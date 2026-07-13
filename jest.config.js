@@ -8,4 +8,11 @@ module.exports = {
       'react-native/jest/assetFileTransformer.js',
     ),
   },
+  // Preset only whitelists react-native/@react-native for transformation; the
+  // nav/svg/safe-area/gesture packages (and their jest mocks) ship TS/ESM.
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@react-navigation|react-native-.*)/)',
+  ],
+  // Concatenated after the preset's own setup by jest's preset merge.
+  setupFiles: ['<rootDir>/jest.setup.js'],
 };

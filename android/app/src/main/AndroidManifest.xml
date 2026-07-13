@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lockscreen/notification playback controls on Android 13+ (runtime-requested on first play).
+         WAKE_LOCK + FOREGROUND_SERVICE* + the MusicService come from react-native-track-player's
+         own manifest via merger. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
       android:name=".MainApplication"

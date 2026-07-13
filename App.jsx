@@ -1,33 +1,55 @@
-import React from 'react';
-import { StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StatusBar, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { PlayerProvider } from './src/playback/PlayerContext';
+import { PlayerSheet } from './src/overlays/PlayerSheet';
+import { Toast } from './src/components/Toast';
+import RootTabs from './src/navigation/RootTabs';
+import AuthScreen from './src/screens/AuthScreen';
+import { getUser, subscribeAuth } from './src/lib/auth';
 
-// Phase 0 — toolchain proof. Replaced by the real app in Phase 1.
+function Shell() {
+  const { name, t } = useTheme();
+  const [user, setUser] = useState(getUser);
+  useEffect(() => subscribeAuth(() => setUser(getUser())), []);
+
+  return (
+    <>
+      <StatusBar
+        barStyle={name === 'midnight' ? 'light-content' : 'dark-content'}
+        backgroundColor={t.bg}
+      />
+      {user ? (
+        <NavigationContainer>
+          <RootTabs />
+          {/* Inside the container so "up next" can hop to the Queue screen. */}
+          <PlayerSheet />
+        </NavigationContainer>
+      ) : (
+        <AuthScreen />
+      )}
+      <Toast />
+    </>
+  );
+}
+
 export default function App() {
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#0b0b10" />
-      <Text style={styles.brand}>AURA</Text>
-      <Text style={styles.note}>native build works — phase 0</Text>
-    </View>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <PlayerProvider>
+            <Shell />
+          </PlayerProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#0b0b10',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  brand: {
-    color: '#f2f0ff',
-    fontSize: 40,
-    fontWeight: '700',
-    letterSpacing: 10,
-  },
-  note: {
-    color: '#8f8ca6',
-    fontSize: 14,
-  },
+  root: { flex: 1 },
 });
