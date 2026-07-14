@@ -5,6 +5,7 @@ import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
 import { openTrackActions } from '../../lib/trackActionsSheet';
+import { splitMatch } from '../../lib/listFilter';
 import { fonts, label, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 import { fmtTime, fmtRuntime } from '../../utils/fmtTime';
@@ -73,10 +74,20 @@ export function DetailSection({ title, sub }) {
 }
 
 // One numbered track row. `sub` defaults to artist · language; `reason` is
-// the auto-mix explainer line; `right` is an optional accessory (heart).
+// the auto-mix explainer line; `right` is an optional accessory (heart);
+// `highlight` tints the in-list search match inside the title.
 // `menu` ({ omit, extras }) adds the ⋯ button + long-press into the track
 // actions sheet — always-visible on native, never hover-gated.
-export function DetailRow({ track, index, sub, reason, onPress, right, menu }) {
+export function DetailRow({
+  track,
+  index,
+  sub,
+  reason,
+  onPress,
+  right,
+  menu,
+  highlight,
+}) {
   const { t } = useTheme();
   const title = cleanTitle(track.title);
   const openMenu = menu ? () => openTrackActions({ track, menu }) : undefined;
@@ -95,7 +106,17 @@ export function DetailRow({ track, index, sub, reason, onPress, right, menu }) {
         <TrackArt track={track} size={54} radius={4} />
         <View style={styles.meta}>
           <Text numberOfLines={1} style={[styles.title, { color: t.ink }]}>
-            {title}
+            {highlight
+              ? splitMatch(title, highlight).map((p, i) =>
+                  p.hit ? (
+                    <Text key={i} style={{ color: t.accent }}>
+                      {p.text}
+                    </Text>
+                  ) : (
+                    p.text
+                  ),
+                )
+              : title}
           </Text>
           <Text numberOfLines={1} style={[label(9.5), { color: t.inkSoft }]}>
             {sub ?? `${(track.artist ?? '').toLowerCase()} · ${track.language ?? ''}`}

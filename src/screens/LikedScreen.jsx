@@ -1,10 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  LinearTransition,
+  ReduceMotion,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { listLiked } from '../api/likes';
 import { useLikes } from '../hooks/useLikes';
+import { storage } from '../storage/mmkv';
+import { filterTracks, sortTracks } from '../lib/listFilter';
 import { HeartButton } from '../components/player/HeartButton';
 import {
   CrumbBack,
@@ -12,10 +18,24 @@ import {
   CountLine,
   DetailRow,
 } from '../components/detail/DetailChassis';
+import { ListTools } from '../components/detail/ListTools';
 import { fonts, label, type } from '../theme/tokens';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
-// total runtime, numbered rows with a heart that drops the row on unlike.
+// total runtime, numbered rows with a heart that drops the row on unlike,
+// plus find-in-list + sort (the chosen sort is remembered).
+const SORT_KEY = 'aura.sortLiked';
+const SORTS = [
+  { id: 'default', label: 'recent' },
+  { id: 'title', label: 'title' },
+  { id: 'artist', label: 'artist' },
+  { id: 'longest', label: 'longest' },
+];
+
+const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
+  ReduceMotion.System,
+);
+
 export default function LikedScreen({ navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
@@ -23,6 +43,23 @@ export default function LikedScreen({ navigation }) {
   const { isLiked, ready } = useLikes();
   const [hit, setHit] = useState({ data: null, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
+
+  const [input, setInput] = useState('');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState(
+    () => storage.getItem(SORT_KEY) ?? 'default',
+  );
+
+  // Debounce the filter a beat so fast typing re-renders once, not per key.
+  useEffect(() => {
+    const id = setTimeout(() => setQuery(input), 150);
+    return () => clearTimeout(id);
+  }, [input]);
+
+  const pickSort = id => {
+    setSort(id);
+    storage.setItem(SORT_KEY, id);
+  };
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -40,9 +77,16 @@ export default function LikedScreen({ navigation }) {
   // Guard on `ready`: until the client like-set has booted, isLiked() is empty
   // and would hide everything (the "liked looks empty" race).
   const liked = (hit.data ?? []).filter(x => !ready || isLiked(x.id));
+  const likedKey = liked.map(x => x.id).join(',');
+  const shown = useMemo(
+    () => sortTracks(filterTracks(liked, query), sort),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [likedKey, query, sort],
+  );
 
+  // Play what's on screen: a filtered or re-sorted view queues in that order.
   const playFrom = i => {
-    player.playQueue(liked, i, 'your liked');
+    player.playQueue(shown, i, 'your liked');
     player.ui?.openPlayer?.();
   };
 
@@ -72,6 +116,20 @@ export default function LikedScreen({ navigation }) {
             <PlayAllPill text="Play all" onPress={() => playFrom(0)} />
           )}
           {liked.length > 0 && <CountLine tracks={liked} noun="song" />}
+          {liked.length > 0 && (
+            <ListTools
+              query={input}
+              onQuery={setInput}
+              sort={sort}
+              onSort={pickSort}
+              sorts={SORTS}
+            />
+          )}
+          {liked.length > 0 && query.trim() !== '' && shown.length === 0 && (
+            <Text style={[styles.stateLine, { color: t.inkSoft }]}>
+              No matches for "{query.trim()}".
+            </Text>
+          )}
           {liked.length === 0 && (
             <View style={styles.empty}>
               <Text style={[styles.emptyTitle, { color: t.ink }]}>
@@ -92,6 +150,7 @@ export default function LikedScreen({ navigation }) {
     <DetailRow
       track={item}
       index={index}
+      highlight={query}
       onPress={() => playFrom(index)}
       menu={{ omit: ['like'] }}
       right={
@@ -109,11 +168,15 @@ export default function LikedScreen({ navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <FlatList
-        data={status === 'ok' ? liked : []}
+      <Animated.FlatList
+        overScrollMode="always"
+        data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}
+        itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.list,
           { paddingBottom: insets.bottom + 24 },

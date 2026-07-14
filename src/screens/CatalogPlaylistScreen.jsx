@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -7,12 +7,15 @@ import { getCatalogPlaylist } from '../api/discover';
 import { hideTrack } from '../api/hidden';
 import { invalidateHomeCache } from '../lib/homeCache';
 import { showToast } from '../lib/toast';
+import { storage } from '../storage/mmkv';
+import { filterTracks, sortTracks } from '../lib/listFilter';
 import {
   CrumbBack,
   PlayAllPill,
   CountLine,
   DetailRow,
 } from '../components/detail/DetailChassis';
+import { ListTools } from '../components/detail/ListTools';
 import { fonts, label, type } from '../theme/tokens';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
@@ -20,6 +23,15 @@ import { fonts, label, type } from '../theme/tokens';
 // mixes, which already carry their full tracks in memory — passed via the
 // `initialData` route param to skip the fetch (auto mixes have no per-id GET).
 // The auto-mix "don't show this again" action arrives with the context menu.
+// Find-in-list + sort ride above the rows; the chosen sort is remembered.
+const SORT_KEY = 'aura.sortPlaylist';
+const SORTS = [
+  { id: 'default', label: 'in order' },
+  { id: 'title', label: 'title' },
+  { id: 'artist', label: 'artist' },
+  { id: 'longest', label: 'longest' },
+];
+
 export default function CatalogPlaylistScreen({ route, navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
@@ -43,7 +55,29 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
     return () => ctl.abort();
   }, [id, initialData]);
 
-  const tracks = hit.data?.tracks ?? [];
+  const tracks = useMemo(() => hit.data?.tracks ?? [], [hit.data]);
+
+  const [input, setInput] = useState('');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState(
+    () => storage.getItem(SORT_KEY) ?? 'default',
+  );
+
+  // Debounce the filter a beat so fast typing re-renders once, not per key.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(input), 150);
+    return () => clearTimeout(timer);
+  }, [input]);
+
+  const pickSort = sortId => {
+    setSort(sortId);
+    storage.setItem(SORT_KEY, sortId);
+  };
+
+  const shown = useMemo(
+    () => sortTracks(filterTracks(tracks, query), sort),
+    [tracks, query, sort],
+  );
 
   // "Don't show this again" — only on the made-for-you mixes (a catalog list
   // isn't a pick of ours to apologise for). Removes the row immediately; the
@@ -71,9 +105,10 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
     }
   };
 
+  // Play what's on screen: a filtered or re-sorted view queues in that order.
   const playFrom = i => {
     player.playQueue(
-      tracks,
+      shown,
       i,
       (hit.data?.name ?? 'this playlist').toLowerCase(),
     );
@@ -84,11 +119,13 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <ScrollView
+      <ScrollView overScrollMode="always"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 24 },
         ]}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <CrumbBack onPress={() => navigation.goBack()} />
@@ -130,12 +167,25 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
               <>
                 <PlayAllPill text="Play all" onPress={() => playFrom(0)} />
                 <CountLine tracks={tracks} />
+                <ListTools
+                  query={input}
+                  onQuery={setInput}
+                  sort={sort}
+                  onSort={pickSort}
+                  sorts={SORTS}
+                />
+                {query.trim() !== '' && shown.length === 0 && (
+                  <Text style={[styles.stateLine, { color: t.inkSoft }]}>
+                    No matches for "{query.trim()}".
+                  </Text>
+                )}
                 <View style={styles.list}>
-                  {tracks.map((track, i) => (
+                  {shown.map((track, i) => (
                     <DetailRow
                       key={track.id}
                       track={track}
                       index={i}
+                      highlight={query}
                       reason={track.reason}
                       onPress={() => playFrom(i)}
                       menu={{
