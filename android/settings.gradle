@@ -3,4 +3,7 @@ plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'AuraNative'
 include ':app'
+// Vendored KotlinAudio (leak fix) — substituted for the JitPack AAR in the
+// root build.gradle.
+include ':kotlin-audio'
 includeBuild('../node_modules/@react-native/gradle-plugin')

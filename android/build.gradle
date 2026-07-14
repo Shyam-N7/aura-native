@@ -21,3 +21,14 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// react-native-track-player resolves KotlinAudio as a prebuilt JitPack AAR;
+// swap in the vendored source module so its notification artwork-bitmap leak
+// fix actually ships (see kotlin-audio/build.gradle).
+subprojects {
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('com.github.doublesymmetry:kotlinaudio') using project(':kotlin-audio')
+        }
+    }
+}
