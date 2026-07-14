@@ -121,6 +121,11 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // Same Coil that KotlinAudio uses for notification artwork —
+    // MainApplication implements ImageLoaderFactory to cap its memory cache
+    // (see the comment there).
+    implementation("io.coil-kt:coil:2.2.0")
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
