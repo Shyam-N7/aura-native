@@ -1,11 +1,14 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
-import { MiniBar } from '../src/components/player/MiniBar';
+import { Bead } from '../src/components/player/Bead';
 
 const mockState = { player: null };
 jest.mock('../src/playback/PlayerContext', () => ({
   usePlayer: () => mockState.player,
+}));
+jest.mock('../src/hooks/usePlaybackProgress', () => ({
+  usePlaybackProgress: () => ({ position: 30, duration: 120, progress: 0.25 }),
 }));
 
 const byLabel = (tree, accessibilityLabel) =>
@@ -16,7 +19,7 @@ async function render() {
   await ReactTestRenderer.act(() => {
     tree = ReactTestRenderer.create(
       <ThemeProvider>
-        <MiniBar />
+        <Bead />
       </ThemeProvider>,
     );
   });
@@ -30,7 +33,7 @@ test('renders nothing without a loaded track', async () => {
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
-test('shows the track and wires play/pause + open player', async () => {
+test('wires play/pause and open player', async () => {
   mockState.player = {
     current: { id: 't1', title: 'Some Song', artist: 'someone' },
     isPlaying: false,
@@ -39,12 +42,11 @@ test('shows the track and wires play/pause + open player', async () => {
   };
   const tree = await render();
 
-  const body = JSON.stringify(tree.toJSON());
-  expect(body).toContain('Some Song');
-
   byLabel(tree, 'play').props.onPress();
   expect(mockState.player.togglePlay).toHaveBeenCalled();
 
+  // The bead measures itself for the morph origin; without a native host the
+  // measure path falls back to a plain open call.
   byLabel(tree, 'open player').props.onPress();
   expect(mockState.player.ui.openPlayer).toHaveBeenCalled();
 

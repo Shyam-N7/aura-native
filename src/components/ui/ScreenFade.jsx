@@ -30,5 +30,7 @@ export function ScreenFade({ duration = DUR.screen, easing = EASE.enter, style, 
     ],
   }));
 
-  return <Animated.View style={[{ flex: 1 }, animated, style]}>{children}</Animated.View>;
+  return <Animated.View style={[styles.fill, animated, style]}>{children}</Animated.View>;
 }
+
+const styles = { fill: { flex: 1 } };

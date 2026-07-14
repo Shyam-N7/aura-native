@@ -16,7 +16,8 @@ export function Glass({ radius = 26, style, solid = false, elevated = true, chil
   return (
     <View
       style={[
-        { borderRadius: radius, borderWidth: 1, borderColor: g.border, overflow: 'hidden' },
+        styles.shell,
+        { borderRadius: radius, borderColor: g.border },
         solid && { backgroundColor: gooFill[name] ?? t.surface },
         elevated && elevation.glass,
         style,
@@ -48,5 +49,6 @@ export function Glass({ radius = 26, style, solid = false, elevated = true, chil
 }
 
 const styles = StyleSheet.create({
+  shell: { borderWidth: 1, overflow: 'hidden' },
   insetLight: { position: 'absolute', top: 0, left: 10, right: 10, height: 1, opacity: 0.9 },
 });

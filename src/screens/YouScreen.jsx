@@ -1,14 +1,13 @@
 import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getUser, logout } from '../lib/auth';
 import { QUALITIES } from '../lib/audioQuality';
+import { TopBar } from '../components/nav/TopBar';
 
-export default function YouScreen() {
+export default function YouScreen({ navigation }) {
   const { t } = useTheme();
-  const insets = useSafeAreaInsets();
   const player = usePlayer();
   const user = getUser();
 
@@ -20,11 +19,9 @@ export default function YouScreen() {
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: t.bg, paddingTop: insets.top + 24 },
-      ]}>
+    <View style={[styles.root, { backgroundColor: t.bg }]}>
+      <TopBar navigation={navigation} />
+      <View style={styles.content}>
       <View style={styles.identity}>
         <View style={[styles.avatar, { backgroundColor: t.accentSoft }]}>
           <Text style={[styles.avatarLetter, { color: t.accent }]}>
@@ -99,6 +96,7 @@ export default function YouScreen() {
       <Text style={[styles.version, { color: t.inkFaint }]}>
         aura · phase 1
       </Text>
+      </View>
     </View>
   );
 }
@@ -106,7 +104,11 @@ export default function YouScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  content: {
+    flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 18,
   },
   identity: {
     flexDirection: 'row',

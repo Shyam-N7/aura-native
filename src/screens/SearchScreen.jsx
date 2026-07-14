@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { searchCatalog } from '../api/catalog';
 import { getUser } from '../lib/auth';
@@ -344,7 +345,8 @@ const styles = StyleSheet.create({
   resultsInner: {
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 24,
+    // Content scrolls under the floating glass dock.
+    paddingBottom: 24 + DOCK_CLEARANCE,
     gap: 14,
   },
   section: {

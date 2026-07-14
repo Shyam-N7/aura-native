@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getFeatured } from '../api/catalog';
 import { getUser } from '../lib/auth';
 import { showToast } from '../lib/toast';
+import { TopBar } from '../components/nav/TopBar';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -18,9 +19,8 @@ function greeting() {
   return 'good evening';
 }
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const { t } = useTheme();
-  const insets = useSafeAreaInsets();
   const player = usePlayer();
   const [loading, setLoading] = useState(false);
   const firstName = getUser()?.name?.split(' ')[0]?.toLowerCase();
@@ -46,12 +46,9 @@ export default function HomeScreen() {
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: t.bg, paddingTop: insets.top + 24 },
-      ]}>
-      <Text style={[styles.brand, { color: t.inkFaint }]}>aura</Text>
+    <View style={[styles.root, { backgroundColor: t.bg }]}>
+      <TopBar navigation={navigation} />
+      <View style={styles.content}>
       <Text style={[styles.greeting, { color: t.ink }]}>
         {greeting()}
         {firstName ? `, ${firstName}` : ''}
@@ -77,6 +74,7 @@ export default function HomeScreen() {
       <Text style={[styles.note, { color: t.inkFaint }]}>
         your mixes, library and more arrive in the next build.
       </Text>
+      </View>
     </View>
   );
 }
@@ -84,15 +82,16 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    paddingHorizontal: 20,
   },
-  brand: {
-    fontSize: 12,
-    letterSpacing: 1,
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: DOCK_CLEARANCE,
   },
   greeting: {
+    fontFamily: 'HankenGrotesk-SemiBold',
     fontSize: 26,
-    fontWeight: '600',
     marginTop: 6,
   },
   card: {
