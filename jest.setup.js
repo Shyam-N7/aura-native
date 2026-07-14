@@ -1,6 +1,22 @@
 /* eslint-env jest */
 require('react-native-gesture-handler/jestSetup');
 
+// Worklets binds a native module at import; its shipped mock must be installed
+// BEFORE reanimated loads (reanimated 4 initializes worklets on import).
+jest.mock('react-native-worklets', () =>
+  require('react-native-worklets/lib/module/mock'),
+);
+require('react-native-reanimated').setUpTests();
+
+// Skia ships an official node mock; the blur view becomes a plain View.
+jest.mock('@shopify/react-native-skia', () =>
+  require('@shopify/react-native-skia/lib/commonjs/mock'),
+);
+jest.mock('@sbaiahmed1/react-native-blur', () => {
+  const { View } = require('react-native');
+  return { BlurView: View };
+});
+
 // react-native-mmkv binds a native TurboModule at import — swap in an
 // in-memory store so storage-backed libs run under jest.
 jest.mock('react-native-mmkv', () => {
