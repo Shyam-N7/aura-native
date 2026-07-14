@@ -57,7 +57,10 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = true
+// RN default (off). Turning R8 on crashed the 0.1.0 release build on-device — RNTP 4.1's
+// old-arch interop relies on reflection R8 can't trace. Revisit only with proper keep rules
+// and a device test; the APK-size win isn't worth a dead app.
+def enableProguardInReleaseBuilds = false
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
