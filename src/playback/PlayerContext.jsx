@@ -11,6 +11,11 @@ import { AppState } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { showToast } from '../lib/toast';
 import { isSignedIn, subscribeAuth } from '../lib/auth';
+import {
+  fireEndOfSetIfArmed,
+  subscribeSleepFire,
+  tickSleepTimer,
+} from '../lib/sleepTimer';
 import { getAudioQuality, setAudioQuality } from '../lib/audioQuality';
 import { getTrack } from '../api/catalog';
 import * as engine from './engine';
@@ -122,6 +127,9 @@ export function PlayerProvider({ children }) {
   }, []);
   const onProgress = useCallback(
     e => {
+      // Screen-off-reliable sleep check: RNTP progress events keep coming
+      // every second while playing, even when JS interval timers are stalled.
+      tickSleepTimer();
       if (!(e?.duration > 0)) {
         return;
       }
@@ -224,6 +232,12 @@ export function PlayerProvider({ children }) {
     clearPosition();
     const q = queueRef.current;
     const d = model.decideNext(q, repeatRef.current);
+    // End-of-set sleep fires at the exact moment the set would otherwise
+    // wrap or fall through to auto-radio (web App.jsx:868) — preempting
+    // both. The sleep-fire subscriber below does the pause + toast.
+    if (d.action !== 'advance' && fireEndOfSetIfArmed()) {
+      return;
+    }
     if (d.action === 'advance' || d.action === 'wrap') {
       applyQueue({ ...q, idx: d.nextIdx });
       setIsPlaying(true);
@@ -598,6 +612,21 @@ export function PlayerProvider({ children }) {
     onQueueEnded,
     prev,
   ]);
+
+  // Sleep-timer expiry (duration or end-of-set) is a hard pause; the current
+  // track position is retained (normal pause semantics, web parity).
+  useEffect(
+    () =>
+      subscribeSleepFire(kind => {
+        setIsPlaying(false);
+        flushPosition();
+        enqueueOp(() => engine.pause());
+        showToast(
+          kind === 'end-of-set' ? 'set ended · sleeping.' : 'sleep timer · paused.',
+        );
+      }),
+    [enqueueOp, flushPosition],
+  );
 
   // Sign-out tears playback down with it: the provider outlives the auth flip
   // (App only swaps the navigator for AuthScreen), so without this the music

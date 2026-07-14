@@ -31,6 +31,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { QUALITIES } from '../lib/audioQuality';
+import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
+import { openSleepTimer } from '../lib/sleepTimerSheet';
 import { TrackArt } from '../components/TrackRow';
 import { HeartButton } from '../components/player/HeartButton';
 import { ProgressRibbon } from '../components/player/ProgressRibbon';
@@ -162,6 +164,10 @@ export function PlayerSheet() {
       },
     );
   }, [vis, reduced, endClose, player.ui, winH, slide]);
+
+  // Armed sleep timer tints the moon in the actions row.
+  const [sleep, setSleep] = useState(getSleepState);
+  useEffect(() => subscribeSleep(setSleep), []);
 
   // Breathing accent glow behind the play button, playing only (web aura-breathe).
   const playing = player.isPlaying;
@@ -447,6 +453,18 @@ export function PlayerSheet() {
                   name={player.repeat === 'one' ? 'repeat-one' : 'repeat'}
                   size={20}
                   color={player.repeat !== 'off' ? t.accent : t.inkFaint}
+                />
+              </PressScale>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel="sleep timer"
+                onPress={openSleepTimer}
+                hitSlop={8}
+              >
+                <Icon
+                  name="moon"
+                  size={19}
+                  color={sleep ? t.accent : t.inkFaint}
                 />
               </PressScale>
             </View>

@@ -8,6 +8,7 @@ import { PlayerProvider } from './src/playback/PlayerContext';
 import { PlayerSheet } from './src/overlays/PlayerSheet';
 import { TrackActionsSheet } from './src/overlays/TrackActionsSheet';
 import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
+import { SleepTimerSheet } from './src/overlays/SleepTimerSheet';
 import { Toast } from './src/components/Toast';
 import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
@@ -32,6 +33,7 @@ function Shell() {
           {/* Action sheets stack above the player (JSX order = z-order). */}
           <TrackActionsSheet />
           <AddToPlaylistSheet />
+          <SleepTimerSheet />
         </NavigationContainer>
       ) : (
         <AuthScreen />
