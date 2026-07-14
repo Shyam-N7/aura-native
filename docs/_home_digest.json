@@ -1,0 +1,274 @@
+{
+ "components": [
+  {
+   "name": "MobileTopBar (App-level chrome, above the screen)",
+   "purpose": "Floating glass pill top bar on mobile — replaces DesktopHome's TopStrip, which is display:none under 600px.",
+   "behaviors": [
+    "Brand lockup (AuraMark 24px + lowercase djName) doubles as a large search tap target → opens search (pill morphs in place into a search field via .is-searching cross-fade; inactive layer set inert)",
+    "Mode chip shows active listening-mode label (+ BreathingDot while the pool is curating); tap → AnchoredMenu with GooeyModePills; selecting calls switchMode → refetches the featured pool",
+    "Search ⌕ button → same open-search; input focused synchronously in the tap gesture so iOS raises the keyboard",
+    "ThemeToggle and ProfileButton (avatar → library screen)",
+    "Hidden while an overlay/talk is open or screen === 'player'"
+   ],
+   "visualSpec": "Glass pill inset 14px from sides, 16px from top; content scrolls UNDER it (screen root gets a 74px ::before spacer). backdrop-filter blur pill per MobileTopBar.css."
+  },
+  {
+   "name": "Mode mix card (section .aura-dh__modemix)",
+   "purpose": "One-tap play-all card for the active listening mode's curated pool; top-most section of the scroll content.",
+   "behaviors": [
+    "HIDDEN when activeMode === 'everyday' (Everyday has no mix — Quick Picks becomes the top section)",
+    "While the pool refetches after a mode switch (loading=true): shows a 'curating your {mode} mix…' banner with a pulsing accent dot (role=status)",
+    "Loaded (tracks.length > 0): whole card is one button → onPlaySequence(tracks, 0, '{Label} mix') — queues the entire pool and opens the player",
+    "Hidden when the pool came back empty"
+   ],
+   "visualSpec": "Mobile padding 22px. Card: 2×2 AlbumArt collage 60px (grid, 1px gaps, radius 10), kicker 'your mix' (11px caps accent), serif title '{Label} mix' (17px mobile), sub '{n} songs · tap to play all' (13px), 44px accent play disc on the right. Accent-tinted background via color-mix."
+  },
+  {
+   "name": "Now playing banner (section .aura-dh__np → NowPlayingBanner variant='quick')",
+   "purpose": "Distinctive now-playing hero card; tap re-opens the full player.",
+   "behaviors": [
+    "Section renders only when a track is loaded (`track && …`); NowPlayingBanner itself also returns null without a track",
+    "Tap → onOpenPlayer → setScreen('player') (mobile: vaul PlayerDrawer slides up)",
+    "On each track change the cover cross-fades (MorphingAlbumArt) and title/artist flourish in (block re-keyed by track.id)",
+    "Overflowing titles ping-pong marquee (measured via ResizeObserver, transform-only, gated by is-scrolling; disabled under reduced motion)"
+   ],
+   "visualSpec": "Mobile padding 20px 22px 0. 72px cover (radius 14), 'now playing' mono kicker label, serif title + artist."
+  },
+  {
+   "name": "Quick Picks (section .aura-dh__qp → QuickPicksSpinner on mobile)",
+   "purpose": "First actionable shelf: 8 discs from YOUR listening as a spinnable fidget wheel (mobile) — the desktop QuickPicksOrbit is also mounted but display:none under 600px.",
+   "behaviors": [
+    "Data: server ring (getQuickPicks, frecency-ranked, 3 anchors + daypart rotation + 1 exploration pick, each with `reason`) IF it yields ≥4 after dropExplicit; else fallback chain: mostPlayed(≥4) → recentlyPlayed(≥4) → featured pool; always sliced to 8",
+    "Section hidden when even the fallback chain yields 0 tracks (brand-new account before the pool loads)",
+    "Header sub: 'your {morning|afternoon|evening|night} picks' when the server ring is live (client mirrors server daypart boundaries 5/12/17/21) else 'jump back into what you love'",
+    "REASON LINE: the wheel has no hover, so ONE reason line (.aura-qps__why, mono 9px, ellipsized, centered) renders under the wheel showing the reason of the CURRENTLY PLAYING pick only (tracks.find(t => t.id === currentTrackId)?.reason). Non-playing picks' reasons are not visible on mobile. (Desktop orbit shows the active disc's reason in the hub instead.)",
+    "Gestures: pointerdown grabs; first ~10px locks intent — clearly-vertical drag (|dy| ≥ 1.3|dx|) scrolls the page manually (1:1 + friction fling on the .aura-dh scroller), otherwise a tangential test decides spin vs scroll; spin coasts with friction (0.96/frame, capped 46°/frame); tap (<7° travel) plays the disc via onPickLive(track, artEl) — art element morphs into the player",
+    "Playing disc: scales 1.16, accent ring + three pulsing 'aura' rings; label turns accent",
+    "'flick to spin' hint with nudging arrows appears each time the wheel scrolls ≥40% into view, fades after 4.2s",
+    "Impression logging: when the SERVER ring rendered, logImpressions('quick-picks', shownIds) once per day per session",
+    "Discs pop in staggered 55ms opacity animation (skipped under prefers-reduced-motion)"
+   ],
+   "visualSpec": "Ring: min(330px, 84vw) square, touch-action:none; 8 discs, each 24% of ring width, circular AlbumArt, centers on a 38%-radius circle starting at -90°; disc labels 9.5px sans under each disc (max 100px, ellipsized); decorative breathing hub (30%) with accent dot. Reason line 28px below."
+  },
+  {
+   "name": "Greeting tagline (section .aura-dh__greeting)",
+   "purpose": "Static hero tagline — brand voice, not data.",
+   "behaviors": [
+    "Always renders (no hide condition)",
+    "Static text 'music that gets your mood', no interaction"
+   ],
+   "visualSpec": "h1, lowercase sans 600; 30px on mobile, 28px ≤420px container; padding 26px 22px 0."
+  },
+  {
+   "name": "Hero band ('the set · tonight' — HeroBand, section .aura-dh__hero-band-wrap)",
+   "purpose": "Tonight's-set opener card built from pool[0].",
+   "behaviors": [
+    "loading → 240px shimmer skeleton block instead; hidden entirely when !loading and the pool is empty",
+    "Whole card tap AND the 'begin the set' button → onPick(heroTrack.id) → pickById: queues the ENTIRE pool from idx 0 as \"tonight's set\", opens player",
+    "Background = blurred (28px) track image + gradient tint; fallback warm gradient if the image fails (onError state)"
+   ],
+   "visualSpec": "Mobile: min-height 180px, radius 18, padding 20px 22px 0 wrapper; album art 110px (92px ≤420px); serif headline 26px (22px ≤420px); the desktop top labels row ('the set · tonight' / 'opens with {dj}'s pick') and the bottom 'opens with {title} — {artist}' line are display:none on mobile — replaced by a mobile-only artist line under the headline; copy column vertically centered; white 'begin the set' pill (9px caps, 22px accent play disc) right-aligned."
+  },
+  {
+   "name": "Recently played rail (MemoryTile ×3, .aura-dh__memory-grid)",
+   "purpose": "Pick-up-where-you-left-off shelf from GET /api/stats/recently-played.",
+   "behaviors": [
+    "Hidden when recentlyPlayed.length === 0 (new account / fetch failed); no loading state — appears when the fetch lands (or instantly from homeCache on remount)",
+    "Header: 'Recently played' / '{n} tracks to pick up from' (n = full fetched count, up to 10, though only 3 tiles render)",
+    "Tile tap → onPickLive(track) → single-track queue 'your pick', player opens",
+    "Horizontal scroll rail: flex overflow-x auto, scroll-snap proximity, edge-fade mask (16px on mobile)",
+    "Play overlay (.aura-dh__memory-play) is opacity:0 until :hover — on touch it never appears; the whole tile is still the tap target"
+   ],
+   "visualSpec": "Mobile: tiles 260px wide (300px desktop), surface-colored card radius 14, padding 16, 80px album art (radius 6), serif title 24px ellipsized, mono artist·language line, 'From {album}' footer line. Rail gutter 22px."
+  },
+  {
+   "name": "Your top artists rail (DesktopArtistTile ×≤8, .aura-dh__artists)",
+   "purpose": "Round-avatar artist shelf from GET /api/stats/top-artists.",
+   "behaviors": [
+    "Hidden when topArtists.length === 0",
+    "Tap → onOpenArtist({ name: a.artist, trackId: a.sampleTrack?.id }) → artist screen (return-to-home remembered)",
+    "Avatar = sampleTrack.imageUrl; onError or missing → accent-gradient circle with up-to-2-letter lowercase initials",
+    "Horizontal scroll rail, same edge-fade mask motif"
+   ],
+   "visualSpec": "Mobile: tiles 96px wide (110px desktop), circular image (aspect 1, radius 9999), artist name 13px centered ellipsized, '{n} plays' mono 8.5px. Header sub 'Artists you play most'."
+  },
+  {
+   "name": "Mood bridges (BridgeCard ×2, .aura-dh__bridges-grid)",
+   "purpose": "Entry into the mood-bridges feature (move from one feeling to another).",
+   "behaviors": [
+    "NEVER hidden — data is the static MOOD_BRIDGES constant (first 2 of 4 bridges: sad→happy, stressed→calm); no fetch, no loading state",
+    "Header 'SEE ALL →' → onOpenBridges → bridges screen; card tap → onOpenBridge(b) — note App.jsx wires this to plain setScreen('bridges') too (the specific bridge arg is ignored at this call site)"
+   ],
+   "visualSpec": "Mobile: single-column grid (2-col desktop), 22px gutters; card min-height 160px, padding 18px 20px, surface bg radius 16; 'path · 01' + '{steps} tracks · {ETA}' mono header row; from/to mood words in italic serif 22px colored per MOOD_COLOR; SVG arc (320×30 viewBox) with gradient stroke and per-step dots; footer 'gradual · 1 song per step' + 'begin →'."
+  },
+  {
+   "name": "Stations grid (.aura-dh__stations)",
+   "purpose": "One-tap 'stations' built from pool slice(5, 9) — image tiles that start the set at that track.",
+   "behaviors": [
+    "Shows while loading (4 shimmer skeleton tiles, 160px) OR when stations.length > 0; hidden only when loaded and pool has ≤5 tracks",
+    "Tap → onPick(s.id) → pickById: queues the whole pool starting at that track's index (source \"tonight's set\")",
+    "Image tile with gradient tint + blurred caption bar; fallback gradient when no imageUrl"
+   ],
+   "visualSpec": "Mobile: 2-col grid (4-col desktop, 3-col ≤1000px container), 22px gutters, gap 12; tile min-height 150px radius 14; caption bar: 'Station' mono 9px, serif name 20px ellipsized, artist 11px, on rgb(0 0 0/.45) + backdrop-blur(16px)."
+  },
+  {
+   "name": "Your playlists grid (.aura-dh__playlists-grid)",
+   "purpose": "The user's own (and collaborated) playlists, first 4, from GET /api/playlists.",
+   "behaviors": [
+    "Hidden when yourPlaylists.length === 0",
+    "Header 'Made by you' + 'SEE ALL →' → onOpenPlaylists (playlists screen)",
+    "Tile tap → onOpenPlaylistDetail(p.id) → playlist detail (return 'home')",
+    "Cover = coverImageUrl or accent-gradient fallback with the playlist's lowercase first letter"
+   ],
+   "visualSpec": "Mobile: 2-col grid (4-col desktop) via repeat(2, minmax(0,1fr)), gap 14, 22px gutters; square cover radius 8; serif name 17px ellipsized; '{n} track(s)' mono 9px."
+  },
+  {
+   "name": "Made for you — auto-mix grid (.aura-dh__playlists-grid reuse)",
+   "purpose": "The made-for-you mixes suite from GET /api/playlists/auto: on repeat, new to you, bring it back, your morning/night songs.",
+   "behaviors": [
+    "Client-side daypart gating: mixKey 'morning' shows only 5:00–11:59 local, 'night' only 20:00–3:59; other mixes always (the playlists screen shows the full suite regardless). Section hidden when visibleAuto.length === 0",
+    "Stale-while-revalidate: cached mixes render instantly, a fresh listAutoPlaylists runs on EVERY mount and swaps in place (mixes go stale mid-session: hidden tracks, edition boundaries)",
+    "Normal mix tile: tap → onOpenAuto(a) → auto-playlist detail; the ▶ chip (34px disc, bottom-right of cover) stopPropagation + onPlaySequence(a.tracks, 0, a.name) — one-tap play of the full prebuilt list; chip is keyboard-accessible (role=button, Enter/Space)",
+    "Gate card (kind 'auto-gate'): not clickable, opacity .55, shows gate.line ('unlocks after ~N songs — you're at X') — honest empty state, the mix doesn't exist yet",
+    "Meta line: (editionLabel ?? description) + ' · {cadence}' + ' · refreshing…' when the server is rebuilding an edition",
+    "Header sub 'Fresh editions from your plays — skips count'; 'SEE ALL →' → onOpenPlaylists"
+   ],
+   "visualSpec": "Same 2-col mobile grid as Your playlists; cover or ♫ fallback; ▶ chip FORCED opacity:1 on mobile (hover-reveal on desktop); mono meta line 8px truncated."
+  },
+  {
+   "name": "New for you grid (.aura-dh__new-picks)",
+   "purpose": "Fresh picks from the pool slice(1, 5).",
+   "behaviors": [
+    "Shows while loading (4 skeleton cards: square art + 70% text line) OR when newPicks.length > 0; hidden when loaded and pool has ≤1 track",
+    "Tap → onPick(t.id) → queue the pool at that index (\"tonight's set\")",
+    "{...ctxPress(t)}: right-click / 500ms long-press opens the track context menu (play, play next, add to queue, add to playlist, like, artist)",
+    "Play FAB (36px white disc, bottom-right of art) is hover-reveal only — never visible on touch; the card itself is the tap target"
+   ],
+   "visualSpec": "Mobile: grid auto-fill minmax(104px, 1fr) (158px min on desktop), gap 12, 22px gutters; square AlbumArt radius 6; serif title 18px ellipsized; lowercase mono artist 8px. Header sub 'Fresh this week'."
+  },
+  {
+   "name": "About you cards (.aura-dh__about-grid)",
+   "purpose": "Entry points into Listening Journal and Music DNA.",
+   "behaviors": [
+    "Hidden until (mostPlayed.length > 0 || topArtists.length > 0) — i.e. some listening history exists",
+    "Journal card tap → onOpenJournal (journal screen, return 'home'); DNA card tap → onOpenDna",
+    "DNA headline: '{topArtists.length} artists · {mostPlayed.length} tracks' or 'Building your profile…' when artists are empty"
+   ],
+   "visualSpec": "Mobile: single-column grid (1.2fr/1fr two-col on desktop), gap 12, 22px gutters; surface cards radius 14, padding 20, min-height 150px; headline 24px; 'Updated daily' + 'Read →'/'View →' mono footer."
+  },
+  {
+   "name": "Popular playlists grid (.aura-dh__playlists-grid reuse)",
+   "purpose": "Editorial/catalog playlists from GET /api/discover/home → popularPlaylists (first 4).",
+   "behaviors": [
+    "Hidden when discover.popularPlaylists.length === 0 (fetch failed or upstream empty)",
+    "Tap → onOpenCatalogPlaylist(p.id) → catalog-playlist-detail screen (return 'home')",
+    "Subtitle rendered lowercase when present"
+   ],
+   "visualSpec": "Same 2-col mobile playlist grid; cover or lowercase-initial fallback; header 'Popular playlists' / 'Trending now' (no SEE ALL)."
+  },
+  {
+   "name": "BackToTop (+ MobileDock back-to-top morph)",
+   "purpose": "Return-to-top affordances for the long scroll.",
+   "behaviors": [
+    "BackToTop: zero-height sticky anchor as the scroller's last child; button appears once scrollTop > 480 while actively scrolling, auto-hides after 3s idle; tap → smooth scrollTo(0)",
+    "Separately, useScrollMemory feeds an active-scroll bus that makes the App-level MobileDock liquid-contract into a centered 'Take me back up' pill while the user scrolls (mode='backtotop')",
+    "Scroll position for 'home' persists across navigation (restored pre-paint on return)"
+   ],
+   "visualSpec": "Pill button just above the bottom chrome; dock morph uses the #aura-goo metaball SVG filter during the ~380ms morph window only."
+  }
+ ],
+ "state": [
+  "homeCache (src/lib/homeCache.js): plain module object caching quickPicks / mostPlayed / topArtists / recentlyPlayed / yourPlaylists / autoPlaylists / discover for the SPA session. Sections initialize state from it synchronously (no loading flash on remount); each fetch runs only if its key is absent — EXCEPT autoPlaylists which refetches on every mount (stale-while-revalidate). invalidateHomeCache(...keys) is called by other screens (e.g. hiding a mix track) to force refetch. Cleared on hard reload.",
+  "Featured pool: App-level useFeaturedTracks({ limit: 24, mode: activeMode }) — NOT in homeCache; keyed by lang|limit|mode|nonce, so a mode switch refetches. `loading` prop = featured.status === 'loading' and drives the mode-mix curating banner + hero/stations/new-picks skeletons. dropExplicit(pool, explicitOff) applies family mode before slicing.",
+  "Quick-picks fallback derivation is pure client logic: served(server, family-filtered) ≥4 → else mostPlayed ≥4 → else recentlyPlayed ≥4 → else pool; slice(0, 8). The daypart label is recomputed client-side each render mirroring server boundaries (5-12 morning, 12-17 afternoon, 17-21 evening, else night).",
+  "Impression guard (src/api/impressions.js): module-level Set keyed `surface|YYYY-MM-DD` — once per surface per day per session; entry removed on POST failure so it can retry.",
+  "Made-for-you visibility recomputed per render from new Date().getHours(): morning mix 5–11, night mix 20–3; no persistence.",
+  "Scroll memory: useScrollMemory('home') via lib/scrollMemory (in-memory map) — restores scrollTop pre-paint on return; passive listener keeps it current and feeds lib/activeScroll for the dock morph.",
+  "Auth: all home APIs (except /api/discover/home and optionally /api/catalog/featured) require the cookie session; fetchAuthed is a plain fetch that triggers revalidateSession() on any 401. Server also supports a native token path (see server/auth.js + auth.native-token.test.js) — the RN app should use that.",
+  "tzOffset convention everywhere: JS Date.getTimezoneOffset() (minutes, UTC-local, so IST = -330). Sent to /api/home/quick-picks, /api/playlists/auto, /api/impressions; server clamps it. The native app must replicate this exact sign convention or editions/dayparts will be wrong.",
+  "No error surfaces anywhere on home: every section fetch .catch(() => {}) → the section simply stays hidden; the pool fetch exposes error via featured.status but DesktopHome only consumes 'loading'."
+ ],
+ "notes": [
+  "Mobile home is NOT a separate component — it's DesktopHome reshaped by CSS container queries (@container dh max-width: 600px / 420px in DesktopHome.css). A native screen must re-derive the mobile layout facts from those query blocks (22px gutters, grids collapsed to 1–2 cols, rails narrowed) rather than any JSX branch. Also note BOTH QuickPicksOrbit and QuickPicksSpinner are always mounted with one hidden via display:none — native should mount only the spinner equivalent.",
+  "QuickPicksSpinner is the biggest native rethink: raw pointer events with touch-action:none, a 10px intent lock separating wheel-spin from page-scroll (vertical ratio 1.3 test + tangential-component test), manual page scrolling of the parent (.aura-dh) with its own friction fling, angular velocity coast (friction 0.96, cap 46°/frame), and CSS-var-driven counter-rotation of discs. In RN: gesture-handler + reanimated, and let the ScrollView own vertical drags via gesture simultaneity instead of manually scrolling the parent.",
+  "Quick-pick REASONS on mobile surface only for the currently playing disc (single line under the wheel) because 'the wheel has no hover'; desktop shows the active disc's reason in the orbit hub. A native design could do better (e.g. reason on the focused/front disc).",
+  "Hover-only affordances that are INVISIBLE on touch today: Recently-played tile play overlay and New-for-you play FAB (opacity 0 until :hover — whole tile is the tap target instead); the made-for-you ▶ chip is the one hover control explicitly forced visible on mobile (opacity:1). Decide per-tile in native: always-visible chips or none.",
+  "ctxPress on New-for-you cards = right-click + 500ms long-press timer (iOS Safari never fires contextmenu) with 10px move slop and an Android double-open suppress flag → replace with native long-press → context menu/bottom sheet. Note only New-for-you rows get it on home; other tiles have no context menu.",
+  "Press-to-player uses morphInto(track, srcEl, cb): a DOM FLIP morph of the tapped album art into the player cover (spinner passes the disc's .aura-qps__art element; App also suppresses vaul's slide when morphing). Pure DOM — use shared-element transitions in native or accept a plain open.",
+  "Scroll chrome is web-specific: content scrolls UNDER two floating backdrop-filter glass pills; clearance via ::before (74px) / ::after (var(--aura-bottom-chrome): 92px with track, 84px idle) pseudo-spacers on the screen root; horizontal rails use -webkit-mask-image edge fades + scroll-snap proximity; the MobileDock back-to-top morph uses an SVG metaball (#aura-goo) filter. Native: BlurView-style bars, ListHeader/Footer spacers, gradient overlay masks, and a plain animated pill instead of goo.",
+  "Hidden-section contract: every section self-hides on empty data with NO skeleton except the three pool-derived ones (hero band, stations, new-for-you) plus the mode-mix curating banner, which shimmer while featured.status === 'loading'. Sections 'cascade in' as fetches land only on first load — homeCache makes remounts render fully synchronously. A native home should replicate the cache-first synchronous render or it will cascade on every tab return.",
+  "Impressions matter for ranking honesty: log 'quick-picks' surface once per local day only when the SERVER ring (≥4 after family filter) actually rendered; never log the local fallback. Keep the once-per-day guard (persist it — the web guard is per-session which under-logs; MMKV works).",
+  "The featured pool drives three sections from ONE fetch (hero=idx 0, new-for-you=1..4, stations=5..8, quick-picks last-resort fallback=slice 8) and is refetched on listening-mode switch — the mode-mix card's 'curating…' state is exactly this refetch. The server seeds it from the auth token's active mode; there is no mode query param.",
+  "Shuffle-all on quick picks (reroll via salt param) is wired ONLY to the desktop orbit's onShuffle; the mobile spinner has no shuffle affordance today — a native port can expose it (getQuickPicks({ salt }) then play shuffled).",
+  "Client mirrors server daypart boundaries (5/12/17/21) and morning/night mix windows (5–12, 20–4) in local time; keep these in sync with server/quickPicks.js daypartOf and DesktopHome.jsx or shelf labels will contradict content.",
+  "tzOffset uses the JS getTimezoneOffset sign convention (IST = -330) on three endpoints; Android's TimeZone offset is the OPPOSITE sign — negate it.",
+  "Auth for the same live API: web uses cookie sessions (fetchAuthed = fetch + 401→revalidate). The server already has a native-token auth path (server/auth.native-token.test.js) — use bearer tokens in RN and implement the 401 revalidate/redirect equivalent.",
+  "Web-only extras riding these sections: IntersectionObserver-driven 'flick to spin' hint (re-arms each viewport entry), ResizeObserver marquee in NowPlayingBanner, prefers-reduced-motion fallbacks (no coast/fling, no pop animation), and CSS color-mix/container units throughout — all need native equivalents or omission.",
+  "Everything here was read from 'AI Music Development' (the live repo). Endpoint list intentionally includes only what the home screen calls; playback/stream URL resolution (getTrack) happens lazily at play time in App.jsx, not on home."
+ ],
+ "endpoints": [
+  {
+   "method": "GET",
+   "path": "/api/catalog/featured",
+   "purpose": "The featured pool that drives THREE home sections: hero band = tracks[0], 'New for you' = tracks[1..4], 'Stations' = tracks[5..8]. App fetches it (useFeaturedTracks, limit 24) and passes it to DesktopHome as `tracks`; mode-seeded server-side from the auth'd user's active mode (everyday = global default). Refetched on every mode switch.",
+   "params": "Query: limit (number, client sends 24), lang (optional). Auth optional (cookie session); signed-in users get their active mode's seeded pool.",
+   "responseShape": "{ results: Track[] } where Track = { id, title, artist, album, language, durationSec, streamUrl, imageUrl, explicit: boolean } (server/catalog.js mapSong). Client applies dropExplicit when family mode is on."
+  },
+  {
+   "method": "GET",
+   "path": "/api/home/quick-picks",
+   "purpose": "Server-ranked Quick Picks ring: top-3 frecency 'anchors' + rotating slots re-seeded per user-local daypart + one 'something new' exploration pick from the user's similarity graph. Each pick carries a plain-sentence `reason`. Cached in homeCache for the session; refetched with `salt` on the shuffle-all action (desktop orbit only).",
+   "params": "Query: tzOffset (REQUIRED by client — new Date().getTimezoneOffset(), minutes, JS sign convention; keys the daily edition + daypart to the user's local day), salt (optional, ≤32 chars, rerolls rotating slots only). Auth required.",
+   "responseShape": "{ tracks: [{ ...Track, explicit, reason: string (e.g. 'you finished this 3× lately' | 'you liked this' | '5 plays this month' | 'you played this recently' | 'something new'), anchor: boolean, exploration?: true }], editionKey: 'YYYY-MM-DD', cadence: 'rotates daily', daypart: 'morning'|'afternoon'|'evening'|'night' }. Up to 12 tracks (client shows 8 after family filter); sparse histories topped up from recently-played; can return fewer than 4 → client falls back to local derivation."
+  },
+  {
+   "method": "POST",
+   "path": "/api/impressions",
+   "purpose": "Logs which quick picks were actually SHOWN so the ranker can demote shown-but-never-played picks. Fired once per (surface='quick-picks', local day) per SPA session, ONLY when the server ring (≥4 picks) is what rendered — the local fallback is never logged. Fire-and-forget; failure releases the guard for retry.",
+   "params": "JSON body: { surface: 'quick-picks', tzOffset: number, track_ids: string[] (client caps at 40) }. Auth required.",
+   "responseShape": "200 empty-ish ack; 400 { error: 'invalid surface or track_ids' }."
+  },
+  {
+   "method": "GET",
+   "path": "/api/stats/most-played",
+   "purpose": "Quick-picks fallback tier 1 (used when the server ring has <4 picks) and the 'About you' DNA card's track count. Not directly a visible shelf on home.",
+   "params": "Query: days (default 30), limit (default 10; client sends defaults). Auth required.",
+   "responseShape": "{ tracks: [{ ...Track, playCount: number }] } — 30-day play-count ranking."
+  },
+  {
+   "method": "GET",
+   "path": "/api/stats/top-artists",
+   "purpose": "'Your top artists' rail (up to 8 round avatar tiles) + feeds the 'About you' DNA card headline and the section's visibility.",
+   "params": "Query: days (default 30), limit (default 8). Auth required.",
+   "responseShape": "{ artists: [{ artist: string, playCount: number, sampleTrack: Track }] } — sampleTrack is the artist's most-played track; its imageUrl becomes the avatar."
+  },
+  {
+   "method": "GET",
+   "path": "/api/stats/recently-played",
+   "purpose": "'Recently played' memory-tile rail (home shows first 3) + quick-picks fallback tier 2.",
+   "params": "Query: limit (default 10). Auth required.",
+   "responseShape": "{ tracks: Track[] } — deduped one row per track, newest first."
+  },
+  {
+   "method": "GET",
+   "path": "/api/playlists",
+   "purpose": "'Your playlists' grid (home shows first 4). Includes playlists the user collaborates on.",
+   "params": "None. Auth required.",
+   "responseShape": "{ playlists: [{ id, name, description, trackCount, coverImageUrl (custom upload wins over cover-track art, else null), updatedAt (ms), role: 'owner'|'editor'|'viewer', shared: boolean }] }"
+  },
+  {
+   "method": "GET",
+   "path": "/api/playlists/auto",
+   "purpose": "'Made for you' mixes (on repeat / new to you / bring it back / your morning songs / your night songs). Each mix ships its FULL playable track list so the ▶ chip plays without a detail fetch. The ONE home fetch that is stale-while-revalidate: cached copy renders instantly, a fresh fetch runs on EVERY mount and updates in place.",
+   "params": "Query: tzOffset (getTimezoneOffset(), keys editions + daily reorder to the user's calendar day). Auth required. NOTE: route must stay matched before /api/playlists/:id.",
+   "responseShape": "{ playlists: [{ id: 'auto:<mixKey>', kind: 'auto' | 'auto-gate', mixKey: 'on-repeat'|'new-to-you'|'bring-it-back'|'morning'|'night', name, description, tracks: [{ ...Track, reason }] (empty for gates), trackCount, coverImageUrl (first track's art, else null), ruleLine, editionKey?, editionLabel?, cadence?: 'updates daily'|'new every friday'|'new every monday', refreshing?: boolean, gate?: { need, have, line: \"unlocks after ~N songs — you're at X\" } }] }. Mixes under their data gate are omitted or sent as kind 'auto-gate'."
+  },
+  {
+   "method": "GET",
+   "path": "/api/discover/home",
+   "purpose": "'Popular playlists' grid (home uses only popularPlaylists, first 4). Server caches per-language per-UTC-day in memory.",
+   "params": "Query: lang (optional; home calls it with none). No auth required on the route.",
+   "responseShape": "{ trending: Track[], popularPlaylists: [{ id, name, coverImageUrl, trackCount, subtitle, kind: 'catalog' }], topHits: Track[], classics: Track[], movieSongs: Track[] } — home ignores everything except popularPlaylists (and keeps trending/movieSongs in its default state shape)."
+  }
+ ]
+}

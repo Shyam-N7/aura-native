@@ -1,15 +1,34 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
-import { getFeatured } from '../api/catalog';
-import { getUser } from '../lib/auth';
+import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { showToast } from '../lib/toast';
+import { homeCache } from '../lib/homeCache';
+import { dropExplicit } from '../lib/explicit';
+import { getQuickPicks } from '../api/quickPicks';
+import { getMostPlayed, getTopArtists, getRecentlyPlayed } from '../api/stats';
+import { listPlaylists } from '../api/playlists';
+import { listAutoPlaylists } from '../api/autoPlaylists';
+import { getDiscoverHome } from '../api/discover';
+import { logImpressions } from '../api/impressions';
+import { useFeaturedPool } from '../hooks/useFeaturedPool';
 import { TopBar } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
-import { PressScale } from '../components/ui/PressScale';
 import { ScreenFade } from '../components/ui/ScreenFade';
-import { elevation } from '../theme/tokens';
+import { SectionHeader } from '../components/home/SectionHeader';
+import { QuickPicksWheel } from '../components/home/QuickPicksWheel';
+import { HeroBand } from '../components/home/HeroBand';
+import { MemoryRail } from '../components/home/MemoryRail';
+import { ArtistRail } from '../components/home/ArtistRail';
+import { StationsGrid } from '../components/home/StationsGrid';
+import { PlaylistGrid } from '../components/home/PlaylistGrid';
+import { Skeleton } from '../components/home/Skeleton';
+import { ModeMixCard } from '../components/home/ModeMixCard';
+import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
+import { fonts } from '../theme/tokens';
+import { artUrl } from '../utils/artUrl';
+import { cleanTitle } from '../utils/title';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -22,100 +41,363 @@ function greeting() {
   return 'good evening';
 }
 
+// Mirrors server daypart boundaries (server/quickPicks.js): 5/12/17/21.
+function daypart() {
+  const h = new Date().getHours();
+  if (h < 5) {
+    return 'night';
+  }
+  if (h < 12) {
+    return 'morning';
+  }
+  if (h < 17) {
+    return 'afternoon';
+  }
+  return h < 21 ? 'evening' : 'night';
+}
+
+// Cache-first section fetch (web homeCache contract): state seeds
+// synchronously from the cache so tab returns render fully without a cascade;
+// the fetch runs only when the key is absent. Failures resolve to [] without
+// caching, so a later visit retries. null = not loaded yet.
+function useHomeSection(key, fetcher) {
+  const [data, setData] = useState(() => homeCache[key] ?? null);
+  useEffect(() => {
+    if (homeCache[key] !== undefined) {
+      return undefined;
+    }
+    let stale = false;
+    fetcher()
+      .then(d => {
+        homeCache[key] = d;
+        if (!stale) {
+          setData(d);
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setData(prev => prev ?? []);
+        }
+      });
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return data;
+}
+
 export default function HomeScreen({ navigation }) {
   const { t } = useTheme();
   const player = usePlayer();
-  const [loading, setLoading] = useState(false);
-  const firstName = getUser()?.name?.split(' ')[0]?.toLowerCase();
+  const user = getUser();
+  const firstName = user?.name?.split(' ')[0]?.toLowerCase();
+  const explicitOff = getActiveExplicitOff();
 
-  const playSomething = async () => {
-    if (loading) {
-      return;
+  const pool = useFeaturedPool({ limit: 24 });
+  const quickPicks = useHomeSection('quickPicks', getQuickPicks);
+  const mostPlayed = useHomeSection('mostPlayed', getMostPlayed);
+  const recent = useHomeSection('recentlyPlayed', getRecentlyPlayed);
+  const topArtists = useHomeSection('topArtists', getTopArtists);
+  const yourPlaylists = useHomeSection('yourPlaylists', listPlaylists);
+  const discover = useHomeSection('discover', getDiscoverHome);
+
+  // Made-for-you is the one stale-while-revalidate fetch (web contract):
+  // cached mixes render instantly, a fresh list swaps in on every mount
+  // (mixes go stale mid-session — hidden tracks, edition boundaries).
+  const [autoMixes, setAutoMixes] = useState(
+    () => homeCache.autoPlaylists ?? null,
+  );
+  useEffect(() => {
+    let stale = false;
+    listAutoPlaylists()
+      .then(p => {
+        homeCache.autoPlaylists = p;
+        if (!stale) {
+          setAutoMixes(p);
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setAutoMixes(prev => prev ?? []);
+        }
+      });
+    return () => {
+      stale = true;
+    };
+  }, []);
+
+  // Quick-picks fallback chain (web DesktopHome): server ring ≥4 after the
+  // family filter → most played ≥4 → recently played ≥4 → the pool; slice 8.
+  const served = dropExplicit(quickPicks ?? [], explicitOff);
+  const serverRing = served.length >= 4;
+  const picks = (
+    serverRing
+      ? served
+      : (mostPlayed?.length ?? 0) >= 4
+      ? mostPlayed
+      : (recent?.length ?? 0) >= 4
+      ? recent
+      : pool.tracks
+  ).slice(0, 8);
+
+  // Log SHOWN picks so the ranker can demote never-played ones — only when
+  // the server ring is what rendered; the local fallback is never logged.
+  useEffect(() => {
+    if (serverRing && picks.length) {
+      logImpressions(
+        'quick-picks',
+        picks.map(p => p.id),
+      );
     }
-    setLoading(true);
-    try {
-      const tracks = await getFeatured({ limit: 20 });
-      if (tracks?.length) {
-        player.playQueue(tracks, 0, "tonight's set");
-        player.ui?.openPlayer?.();
-      } else {
-        showToast('nothing to play right now');
-      }
-    } catch {
-      showToast("couldn't load songs — try again");
-    } finally {
-      setLoading(false);
+  }, [serverRing, picks]);
+
+  const poolLoading = pool.status === 'loading';
+  const hero = pool.tracks[0] ?? null;
+  const newPicks = pool.tracks.slice(1, 5);
+  const stations = pool.tracks.slice(5, 9);
+
+  // Web daypart gating: the morning mix shows 5:00–11:59, night 20:00–3:59.
+  const hour = new Date().getHours();
+  const visibleAuto = (autoMixes ?? []).filter(a =>
+    a.mixKey === 'morning'
+      ? hour >= 5 && hour < 12
+      : a.mixKey === 'night'
+      ? hour >= 20 || hour < 4
+      : true,
+  );
+
+  const activeMode = user?.activeMode ?? 'everyday';
+  const modeLabel =
+    (user?.modes ?? []).find(m => m.key === activeMode)?.label ?? activeMode;
+
+  const openPlayer = () => player.ui?.openPlayer?.();
+  // Queue the whole pool starting at this track ("tonight's set", web pickById).
+  const pickFromPool = track => {
+    const idx = pool.tracks.findIndex(x => x.id === track.id);
+    player.playQueue(pool.tracks, Math.max(0, idx), "tonight's set");
+    openPlayer();
+  };
+  const pickLive = track => {
+    player.playTrack(track, { source: 'your pick' });
+    openPlayer();
+  };
+  const playMix = item => {
+    if (item.tracks?.length) {
+      player.playQueue(item.tracks, 0, item.name);
+      openPlayer();
+    } else {
+      // Gate card: the mix hasn't unlocked yet — say why instead of playing.
+      showToast(item.meta || "this mix isn't ready yet");
     }
   };
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
-      <ScreenFade style={styles.content}>
-        <Text style={[styles.greeting, { color: t.ink }]}>
-          {greeting()}
-          {firstName ? `, ${firstName}` : ''}
-        </Text>
-
-        <PressScale
-          accessibilityRole="button"
-          accessibilityLabel="play something"
-          onPress={playSomething}
-          style={[
-            styles.card,
-            { backgroundColor: t.accentCard, borderColor: t.line },
-            elevation.accentGlow(t.accent),
-          ]}
+      <ScreenFade>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.cardTitle, { color: t.accent }]}>
-            play something
-          </Text>
-          <Text style={[styles.cardSub, { color: t.inkSoft }]}>
-            {loading ? 'finding songs…' : "starts tonight's set"}
-          </Text>
-        </PressScale>
+          <View style={styles.pad}>
+            <Text style={[styles.greeting, { color: t.ink }]}>
+              {greeting()}
+              {firstName ? `, ${firstName}` : ''}
+            </Text>
+            <Text style={[styles.tagline, { color: t.inkSoft }]}>
+              music that gets your mood
+            </Text>
+          </View>
 
-        <Text style={[styles.note, { color: t.inkFaint }]}>
-          your mixes, library and more arrive in the next build.
-        </Text>
+          {activeMode !== 'everyday' && (
+            <ModeMixCard
+              modeLabel={modeLabel}
+              tracks={pool.tracks}
+              loading={poolLoading}
+              onPlayAll={() => {
+                player.playQueue(pool.tracks, 0, `${modeLabel} mix`);
+                openPlayer();
+              }}
+            />
+          )}
+
+          <NowPlayingBanner track={player.current} onOpen={openPlayer} />
+
+          {picks.length > 0 && (
+            <View>
+              <SectionHeader
+                title="quick picks"
+                sub={
+                  serverRing
+                    ? `your ${daypart()} picks`
+                    : 'jump back into what you love'
+                }
+              />
+              <View style={styles.wheelWrap}>
+                <QuickPicksWheel
+                  tracks={picks}
+                  currentId={player.current?.id}
+                  onPick={pickLive}
+                />
+              </View>
+            </View>
+          )}
+
+          <HeroBand
+            track={hero}
+            loading={poolLoading}
+            onBegin={() => hero && pickFromPool(hero)}
+          />
+
+          {(recent?.length ?? 0) > 0 && (
+            <View>
+              <SectionHeader
+                title="recently played"
+                sub={`${recent.length} tracks to pick up from`}
+              />
+              <MemoryRail tracks={recent} onPick={pickLive} />
+            </View>
+          )}
+
+          {(topArtists?.length ?? 0) > 0 && (
+            <View>
+              <SectionHeader
+                title="your top artists"
+                sub="artists you play most"
+              />
+              <ArtistRail
+                artists={topArtists}
+                onOpen={() => showToast('artist pages come in the next build')}
+              />
+            </View>
+          )}
+
+          {(poolLoading || stations.length > 0) && (
+            <View>
+              <SectionHeader title="stations" sub="start from any song" />
+              <StationsGrid
+                stations={stations}
+                loading={poolLoading}
+                onPick={pickFromPool}
+              />
+            </View>
+          )}
+
+          {(yourPlaylists?.length ?? 0) > 0 && (
+            <View>
+              <SectionHeader title="made by you" sub="your playlists" />
+              <PlaylistGrid
+                items={yourPlaylists.slice(0, 4).map(p => ({
+                  id: p.id,
+                  name: p.name,
+                  cover: p.coverImageUrl,
+                  meta: `${p.trackCount} ${
+                    p.trackCount === 1 ? 'track' : 'tracks'
+                  }`,
+                }))}
+                onPressItem={() =>
+                  showToast('playlist pages come in a later build')
+                }
+              />
+            </View>
+          )}
+
+          {visibleAuto.length > 0 && (
+            <View>
+              <SectionHeader
+                title="made for you"
+                sub="fresh editions from your plays — skips count"
+              />
+              <PlaylistGrid
+                items={visibleAuto.map(a => ({
+                  id: a.id,
+                  name: a.name,
+                  cover: a.coverImageUrl,
+                  tracks: a.tracks,
+                  meta:
+                    a.kind === 'auto-gate'
+                      ? a.gate?.line
+                      : [
+                          a.editionLabel ?? a.description,
+                          a.cadence,
+                          a.refreshing ? 'refreshing…' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · '),
+                }))}
+                onPressItem={playMix}
+              />
+            </View>
+          )}
+
+          {(poolLoading || newPicks.length > 0) && (
+            <View>
+              <SectionHeader title="new for you" sub="fresh this week" />
+              {poolLoading ? (
+                <View style={styles.skeletonGrid}>
+                  {[0, 1, 2, 3].map(i => (
+                    <Skeleton key={i} radius={8} style={styles.skeletonCell} />
+                  ))}
+                </View>
+              ) : (
+                <PlaylistGrid
+                  items={newPicks.map(track => ({
+                    id: track.id,
+                    name: cleanTitle(track.title),
+                    cover: artUrl(track, 500),
+                    meta: track.artist,
+                    track,
+                  }))}
+                  onPressItem={item => pickFromPool(item.track)}
+                />
+              )}
+            </View>
+          )}
+
+          {(discover?.popularPlaylists?.length ?? 0) > 0 && (
+            <View>
+              <SectionHeader title="popular playlists" sub="trending now" />
+              <PlaylistGrid
+                items={discover.popularPlaylists.slice(0, 4).map(p => ({
+                  id: p.id,
+                  name: p.name,
+                  cover: p.coverImageUrl,
+                  meta: p.subtitle?.toLowerCase(),
+                }))}
+                onPressItem={() =>
+                  showToast('playlist pages come in the next build')
+                }
+              />
+            </View>
+          )}
+        </ScrollView>
       </ScreenFade>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: DOCK_CLEARANCE,
+    gap: 28,
+    paddingTop: 14,
+    paddingBottom: 24 + DOCK_CLEARANCE,
   },
-  greeting: {
-    fontFamily: 'HankenGrotesk-SemiBold',
-    fontSize: 26,
-    marginTop: 6,
+  pad: { paddingHorizontal: 22, gap: 4 },
+  greeting: { fontFamily: fonts.semibold, fontSize: 26 },
+  tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
+  wheelWrap: { alignItems: 'center', paddingTop: 6 },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    paddingHorizontal: 22,
   },
-  card: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 20,
-    marginTop: 28,
-    gap: 4,
-  },
-  cardTitle: {
-    fontFamily: 'HankenGrotesk-SemiBold',
-    fontSize: 19,
-  },
-  cardSub: {
-    fontFamily: 'HankenGrotesk-Regular',
-    fontSize: 13,
-  },
-  note: {
-    fontFamily: 'HankenGrotesk-Regular',
-    fontSize: 12.5,
-    marginTop: 18,
+  skeletonCell: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    aspectRatio: 1,
+    height: undefined,
   },
 });
