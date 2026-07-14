@@ -13,6 +13,12 @@ import { usePlayer } from '../playback/PlayerContext';
 import { getUser, logout } from '../lib/auth';
 import { showToast } from '../lib/toast';
 import { QUALITIES } from '../lib/audioQuality';
+import {
+  isPrivateSession,
+  privateSessionUntil,
+  setPrivateSession,
+  subscribePrivateSession,
+} from '../lib/privateSession';
 import { getLibrarySummary } from '../api/library';
 import { listLiked } from '../api/likes';
 import { listPlaylists } from '../api/playlists';
@@ -146,6 +152,21 @@ export default function YouScreen({ navigation }) {
   // unhide prunes locally so it reacts at once.
   const [hidden, setHidden] = useState(null);
   const [hiddenError, setHiddenError] = useState(false);
+  const [priv, setPriv] = useState(isPrivateSession);
+  useEffect(() => subscribePrivateSession(setPriv), []);
+
+  const togglePrivate = () => {
+    const next = !priv;
+    setPrivateSession(next);
+    showToast(next ? 'private session on.' : 'private session off.');
+  };
+  const privUntil = privateSessionUntil();
+  const privCaption =
+    priv && privUntil
+      ? `on · until ${new Date(privUntil)
+          .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+          .toLowerCase()}`
+      : "what you play won't shape your mixes.";
   useEffect(() => {
     if (openShelf !== 'settings') {
       return undefined;
@@ -258,7 +279,7 @@ export default function YouScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
       <ScreenFade>
-        <ScrollView
+        <ScrollView overScrollMode="always"
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
@@ -474,6 +495,43 @@ export default function YouScreen({ navigation }) {
                 onToggle={() => toggleShelf('settings')}
                 peek={<Icon name="cog" size={18} color={t.inkFaint} strokeWidth={1.6} />}
               >
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  privacy
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="private session"
+                  accessibilityState={priv ? { selected: true } : {}}
+                  onPress={togglePrivate}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text
+                      style={[
+                        styles.rowTitle,
+                        { color: priv ? t.accent : t.ink },
+                      ]}
+                    >
+                      private session
+                    </Text>
+                    <Text
+                      style={[styles.qualityCaption, { color: t.inkSoft }]}
+                    >
+                      {privCaption}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.dot,
+                      { borderColor: priv ? t.accent : t.line },
+                      priv && { backgroundColor: t.accent },
+                    ]}
+                  />
+                </Pressable>
+
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   audio quality
                 </Text>

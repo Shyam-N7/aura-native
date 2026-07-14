@@ -8,8 +8,11 @@ import { useTheme } from '../../theme/ThemeContext';
 import { getUser } from '../../lib/auth';
 import { themes, type, radii } from '../../theme/tokens';
 
-const THEME_ORDER = Object.keys(themes);
-// The cycle button wears the active theme's own glyph.
+// 'auto' rides the end of the cycle: it follows the system light/dark
+// setting (dusk by day, midnight by night).
+const THEME_ORDER = [...Object.keys(themes), 'auto'];
+// The cycle button wears the active theme's own glyph; on 'auto' it wears
+// the resolved theme's glyph inside an accent ring — the ring is the tell.
 const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bloom' };
 
 // The web's glass top bar: wordmark left, controls right. Mode chip and profile
@@ -17,13 +20,13 @@ const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bloom' };
 // `navigation` comes from the hosting screen's props (screens render standalone
 // in tests, so no useNavigation here).
 export function TopBar({ navigation }) {
-  const { name, t, setTheme } = useTheme();
+  const { name, pref, t, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const initial = (getUser()?.name || 'a').trim()[0]?.toLowerCase();
 
   const cycleTheme = () => {
     const next =
-      THEME_ORDER[(THEME_ORDER.indexOf(name) + 1) % THEME_ORDER.length];
+      THEME_ORDER[(THEME_ORDER.indexOf(pref) + 1) % THEME_ORDER.length];
     setTheme(next);
   };
 
@@ -36,8 +39,12 @@ export function TopBar({ navigation }) {
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="switch theme"
+            accessibilityState={pref === 'auto' ? { selected: true } : {}}
             onPress={cycleTheme}
-            style={[styles.chip, { borderColor: t.line }]}
+            style={[
+              styles.chip,
+              { borderColor: pref === 'auto' ? t.accent : t.line },
+            ]}
           >
             <Icon name={THEME_ICON[name]} size={16} color={t.inkSoft} />
           </PressScale>

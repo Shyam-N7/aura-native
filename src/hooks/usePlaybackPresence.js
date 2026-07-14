@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { isSignedIn } from '../lib/auth';
+import { isPrivateSession } from '../lib/privateSession';
 import { sendHeartbeat, getNowPlaying } from '../api/playback';
 
 // Ported from web usePlaybackPresence: heartbeat this device's playback and
@@ -27,7 +28,9 @@ export function usePlaybackPresence({ track, playing, progress }) {
     }
     const beat = () => {
       const s = stateRef.current;
-      if (!s.track) {
+      // Private session: this device goes quiet — no "playing elsewhere"
+      // note, no cross-device resume trail.
+      if (!s.track || isPrivateSession()) {
         return;
       }
       sendHeartbeat({

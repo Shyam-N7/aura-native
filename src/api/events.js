@@ -1,4 +1,5 @@
 import { fetchAuthed } from '../lib/auth';
+import { isPrivateSession } from '../lib/privateSession';
 // Fire-and-forget listening event recorder, ported from web src/api/events.js
 // (postEvent(track_id, kind, opts) reshaped to recordEvent(evt) per the native
 // contract). Failures are logged to console but never surface to the user —
@@ -15,6 +16,10 @@ function invalidateHomeCache() {}
 export function recordEvent(evt = {}) {
   const { track_id, kind } = evt;
   if (!track_id || !kind) {
+    return;
+  }
+  // Private session: the play happens, the profile never hears about it.
+  if (isPrivateSession()) {
     return;
   }
   if (kind === 'play' || kind === 'end') {

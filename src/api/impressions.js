@@ -1,4 +1,5 @@
 import { fetchAuthed } from '../lib/auth';
+import { isPrivateSession } from '../lib/privateSession';
 
 // Fire-and-forget impression logger, ported from web src/api/impressions.js:
 // records that these tracks were SHOWN on a surface, so the server ranker can
@@ -9,6 +10,10 @@ const logged = new Set();
 
 export function logImpressions(surface, trackIds) {
   if (!surface || !Array.isArray(trackIds) || !trackIds.length) {
+    return;
+  }
+  // Private session: what's shown stays out of the ranker too.
+  if (isPrivateSession()) {
     return;
   }
   const key = `${surface}|${new Date().toISOString().slice(0, 10)}`;
