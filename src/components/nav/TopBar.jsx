@@ -9,6 +9,8 @@ import { getUser } from '../../lib/auth';
 import { themes, type, radii } from '../../theme/tokens';
 
 const THEME_ORDER = Object.keys(themes);
+// The cycle button wears the active theme's own glyph.
+const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bloom' };
 
 // The web's glass top bar: wordmark left, controls right. Mode chip and profile
 // actions arrive with Phase 2 — the profile circle is decorative for now.
@@ -20,7 +22,8 @@ export function TopBar({ navigation }) {
   const initial = (getUser()?.name || 'a').trim()[0]?.toLowerCase();
 
   const cycleTheme = () => {
-    const next = THEME_ORDER[(THEME_ORDER.indexOf(name) + 1) % THEME_ORDER.length];
+    const next =
+      THEME_ORDER[(THEME_ORDER.indexOf(name) + 1) % THEME_ORDER.length];
     setTheme(next);
   };
 
@@ -36,7 +39,7 @@ export function TopBar({ navigation }) {
             onPress={cycleTheme}
             style={[styles.chip, { borderColor: t.line }]}
           >
-            <Icon name="theme" size={16} color={t.inkSoft} />
+            <Icon name={THEME_ICON[name]} size={16} color={t.inkSoft} />
           </PressScale>
           <PressScale
             accessibilityRole="button"
@@ -47,7 +50,9 @@ export function TopBar({ navigation }) {
             <Icon name="search" size={16} color={t.inkSoft} />
           </PressScale>
           <View style={[styles.profile, { backgroundColor: t.accentSoft }]}>
-            <Text style={[styles.profileText, { color: t.accent }]}>{initial}</Text>
+            <Text style={[styles.profileText, { color: t.accent }]}>
+              {initial}
+            </Text>
           </View>
         </View>
       </Glass>
@@ -58,7 +63,12 @@ export function TopBar({ navigation }) {
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 14, marginBottom: 6 },
   bar: { height: 52, justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 10,
+  },
   spacer: { flex: 1 },
   chip: {
     width: 32,

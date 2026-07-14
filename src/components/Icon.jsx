@@ -29,7 +29,14 @@ const ICONS = {
     d: 'M17 2 l4 4 -4 4 M3 12 V10 a4 4 0 0 1 4 -4 h14 M7 22 l-4 -4 4 -4 M21 12 v2 a4 4 0 0 1 -4 4 H3 M11 10.5 l1.5 -1 v5',
   },
   'chevron-down': { d: 'M6 9 l6 6 6 -6' },
-  theme: { d: 'M21 12.8 A9 9 0 1 1 11.2 3 a7 7 0 0 0 9.8 9.8 Z' },
+  // Theme-cycle glyphs — one per theme, the button always wears the active one.
+  sun: {
+    d: 'M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8 M12 2.5 v2 M12 19.5 v2 M2.5 12 h2 M19.5 12 h2 M5.3 5.3 l1.4 1.4 M17.3 17.3 l1.4 1.4 M18.7 5.3 l-1.4 1.4 M6.7 17.3 l-1.4 1.4',
+  },
+  moon: { d: 'M21 12.8 A9 9 0 1 1 11.2 3 a7 7 0 0 0 9.8 9.8 Z' },
+  bloom: {
+    d: 'M12 3 c1.2 4.2 2.8 5.8 7 7 c-4.2 1.2 -5.8 2.8 -7 7 c-1.2 -4.2 -2.8 -5.8 -7 -7 c4.2 -1.2 5.8 -2.8 7 -7 Z',
+  },
 };
 
 export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {
@@ -42,7 +49,9 @@ export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {
       <Path
         d={icon.d}
         stroke={icon.fill ? 'none' : color}
-        strokeWidth={icon.fill ? 0 : icon.thick ? strokeWidth + 0.6 : strokeWidth}
+        strokeWidth={
+          icon.fill ? 0 : icon.thick ? strokeWidth + 0.6 : strokeWidth
+        }
         strokeLinecap="round"
         strokeLinejoin="round"
         fill={icon.fill ? color : 'none'}
