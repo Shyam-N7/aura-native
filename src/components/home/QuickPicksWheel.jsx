@@ -34,13 +34,16 @@ const DECELERATION = 0.9976;
 const MAX_DEG_PER_SEC = 2760;
 const HINT_MS = 4200;
 
-function Disc({ track, index, ringSize, rot, playing, accent, onPick }) {
+function Disc({ track, index, ringSize, rot, playing, accent, ink, onPick }) {
   const reduced = useReducedMotion();
   const discSize = ringSize * 0.24;
   const radius = ringSize * 0.38;
   const angle = (-90 + index * (360 / DISC_COUNT)) * (Math.PI / 180);
   const cx = ringSize / 2 + radius * Math.cos(angle) - discSize / 2;
   const cy = ringSize / 2 + radius * Math.sin(angle) - discSize / 2;
+  // Web .aura-qps__name: the title hangs under the disc (150% width, 100px
+  // cap) and counter-rotates with it, staying upright while orbiting.
+  const nameW = Math.min(discSize * 1.5, 100);
 
   // Pop-in stagger (55ms per disc, web .aura-qps pop) + counter-rotation so
   // the art stays upright while the ring turns.
@@ -73,6 +76,20 @@ function Disc({ track, index, ringSize, rot, playing, accent, onPick }) {
       >
         <TrackArt track={track} size={discSize - (playing ? 8 : 0)} round />
       </Pressable>
+      <Text
+        numberOfLines={2}
+        style={[
+          styles.discName,
+          {
+            top: discSize + 6,
+            width: nameW,
+            left: (discSize - nameW) / 2,
+            color: playing ? accent : ink,
+          },
+        ]}
+      >
+        {cleanTitle(track.title)}
+      </Text>
     </Animated.View>
   );
 }
@@ -151,7 +168,7 @@ export function QuickPicksWheel({ tracks, currentId, onPick }) {
       <GestureDetector gesture={spin}>
         <View
           accessibilityLabel="quick picks wheel"
-          style={{ width: ringSize, height: ringSize }}
+          style={[styles.ringBox, { width: ringSize, height: ringSize }]}
         >
           <View style={[styles.hubWrap, { width: ringSize, height: ringSize }]}>
             <Animated.View
@@ -181,6 +198,7 @@ export function QuickPicksWheel({ tracks, currentId, onPick }) {
                 rot={rot}
                 playing={track.id === currentId}
                 accent={t.accent}
+                ink={t.inkSoft}
                 onPick={onPick}
               />
             ))}
@@ -201,6 +219,9 @@ export function QuickPicksWheel({ tracks, currentId, onPick }) {
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 10 },
+  // The bottom disc's name hangs past the ring box — keep the hint line
+  // clear of it (web gives the why-line 28px for the same reason).
+  ringBox: { marginBottom: 22 },
   hubWrap: {
     position: 'absolute',
     alignItems: 'center',
@@ -214,6 +235,13 @@ const styles = StyleSheet.create({
   hubDot: { width: 6, height: 6, borderRadius: 3 },
   disc: { position: 'absolute' },
   discPress: { alignItems: 'center', justifyContent: 'center' },
+  discName: {
+    position: 'absolute',
+    textAlign: 'center',
+    fontFamily: fonts.semibold,
+    fontSize: 9.5,
+    lineHeight: 11.5,
+  },
   playingRing: { borderWidth: 2, borderRadius: 999 },
   reason: {
     fontFamily: fonts.regular,
