@@ -6,6 +6,7 @@ import {
   dedupeAppend,
   jumpTo,
   removeAt,
+  reorder,
   serializeQueue,
   shuffleUpcoming,
 } from '../src/playback/queueModel';
@@ -192,6 +193,36 @@ describe('dedupeAppend', () => {
     const q = q3();
     expect(dedupeAppend(q, [t('a')])).toBe(q);
     expect(dedupeAppend(q, [])).toBe(q);
+  });
+});
+
+describe('reorder', () => {
+  const ids = q => q.tracks.map(x => x.id);
+
+  test('moves a track and keeps the playing one pinned', () => {
+    const q = reorder(q3("tonight's set", 1), 0, 2);
+    expect(ids(q)).toEqual(['b', 'c', 'a']);
+    expect(q.tracks[q.idx].id).toBe('b'); // was playing b, still playing b
+  });
+
+  test('moving the current track re-points idx at it', () => {
+    const q = reorder(q3("tonight's set", 0), 0, 2);
+    expect(ids(q)).toEqual(['b', 'c', 'a']);
+    expect(q.idx).toBe(2);
+  });
+
+  test('moving a later track above the current shifts idx up', () => {
+    const q = reorder(q3("tonight's set", 1), 2, 0);
+    expect(ids(q)).toEqual(['c', 'a', 'b']);
+    expect(q.idx).toBe(2);
+    expect(q.tracks[q.idx].id).toBe('b');
+  });
+
+  test('no-ops on same index or out-of-range moves', () => {
+    const q = q3();
+    expect(reorder(q, 1, 1)).toBe(q);
+    expect(reorder(q, -1, 2)).toBe(q);
+    expect(reorder(q, 0, 3)).toBe(q);
   });
 });
 

@@ -65,6 +65,29 @@ export function removeAt(queue, i) {
   return { ...queue, tracks, idx: Math.max(0, idx) };
 }
 
+// Web reorderQueue semantics: pure splice-out/splice-in with idx fixups —
+// moving the current track re-points idx at it; moving another track across
+// the current shifts idx to keep the same song playing. Out-of-range or
+// no-op moves return the queue unchanged.
+export function reorder(queue, from, to) {
+  const len = queue.tracks.length;
+  if (from === to || from < 0 || to < 0 || from >= len || to >= len) {
+    return queue;
+  }
+  const tracks = [...queue.tracks];
+  const [moved] = tracks.splice(from, 1);
+  tracks.splice(to, 0, moved);
+  let idx = queue.idx;
+  if (from === idx) {
+    idx = to;
+  } else if (from < idx && idx <= to) {
+    idx -= 1;
+  } else if (to <= idx && idx < from) {
+    idx += 1;
+  }
+  return { ...queue, tracks, idx };
+}
+
 // Source flips "tonight's set" → 'your set' on first insertion so wrap-around
 // turns off once the user starts curating (web enqueueNext/enqueueLast).
 const curatedSource = source => (source === WRAP_SOURCE ? 'your set' : source);

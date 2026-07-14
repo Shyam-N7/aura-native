@@ -410,6 +410,20 @@ export function PlayerProvider({ children }) {
     [applyQueue, enqueueOp],
   );
 
+  const reorder = useCallback(
+    (from, to) => {
+      userActedRef.current = true;
+      const q = queueRef.current;
+      const nq = model.reorder(q, from, to);
+      if (nq === q) {
+        return;
+      }
+      applyQueue(nq);
+      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+    },
+    [applyQueue, enqueueOp],
+  );
+
   // Context-menu "play next" / "add to queue" (web enqueueNext/enqueueLast).
   // First insertion flips "tonight's set" → 'your set' inside the model so
   // wrap-around turns off once the user starts curating. With nothing queued
@@ -699,6 +713,7 @@ export function PlayerProvider({ children }) {
       seekTo,
       jumpTo,
       removeAt,
+      reorder,
       enqueueNext,
       enqueueLast,
       cycleRepeat,
@@ -721,6 +736,7 @@ export function PlayerProvider({ children }) {
       seekTo,
       jumpTo,
       removeAt,
+      reorder,
       enqueueNext,
       enqueueLast,
       cycleRepeat,

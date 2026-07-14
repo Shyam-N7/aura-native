@@ -35,6 +35,11 @@ const ICONS = {
   'chevron-left': { d: 'M15 5 l-7 7 7 7' },
   // Round line caps turn zero-length strokes into the ⋯ overflow dots.
   dots: { d: 'M12 5 v0.01 M12 12 v0.01 M12 19 v0.01', thick: true },
+  // 6-dot drag grip (two columns of three).
+  grip: {
+    d: 'M9 6 v0.01 M9 12 v0.01 M9 18 v0.01 M15 6 v0.01 M15 12 v0.01 M15 18 v0.01',
+    thick: true,
+  },
   plus: { d: 'M12 5 v14 M5 12 h14' },
   'queue-add': { d: 'M4 6 h16 M4 12 h16 M4 18 h7 M17.5 15 v6 M14.5 18 h6' },
   heart: { d: HEART_D },
