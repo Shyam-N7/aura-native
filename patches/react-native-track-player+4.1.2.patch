@@ -1,4 +1,5 @@
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
+index b2409a0..5d3d74b 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
 @@ -251,7 +251,7 @@ class MusicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
@@ -412,9 +413,32 @@ diff --git a/node_modules/react-native-track-player/android/src/main/java/com/do
 +    } }
  }
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
+index afa6b0f..eabe679 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
-@@ -739,9 +739,19 @@ class MusicService : HeadlessJsTaskService() {
+@@ -120,9 +120,18 @@ class MusicService : HeadlessJsTaskService() {
+             notificationBuilder.foregroundServiceBehavior = NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
+         }
+         val notification = notificationBuilder.build()
+-        startForeground(EMPTY_NOTIFICATION_ID, notification)
+-        @Suppress("DEPRECATION")
+-        stopForeground(true)
++        try {
++            startForeground(EMPTY_NOTIFICATION_ID, notification)
++            @Suppress("DEPRECATION")
++            stopForeground(true)
++        } catch (error: Exception) {
++            // Android 12+ forbids startForeground while the app is in the
++            // background, e.g. when the system sticky-restarts this service
++            // (null intent) after a process kill. No startForegroundService()
++            // promise is pending in that path, so skipping the empty
++            // notification is safe; crashing here took the whole app down.
++            Timber.w(error, "startForeground not allowed; skipping empty ANR notification")
++        }
+     }
+ 
+     @MainThread
+@@ -739,9 +748,19 @@ class MusicService : HeadlessJsTaskService() {
          return bundle
      }
  
@@ -435,7 +459,7 @@ diff --git a/node_modules/react-native-track-player/android/src/main/java/com/do
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, data?.let { Arguments.fromBundle(it) })
      }
-@@ -751,7 +761,7 @@ class MusicService : HeadlessJsTaskService() {
+@@ -751,7 +770,7 @@ class MusicService : HeadlessJsTaskService() {
          val payload = Arguments.createArray()
          data.forEach { payload.pushMap(Arguments.fromBundle(it)) }
  
