@@ -399,7 +399,7 @@ export default function YouScreen({ navigation }) {
                       accessibilityRole="button"
                       accessibilityLabel={`language ${L}`}
                       onPress={() =>
-                        showToast('language pages come in the next build')
+                        navigation.navigate('LanguageHub', { lang: L })
                       }
                       style={({ pressed }) => [
                         styles.lang,

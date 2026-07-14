@@ -12,7 +12,7 @@ import { usePlayer } from '../playback/PlayerContext';
 import { getHistory, getMusicClockPlays } from '../api/stats';
 import { summarizeClock } from '../lib/musicClock';
 import { TrackArt } from '../components/TrackRow';
-import { Icon } from '../components/Icon';
+import { CrumbBack } from '../components/detail/DetailChassis';
 import { fonts, label, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
@@ -191,15 +191,7 @@ export default function HistoryScreen({ navigation }) {
 
   const header = (
     <View style={styles.header}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="back"
-        onPress={() => navigation.goBack()}
-        hitSlop={10}
-        style={styles.back}
-      >
-        <Icon name="chevron-left" size={24} color={t.ink} />
-      </Pressable>
+      <CrumbBack onPress={() => navigation.goBack()} />
       <Text style={[type.queueHero, { color: t.ink }]}>your history.</Text>
       {status === 'loading' && (
         <Text style={[styles.stateLine, { color: t.inkFaint }]}>
@@ -298,7 +290,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { paddingHorizontal: 20 },
   header: { paddingTop: 10, paddingBottom: 6, gap: 10 },
-  back: { alignSelf: 'flex-start', paddingVertical: 4, marginLeft: -4 },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5 },
   empty: { marginTop: 10, gap: 5 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },

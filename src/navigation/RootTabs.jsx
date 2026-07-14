@@ -58,6 +58,26 @@ export default function RootTabs() {
         getComponent={() => require('../screens/HistoryScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="Artist"
+        getComponent={() => require('../screens/ArtistScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Album"
+        getComponent={() => require('../screens/AlbumScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="LanguageHub"
+        getComponent={() => require('../screens/LanguageHubScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CatalogPlaylist"
+        getComponent={() => require('../screens/CatalogPlaylistScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }

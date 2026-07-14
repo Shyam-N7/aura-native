@@ -39,6 +39,20 @@ export async function searchCatalog(
   };
 }
 
+// Album / movie detail — { album: { ..., isMovie, artist (comma-joined
+// string of every contributor), tracks } }.
+export async function getAlbum(id, { signal } = {}) {
+  const res = await fetchAuthed(`/api/albums/${encodeURIComponent(id)}`, {
+    signal,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `album fetch failed (${res.status})`);
+  }
+  const { album } = await res.json();
+  return album;
+}
+
 export async function getTrack(id, { signal } = {}) {
   const res = await fetchAuthed(
     `/api/catalog/track/${encodeURIComponent(id)}`,

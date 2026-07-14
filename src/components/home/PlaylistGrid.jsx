@@ -4,12 +4,14 @@ import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
 import { fonts, label } from '../../theme/tokens';
 
-// Shared 2-col cover grid for "made by you" / "made for you" / "popular
-// playlists". Items are pre-normalized: { id, name, cover, meta }.
-export function PlaylistGrid({ items, onPressItem }) {
+// Shared 2-col cover grid for home rails ("made by you", "popular playlists"),
+// artist discographies and language-hub shelves. Items are pre-normalized:
+// { id, name, cover, meta }. `style` overrides the container (detail screens
+// pad the whole scroll, so they zero the grid's own page padding).
+export function PlaylistGrid({ items, onPressItem, style }) {
   const { t } = useTheme();
   return (
-    <View style={styles.grid}>
+    <View style={[styles.grid, style]}>
       {items.map(item => (
         <PressScale
           key={item.id}

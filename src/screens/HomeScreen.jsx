@@ -168,14 +168,15 @@ export default function HomeScreen({ navigation }) {
     player.playTrack(track, { source: 'your pick' });
     openPlayer();
   };
-  const playMix = item => {
-    if (item.tracks?.length) {
-      player.playQueue(item.tracks, 0, item.name);
-      openPlayer();
-    } else {
-      // Gate card: the mix hasn't unlocked yet — say why instead of playing.
+  // A mix card opens the set (web onOpenAuto) — the full track list travels
+  // as initialData since auto mixes have no per-id endpoint. Gate cards say
+  // why they're locked instead.
+  const openMix = item => {
+    if (item.mix.kind === 'auto-gate' || !item.mix.tracks?.length) {
       showToast(item.meta || "this mix isn't ready yet");
+      return;
     }
+    navigation.navigate('CatalogPlaylist', { initialData: item.mix });
   };
 
   return (
@@ -254,7 +255,12 @@ export default function HomeScreen({ navigation }) {
               />
               <ArtistRail
                 artists={topArtists}
-                onOpen={() => showToast('artist pages come in the next build')}
+                onOpen={a =>
+                  navigation.navigate('Artist', {
+                    name: a.artist,
+                    trackId: a.sampleTrack?.id,
+                  })
+                }
               />
             </View>
           )}
@@ -300,7 +306,7 @@ export default function HomeScreen({ navigation }) {
                   id: a.id,
                   name: a.name,
                   cover: a.coverImageUrl,
-                  tracks: a.tracks,
+                  mix: a,
                   meta:
                     a.kind === 'auto-gate'
                       ? a.gate?.line
@@ -312,7 +318,7 @@ export default function HomeScreen({ navigation }) {
                           .filter(Boolean)
                           .join(' · '),
                 }))}
-                onPressItem={playMix}
+                onPressItem={openMix}
               />
             </View>
           )}
@@ -351,8 +357,8 @@ export default function HomeScreen({ navigation }) {
                   cover: p.coverImageUrl,
                   meta: p.subtitle?.toLowerCase(),
                 }))}
-                onPressItem={() =>
-                  showToast('playlist pages come in the next build')
+                onPressItem={item =>
+                  navigation.navigate('CatalogPlaylist', { id: item.id })
                 }
               />
             </View>
