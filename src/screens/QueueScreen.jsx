@@ -1,35 +1,76 @@
-import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  Vibration,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   runOnJS,
   scrollTo,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
+import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
+import { label, radii } from '../theme/tokens';
+import { DUR, EASE, SPRING } from '../theme/motion';
 
 const ROW_HEIGHT = 62;
-// Hold the grip briefly to pick a row up — instant pans would fight the
-// list's own scroll gesture.
-const PICKUP_MS = 180;
 const SHIFT_MS = 160;
 const EDGE = 90;
+
+// The current row's live line: 'now playing' + a thin bar gliding between the
+// 1Hz position ticks + elapsed/remaining. Isolated so the ticker re-renders
+// only this leaf, never the list.
+function NowPlayingLine({ t }) {
+  const { position, duration } = usePlaybackProgress(1000);
+  const frac = duration > 0 ? Math.min(1, position / duration) : 0;
+  const w = useSharedValue(frac);
+  useEffect(() => {
+    w.value = withTiming(frac, { duration: 1000, easing: Easing.linear });
+  }, [frac, w]);
+  const fill = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+  return (
+    <View style={styles.npLine}>
+      <Text style={[label(8.5), { color: t.accent }]}>now playing</Text>
+      <View style={[styles.npBar, { backgroundColor: t.line }]}>
+        <Animated.View
+          style={[styles.npFill, { backgroundColor: t.accent }, fill]}
+        />
+      </View>
+      {duration > 0 && (
+        <Text style={[styles.npTime, { color: t.inkFaint }]}>
+          {fmtTime(position)} · -{fmtTime(Math.max(0, duration - position))}
+        </Text>
+      )}
+    </View>
+  );
+}
 
 // One queue row. Drag-reorder ports the web DesktopQueue math onto fixed-height
 // rows: the dragged row rides the finger (translation + scroll delta), rows
 // between origin and target shift one slot, drop commits reorder(from, to).
-// All motion is UI-thread; only pickup/commit cross to JS.
+// All motion is UI-thread; only pickup/commit cross to JS. The grip pan
+// activates on the first few px of vertical movement — an instant pickup that
+// also wins the race against the list's scroll gesture (the old long-press
+// arming lost it whenever the finger drifted during the hold, which read as
+// "reorder is broken").
 function Row({
   item,
   index,
@@ -49,7 +90,14 @@ function Row({
   const { t } = useTheme();
   const title = cleanTitle(item.title);
 
+  const pickup = useCallback(() => {
+    Vibration.vibrate(10);
+  }, []);
+
   const commit = (from, to) => {
+    if (from !== to) {
+      Vibration.vibrate(8);
+    }
     player.reorder(from, to);
     // Release the drag one frame later so the list paints the new order
     // before rows stop compensating — avoids a one-frame jump-back.
@@ -61,7 +109,8 @@ function Row({
   };
 
   const pan = Gesture.Pan()
-    .activateAfterLongPress(PICKUP_MS)
+    .activeOffsetY([-6, 6])
+    .failOffsetX([-14, 14])
     .onStart(() => {
       'worklet';
       dragFrom.value = index;
@@ -69,6 +118,7 @@ function Row({
       dragShift.value = 0;
       scrollStart.value = scrollY.value;
       runOnJS(onDragging)(true);
+      runOnJS(pickup)();
     })
     .onUpdate(e => {
       'worklet';
@@ -137,7 +187,7 @@ function Row({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`reorder ${title}`}
-          hitSlop={6}
+          hitSlop={8}
           style={styles.grip}
         >
           <Icon name="grip" size={18} color={t.inkFaint} />
@@ -167,9 +217,16 @@ function Row({
           >
             {title}
           </Text>
-          <Text numberOfLines={1} style={[styles.artist, { color: t.inkSoft }]}>
-            {isCurrent ? 'now playing' : item.artist ?? ''}
-          </Text>
+          {isCurrent ? (
+            <NowPlayingLine t={t} />
+          ) : (
+            <Text
+              numberOfLines={1}
+              style={[styles.artist, { color: t.inkSoft }]}
+            >
+              {item.artist ?? ''}
+            </Text>
+          )}
         </View>
         {!!item.durationSec && (
           <Text style={[styles.time, { color: t.inkFaint }]}>
@@ -192,11 +249,14 @@ function Row({
   );
 }
 
-// The live queue: tap a row to jump, ✕ to drop it, hold the grip to reorder,
-// shuffle/repeat toggles in the header.
+// The live queue: tap a row to jump, ✕ to drop it, drag the grip to reorder,
+// shuffle/repeat toggles in the header. The screen itself is sheet-like:
+// dragging the header follows the finger and commits to a dismiss on distance
+// or velocity (the stack keeps the tabs alive underneath via transparentModal).
 export default function QueueScreen({ navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
   const player = usePlayer();
   const { tracks, idx, source } = player.queue ?? {
     tracks: [],
@@ -213,11 +273,51 @@ export default function QueueScreen({ navigation }) {
   const listH = useSharedValue(0);
   const listRef = useAnimatedRef();
 
+  const dragY = useSharedValue(0);
+
   const onScroll = useAnimatedScrollHandler(e => {
     scrollY.value = e.contentOffset.y;
   });
 
   const onDragging = useCallback(on => setDragging(on), []);
+
+  // The drag already slid the screen off — pop without replaying the slide.
+  const finishDismiss = useCallback(() => {
+    navigation.setOptions?.({ animation: 'none' });
+    requestAnimationFrame(() => navigation.goBack());
+  }, [navigation]);
+
+  const dismissPan = Gesture.Pan()
+    .activeOffsetY(16)
+    .failOffsetY(-16)
+    .onUpdate(e => {
+      'worklet';
+      dragY.value = Math.max(0, e.translationY);
+    })
+    .onEnd(e => {
+      'worklet';
+      if (e.velocityY > 900 || dragY.value > winH * 0.22) {
+        dragY.value = withTiming(
+          winH,
+          { duration: DUR.sheetOut, easing: EASE.exit },
+          done => {
+            if (done) {
+              runOnJS(finishDismiss)();
+            }
+          },
+        );
+      } else {
+        dragY.value = withSpring(0, SPRING.snapback);
+      }
+    });
+
+  const rootDragStyle = useAnimatedStyle(() => {
+    const p = Math.min(1, dragY.value / (winH * 0.5));
+    return {
+      transform: [{ translateY: dragY.value }, { scale: 1 - p * 0.04 }],
+      borderRadius: p * radii.sheet,
+    };
+  });
 
   const renderItem = ({ item, index }) => (
     <Row
@@ -239,54 +339,65 @@ export default function QueueScreen({ navigation }) {
   );
 
   return (
-    <View
-      style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
+    <Animated.View
+      style={[
+        styles.root,
+        { backgroundColor: t.bg, paddingTop: insets.top },
+        rootDragStyle,
+      ]}
     >
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="close queue"
-          onPress={() => navigation.goBack()}
-          hitSlop={10}
-          style={styles.back}
-        >
-          <Icon name="chevron-down" size={24} color={t.ink} />
-        </Pressable>
-        <View style={styles.headMeta}>
-          <Text style={[styles.source, { color: t.ink }]}>
-            {source ?? 'up next'}
-          </Text>
-          <Text style={[styles.count, { color: t.inkFaint }]}>
-            {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
-          </Text>
+      <GestureDetector gesture={dismissPan}>
+        <View>
+          <View style={[styles.sheetGrip, { backgroundColor: t.line }]} />
+          <View style={styles.header}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="close queue"
+              onPress={() => navigation.goBack()}
+              hitSlop={10}
+              style={styles.back}
+            >
+              <Icon name="chevron-down" size={24} color={t.ink} />
+            </Pressable>
+            <View style={styles.headMeta}>
+              <Text style={[styles.source, { color: t.ink }]}>
+                {source ?? 'up next'}
+              </Text>
+              <Text style={[styles.count, { color: t.inkFaint }]}>
+                {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                player.shuffleActive ? 'shuffle off' : 'shuffle'
+              }
+              onPress={player.toggleShuffle}
+              hitSlop={8}
+              style={styles.toggle}
+            >
+              <Icon
+                name="shuffle"
+                size={20}
+                color={player.shuffleActive ? t.accent : t.inkFaint}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`repeat ${player.repeat}`}
+              onPress={player.cycleRepeat}
+              hitSlop={8}
+              style={styles.toggle}
+            >
+              <Icon
+                name={player.repeat === 'one' ? 'repeat-one' : 'repeat'}
+                size={20}
+                color={player.repeat !== 'off' ? t.accent : t.inkFaint}
+              />
+            </Pressable>
+          </View>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={player.shuffleActive ? 'shuffle off' : 'shuffle'}
-          onPress={player.toggleShuffle}
-          hitSlop={8}
-          style={styles.toggle}
-        >
-          <Icon
-            name="shuffle"
-            size={20}
-            color={player.shuffleActive ? t.accent : t.inkFaint}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`repeat ${player.repeat}`}
-          onPress={player.cycleRepeat}
-          hitSlop={8}
-          style={styles.toggle}
-        >
-          <Icon
-            name={player.repeat === 'one' ? 'repeat-one' : 'repeat'}
-            size={20}
-            color={player.repeat !== 'off' ? t.accent : t.inkFaint}
-          />
-        </Pressable>
-      </View>
+      </GestureDetector>
 
       {tracks.length === 0 ? (
         <Text style={[styles.empty, { color: t.inkFaint }]}>
@@ -307,6 +418,7 @@ export default function QueueScreen({ navigation }) {
           onScroll={onScroll}
           scrollEventThrottle={16}
           scrollEnabled={!dragging}
+          overScrollMode="always"
           onLayout={e => {
             listH.value = e.nativeEvent.layout.height;
           }}
@@ -318,20 +430,28 @@ export default function QueueScreen({ navigation }) {
           ]}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    overflow: 'hidden',
+  },
+  sheetGrip: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 6,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 6,
   },
   back: {
@@ -372,7 +492,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   grip: {
-    width: 26,
+    width: 30,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
@@ -402,6 +522,25 @@ const styles = StyleSheet.create({
   },
   artist: {
     fontSize: 12,
+  },
+  npLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  npBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  npFill: {
+    height: 3,
+    borderRadius: 1.5,
+  },
+  npTime: {
+    fontSize: 10.5,
+    fontVariant: ['tabular-nums'],
   },
   time: {
     fontSize: 11.5,
