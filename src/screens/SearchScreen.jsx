@@ -12,8 +12,9 @@ import { useTheme } from '../theme/ThemeContext';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { searchCatalog } from '../api/catalog';
-import { getUser } from '../lib/auth';
+import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { showToast } from '../lib/toast';
+import { dropExplicit } from '../lib/explicit';
 import { TrackRow, TrackArt } from '../components/TrackRow';
 import {
   useRecentSearches,
@@ -31,8 +32,19 @@ const EMPTY = {
   error: null,
 };
 
-// Non-playable entity row (artists / albums) — Phase 1 has no artist or album
-// pages, so pressing one says so honestly.
+// Pre-query trending chips, ported verbatim from web SearchSidebar: a
+// hardcoded in-bundle list per language (no endpoint exists — it changes
+// only on deploy); unlisted languages fall back to 'all'.
+const TRENDING_BY_LANG = {
+  all: ['halcyon', 'a.r. rahman', 'sid sriram', 'lana del rey', 'arijit singh', 'phir bhi tumko chaahunga'],
+  tamil: ['vaaranam aayiram', 'anirudh', 'sid sriram', 'thalapathy', 'jana nayagan', 'ar rahman tamil'],
+  english: ['halcyon', 'lana del rey', 'hozier', 'ellie goulding', 'taylor swift', 'phoebe bridgers'],
+  hindi: ['arijit singh', 'ar rahman hindi', 'pritam', 'lata mangeshkar', 'tu hi hai aashiqui', 'kal ho na ho'],
+  malayalam: ['malayalam hits', 'shaan rahman', 'gopi sundar', 'sushin shyam', 'malayalam classics', 'kj yesudas'],
+  kannada: ['kannada hits', 'raghu dixit', 'arjun janya', 'sanjith hegde', 'sonu nigam kannada', 'k.j. yesudas'],
+};
+
+// Entity row (artist / album / playlist tile).
 function EntityRow({ image, name, sub, round, onPress, t }) {
   return (
     <Pressable
@@ -106,8 +118,14 @@ export default function SearchScreen({ navigation }) {
           return;
         }
         setHit({ key: wantKey, ...d, error: null });
-        // Remember the query once something actually matched.
-        if (d.songs.length || d.artists.length || d.albums.length) {
+        // Remember the query once something actually matched (web: an
+        // artists-only match does NOT record).
+        if (
+          d.songs.length ||
+          d.albums.length ||
+          d.playlists.length ||
+          d.userPlaylists.length
+        ) {
           pushRecentSearch(trimmed);
         }
       })
@@ -129,8 +147,16 @@ export default function SearchScreen({ navigation }) {
       : view.key === wantKey
         ? 'ok'
         : 'loading';
+  // Family mode filters the songs section client-side (web dropExplicit);
+  // other sections carry no per-track flag.
+  const songs = dropExplicit(view.songs, getActiveExplicitOff());
   const nothing =
-    !view.songs.length && !view.artists.length && !view.albums.length;
+    !songs.length &&
+    !view.artists.length &&
+    !view.albums.length &&
+    !view.playlists.length &&
+    !view.userPlaylists.length &&
+    !view.top;
 
   const playSong = track => {
     // Web labels a direct search pick 'your pick' (auto-radio still continues
@@ -138,6 +164,21 @@ export default function SearchScreen({ navigation }) {
     player.playTrack(track, { source: 'your pick' });
     player.ui?.openPlayer?.();
   };
+
+  // Tile taps route by entity type; a song top-result is suppressed (the
+  // songs list leads instead, web parity).
+  const openTop = top => {
+    if (top.type === 'artist') {
+      navigation.navigate('Artist', { id: top.id, name: top.name });
+    } else if (top.type === 'album') {
+      navigation.navigate('Album', { id: top.id });
+    } else if (top.type === 'playlist') {
+      navigation.navigate('CatalogPlaylist', { id: top.id });
+    }
+  };
+  const trending = TRENDING_BY_LANG[lang] ?? TRENDING_BY_LANG.all;
+  // Album-hero queries lead with albums (web section-order swap).
+  const albumsFirst = view.top?.type === 'album';
 
   return (
     <View
@@ -227,6 +268,29 @@ export default function SearchScreen({ navigation }) {
                 find songs, artists and albums from the catalog.
               </Text>
             )}
+            <View>
+              <Text style={[styles.section, { color: t.inkFaint }]}>
+                trending{lang !== 'all' ? ` · ${lang}` : ''}
+              </Text>
+              <View style={styles.chips}>
+                {trending.map(item => (
+                  <Pressable
+                    key={item}
+                    accessibilityRole="button"
+                    accessibilityLabel={`search ${item}`}
+                    onPress={() => setQ(item)}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      { borderColor: t.line },
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text style={[styles.chipText, { color: t.ink }]}>
+                      {item}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           </>
         )}
 
@@ -239,19 +303,14 @@ export default function SearchScreen({ navigation }) {
           </Text>
         )}
 
-        {status === 'ok' && (
-          <>
-            {nothing && (
-              <Text style={[styles.hint, { color: t.inkFaint }]}>
-                nothing matched “{trimmed}”.
-              </Text>
-            )}
-            {view.songs.length > 0 && (
-              <View>
+        {status === 'ok' &&
+          (() => {
+            const songsSection = songs.length > 0 && (
+              <View key="songs">
                 <Text style={[styles.section, { color: t.inkFaint }]}>
                   songs
                 </Text>
-                {view.songs.map(track => (
+                {songs.map(track => (
                   <TrackRow
                     key={track.id}
                     track={track}
@@ -260,9 +319,9 @@ export default function SearchScreen({ navigation }) {
                   />
                 ))}
               </View>
-            )}
-            {view.artists.length > 0 && (
-              <View>
+            );
+            const artistsSection = view.artists.length > 0 && (
+              <View key="artists">
                 <Text style={[styles.section, { color: t.inkFaint }]}>
                   artists
                 </Text>
@@ -275,16 +334,16 @@ export default function SearchScreen({ navigation }) {
                     round
                     t={t}
                     onPress={() =>
-                      showToast('artist pages come in the next build')
+                      navigation.navigate('Artist', { id: a.id, name: a.name })
                     }
                   />
                 ))}
               </View>
-            )}
-            {view.albums.length > 0 && (
-              <View>
+            );
+            const albumsSection = view.albums.length > 0 && (
+              <View key="albums">
                 <Text style={[styles.section, { color: t.inkFaint }]}>
-                  albums
+                  albums & movies
                 </Text>
                 {view.albums.map(a => (
                   <EntityRow
@@ -295,15 +354,96 @@ export default function SearchScreen({ navigation }) {
                       .filter(Boolean)
                       .join(' · ')}
                     t={t}
-                    onPress={() =>
-                      showToast('album pages come in the next build')
-                    }
+                    onPress={() => navigation.navigate('Album', { id: a.id })}
                   />
                 ))}
               </View>
-            )}
-          </>
-        )}
+            );
+            return (
+              <>
+                {nothing && (
+                  <Text style={[styles.hint, { color: t.inkFaint }]}>
+                    nothing matched “{trimmed}”.
+                  </Text>
+                )}
+                {view.top && view.top.type !== 'song' && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`open ${view.top.name}`}
+                    onPress={() => openTop(view.top)}
+                    style={({ pressed }) => [
+                      styles.hero,
+                      { backgroundColor: t.surface },
+                      pressed && styles.pressed,
+                    ]}>
+                    <TrackArt
+                      track={{ imageUrl: view.top.image, name: view.top.name }}
+                      size={68}
+                      radius={10}
+                      round={view.top.type === 'artist'}
+                    />
+                    <View style={styles.entityMeta}>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.heroName, { color: t.ink }]}>
+                        {view.top.name}
+                      </Text>
+                      <Text style={[styles.entitySub, { color: t.inkSoft }]}>
+                        {view.top.type === 'album'
+                          ? view.top.isMovie
+                            ? 'movie'
+                            : 'album'
+                          : view.top.type}
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
+                {albumsFirst
+                  ? [albumsSection, songsSection, artistsSection]
+                  : [songsSection, artistsSection, albumsSection]}
+                {view.playlists.length > 0 && (
+                  <View>
+                    <Text style={[styles.section, { color: t.inkFaint }]}>
+                      playlists
+                    </Text>
+                    {view.playlists.map(p => (
+                      <EntityRow
+                        key={p.id}
+                        image={p.image}
+                        name={p.name}
+                        sub={(p.subtitle ?? 'playlist').toLowerCase()}
+                        t={t}
+                        onPress={() =>
+                          navigation.navigate('CatalogPlaylist', { id: p.id })
+                        }
+                      />
+                    ))}
+                  </View>
+                )}
+                {view.userPlaylists.length > 0 && (
+                  <View>
+                    <Text style={[styles.section, { color: t.inkFaint }]}>
+                      your playlists
+                    </Text>
+                    {view.userPlaylists.map(p => (
+                      <EntityRow
+                        key={p.id}
+                        image={p.coverImageUrl}
+                        name={p.name}
+                        sub={`${p.trackCount} ${
+                          p.trackCount === 1 ? 'track' : 'tracks'
+                        }`}
+                        t={t}
+                        onPress={() =>
+                          showToast('playlist pages come in a later build')
+                        }
+                      />
+                    ))}
+                  </View>
+                )}
+              </>
+            );
+          })()}
       </ScrollView>
     </View>
   );
@@ -396,5 +536,33 @@ const styles = StyleSheet.create({
   },
   entitySub: {
     fontSize: 12.5,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingTop: 4,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
+  chipText: {
+    fontSize: 12.5,
+    fontFamily: 'HankenGrotesk-Regular',
+  },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 14,
+    padding: 14,
+  },
+  heroName: {
+    fontFamily: 'HankenGrotesk-SemiBold',
+    fontSize: 19,
+    letterSpacing: -0.1,
   },
 });
