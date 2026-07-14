@@ -6,14 +6,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  ReduceMotion,
-  SlideInDown,
-  SlideOutDown,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import {
   listPlaylists,
@@ -23,8 +15,8 @@ import {
 import { subscribeAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
+import { Sheet } from '../components/ui/Sheet';
 import { fonts, label, radii } from '../theme/tokens';
-import { DUR } from '../theme/motion';
 import { cleanTitle } from '../utils/title';
 
 // "Add to playlist" bottom sheet, ported from web AddToPlaylistSheet +
@@ -228,7 +220,6 @@ function PickerBody({ tracks, onPicked }) {
 
 export function AddToPlaylistSheet() {
   const { t } = useTheme();
-  const insets = useSafeAreaInsets();
   const [event, setEvent] = useState(null);
 
   useEffect(() => subscribeAddToPlaylist(setEvent), []);
@@ -243,69 +234,33 @@ export function AddToPlaylistSheet() {
       : `${tracks.length} tracks`;
 
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <Animated.View
-        entering={FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
-        exiting={FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
-        style={[StyleSheet.absoluteFill, styles.backdrop]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="close add to playlist"
-          onPress={() => setEvent(null)}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-      <Animated.View
-        entering={SlideInDown.duration(DUR.upNext).reduceMotion(
-          ReduceMotion.System,
-        )}
-        exiting={SlideOutDown.duration(DUR.dot).reduceMotion(
-          ReduceMotion.System,
-        )}
-        style={[
-          styles.card,
-          { backgroundColor: t.surface, paddingBottom: insets.bottom + 14 },
-        ]}
-      >
-        <View style={[styles.grip, { backgroundColor: t.line }]} />
-        <Text style={[styles.title, { color: t.ink }]}>Add to playlist</Text>
-        <Text
-          numberOfLines={1}
-          style={[label(9.5), styles.subtitle, { color: t.inkFaint }]}
-        >
-          {sublabel}
-        </Text>
-        <PickerBody
-          key={event.id}
-          tracks={tracks}
-          onPicked={() => setEvent(null)}
-        />
-      </Animated.View>
-    </View>
+    <Sheet
+      onClose={() => setEvent(null)}
+      closeLabel="close add to playlist"
+      // Long playlist collections scroll under the pinned title (they used to
+      // clip at the sheet's max height); the header stays the drag zone.
+      header={
+        <>
+          <Text style={[styles.title, { color: t.ink }]}>Add to playlist</Text>
+          <Text
+            numberOfLines={1}
+            style={[label(9.5), styles.subtitle, { color: t.inkFaint }]}
+          >
+            {sublabel}
+          </Text>
+        </>
+      }
+    >
+      <PickerBody
+        key={event.id}
+        tracks={tracks}
+        onPicked={() => setEvent(null)}
+      />
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
-  card: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: radii.sheet,
-    borderTopRightRadius: radii.sheet,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    maxHeight: '72%',
-  },
-  grip: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    marginBottom: 10,
-  },
   title: { fontFamily: fonts.semibold, fontSize: 18 },
   subtitle: { marginTop: 3, marginBottom: 8 },
   stateLine: {

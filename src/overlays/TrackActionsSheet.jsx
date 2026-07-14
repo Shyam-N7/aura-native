@@ -1,13 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  ReduceMotion,
-  SlideInDown,
-  SlideOutDown,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainerRefContext } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -20,8 +12,8 @@ import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
-import { fonts, radii } from '../theme/tokens';
-import { DUR } from '../theme/motion';
+import { Sheet } from '../components/ui/Sheet';
+import { fonts } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 
 // The track action menu (web TrackContextMenu rethought as a bottom sheet —
@@ -54,7 +46,6 @@ function Item({ icon, label, danger, onPress }) {
 
 export function TrackActionsSheet() {
   const { t } = useTheme();
-  const insets = useSafeAreaInsets();
   const player = usePlayer();
   const navRef = useContext(NavigationContainerRefContext);
   const { isLiked, like, unlike } = useLikes();
@@ -142,95 +133,48 @@ export function TrackActionsSheet() {
   }
 
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <Animated.View
-        entering={FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
-        exiting={FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
-        style={[StyleSheet.absoluteFill, styles.backdrop]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="close menu"
-          onPress={closeTrackActions}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-      <Animated.View
-        entering={SlideInDown.duration(DUR.upNext).reduceMotion(
-          ReduceMotion.System,
-        )}
-        exiting={SlideOutDown.duration(DUR.dot).reduceMotion(
-          ReduceMotion.System,
-        )}
-        style={[
-          styles.card,
-          {
-            backgroundColor: t.surface,
-            paddingBottom: insets.bottom + 14,
-          },
-        ]}
-      >
-        <View style={[styles.grip, { backgroundColor: t.line }]} />
-        <View style={styles.head}>
-          <TrackArt track={track} size={44} radius={6} />
-          <View style={styles.headMeta}>
-            <Text numberOfLines={1} style={[styles.headTitle, { color: t.ink }]}>
-              {cleanTitle(track.title)}
+    <Sheet onClose={closeTrackActions} closeLabel="close menu">
+      <View style={styles.head}>
+        <TrackArt track={track} size={44} radius={6} />
+        <View style={styles.headMeta}>
+          <Text numberOfLines={1} style={[styles.headTitle, { color: t.ink }]}>
+            {cleanTitle(track.title)}
+          </Text>
+          {!!track.artist && (
+            <Text
+              numberOfLines={1}
+              style={[styles.headArtist, { color: t.inkSoft }]}
+            >
+              {track.artist}
             </Text>
-            {!!track.artist && (
-              <Text
-                numberOfLines={1}
-                style={[styles.headArtist, { color: t.inkSoft }]}
-              >
-                {track.artist}
-              </Text>
-            )}
-          </View>
+          )}
         </View>
+      </View>
 
-        {items.map(item => (
-          <Item
-            key={item.id}
-            icon={item.icon}
-            label={item.label}
-            onPress={act(item.run)}
-          />
-        ))}
-        {extras.length > 0 && (
-          <View style={[styles.separator, { backgroundColor: t.line }]} />
-        )}
-        {extras.map(extra => (
-          <Item
-            key={extra.label}
-            label={extra.label}
-            danger={extra.danger}
-            onPress={act(extra.onPress)}
-          />
-        ))}
-      </Animated.View>
-    </View>
+      {items.map(item => (
+        <Item
+          key={item.id}
+          icon={item.icon}
+          label={item.label}
+          onPress={act(item.run)}
+        />
+      ))}
+      {extras.length > 0 && (
+        <View style={[styles.separator, { backgroundColor: t.line }]} />
+      )}
+      {extras.map(extra => (
+        <Item
+          key={extra.label}
+          label={extra.label}
+          danger={extra.danger}
+          onPress={act(extra.onPress)}
+        />
+      ))}
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
-  card: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: radii.sheet,
-    borderTopRightRadius: radii.sheet,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-  },
-  grip: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    marginBottom: 10,
-  },
   head: {
     flexDirection: 'row',
     alignItems: 'center',

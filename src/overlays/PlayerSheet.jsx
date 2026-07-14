@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  BackHandler,
   Image,
   Keyboard,
   StyleSheet,
@@ -168,6 +169,19 @@ export function PlayerSheet() {
   // Armed sleep timer tints the moon in the actions row.
   const [sleep, setSleep] = useState(getSleepState);
   useEffect(() => subscribeSleep(setSleep), []);
+
+  // Hardware back closes the player instead of popping the navigator under
+  // it. Sheets stacked above register later, so they win first (LIFO).
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => sub.remove();
+  }, [open, close]);
 
   // Breathing accent glow behind the play button, playing only (web aura-breathe).
   const playing = player.isPlaying;
