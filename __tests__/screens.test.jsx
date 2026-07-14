@@ -59,6 +59,10 @@ jest.mock('../src/api/library', () => ({
     }),
   ),
 }));
+jest.mock('../src/api/hidden', () => ({
+  listHidden: jest.fn(() => Promise.resolve([])),
+  unhideTrack: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('../src/api/likes', () => ({
   listLiked: jest.fn(() =>
     Promise.resolve([

@@ -396,6 +396,40 @@ export function PlayerProvider({ children }) {
     [applyQueue, enqueueOp],
   );
 
+  // Context-menu "play next" / "add to queue" (web enqueueNext/enqueueLast).
+  // First insertion flips "tonight's set" → 'your set' inside the model so
+  // wrap-around turns off once the user starts curating. With nothing queued
+  // they simply start playback.
+  const enqueueNext = useCallback(
+    track => {
+      userActedRef.current = true;
+      const q = queueRef.current;
+      if (!q.tracks.length) {
+        playTrack(track);
+        return;
+      }
+      const nq = model.addNext(q, track);
+      applyQueue(nq);
+      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+    },
+    [applyQueue, enqueueOp, playTrack],
+  );
+
+  const enqueueLast = useCallback(
+    track => {
+      userActedRef.current = true;
+      const q = queueRef.current;
+      if (!q.tracks.length) {
+        playTrack(track);
+        return;
+      }
+      const nq = model.addToEnd(q, track);
+      applyQueue(nq);
+      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+    },
+    [applyQueue, enqueueOp, playTrack],
+  );
+
   const cycleRepeat = useCallback(() => {
     const nextRepeat =
       repeatRef.current === 'off'
@@ -636,6 +670,8 @@ export function PlayerProvider({ children }) {
       seekTo,
       jumpTo,
       removeAt,
+      enqueueNext,
+      enqueueLast,
       cycleRepeat,
       toggleShuffle,
       setQuality,
@@ -656,6 +692,8 @@ export function PlayerProvider({ children }) {
       seekTo,
       jumpTo,
       removeAt,
+      enqueueNext,
+      enqueueLast,
       cycleRepeat,
       toggleShuffle,
       setQuality,

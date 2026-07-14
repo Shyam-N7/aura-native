@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
+import { openTrackActions } from '../../lib/trackActionsSheet';
 import { fonts, label, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 import { fmtTime, fmtRuntime } from '../../utils/fmtTime';
@@ -73,9 +74,12 @@ export function DetailSection({ title, sub }) {
 
 // One numbered track row. `sub` defaults to artist · language; `reason` is
 // the auto-mix explainer line; `right` is an optional accessory (heart).
-export function DetailRow({ track, index, sub, reason, onPress, right }) {
+// `menu` ({ omit, extras }) adds the ⋯ button + long-press into the track
+// actions sheet — always-visible on native, never hover-gated.
+export function DetailRow({ track, index, sub, reason, onPress, right, menu }) {
   const { t } = useTheme();
   const title = cleanTitle(track.title);
+  const openMenu = menu ? () => openTrackActions({ track, menu }) : undefined;
   return (
     <View style={styles.row}>
       <Text style={[styles.idx, { color: t.inkFaint }]}>
@@ -85,6 +89,7 @@ export function DetailRow({ track, index, sub, reason, onPress, right }) {
         accessibilityRole="button"
         accessibilityLabel={`play ${title}`}
         onPress={onPress}
+        onLongPress={openMenu}
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}
       >
         <TrackArt track={track} size={54} radius={4} />
@@ -108,6 +113,17 @@ export function DetailRow({ track, index, sub, reason, onPress, right }) {
         )}
       </Pressable>
       {right}
+      {menu && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="more"
+          onPress={openMenu}
+          hitSlop={8}
+          style={({ pressed }) => [styles.more, pressed && styles.pressed]}
+        >
+          <Icon name="dots" size={17} color={t.inkFaint} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -158,4 +174,5 @@ const styles = StyleSheet.create({
   },
   meta: { flex: 1, minWidth: 0, gap: 3 },
   title: { fontFamily: fonts.medium, fontSize: 15 },
+  more: { paddingVertical: 8, paddingLeft: 2 },
 });

@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
+import { openTrackActions } from '../lib/trackActionsSheet';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { cleanTitle } from '../utils/title';
@@ -37,6 +38,13 @@ export default function QueueScreen({ navigation }) {
           accessibilityRole="button"
           accessibilityLabel={`play ${title}`}
           onPress={() => player.jumpTo(index)}
+          onLongPress={() =>
+            openTrackActions({
+              track: item,
+              // Queue rows: play/queue actions are redundant here (web parity).
+              menu: { omit: ['play', 'playNext', 'addToQueue'] },
+            })
+          }
           style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
           <Text style={[styles.idx, { color: t.inkFaint }]}>
             {String(index + 1).padStart(2, '0')}

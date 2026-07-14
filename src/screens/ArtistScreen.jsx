@@ -113,6 +113,7 @@ export default function ArtistScreen({ route, navigation }) {
                       track.language ? ` · ${track.language}` : ''
                     }`}
                     onPress={() => playTop(i)}
+                    menu={{ omit: ['artist'] }}
                   />
                 ))}
               </>

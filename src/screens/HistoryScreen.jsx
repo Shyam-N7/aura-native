@@ -11,6 +11,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getHistory, getMusicClockPlays } from '../api/stats';
 import { summarizeClock } from '../lib/musicClock';
+import { openTrackActions } from '../lib/trackActionsSheet';
 import { TrackArt } from '../components/TrackRow';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { fonts, label, type } from '../theme/tokens';
@@ -242,6 +243,7 @@ export default function HistoryScreen({ navigation }) {
         accessibilityRole="button"
         accessibilityLabel={`play ${title}`}
         onPress={() => pickLive(item)}
+        onLongPress={() => openTrackActions({ track: item, menu: {} })}
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       >
         <TrackArt track={item} size={50} radius={4} />

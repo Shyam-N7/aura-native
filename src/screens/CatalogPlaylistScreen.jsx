@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getCatalogPlaylist } from '../api/discover';
+import { hideTrack } from '../api/hidden';
+import { invalidateHomeCache } from '../lib/homeCache';
+import { showToast } from '../lib/toast';
 import {
   CrumbBack,
   PlayAllPill,
@@ -41,6 +44,32 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   }, [id, initialData]);
 
   const tracks = hit.data?.tracks ?? [];
+
+  // "Don't show this again" — only on the made-for-you mixes (a catalog list
+  // isn't a pick of ours to apologise for). Removes the row immediately; the
+  // undo lives in the library's settings shelf.
+  const isAutoMix = initialData?.kind === 'auto';
+  const hideOne = async track => {
+    try {
+      await hideTrack(track.id);
+      setHit(h =>
+        h.data
+          ? {
+              ...h,
+              data: {
+                ...h.data,
+                tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
+              },
+            }
+          : h,
+      );
+      // Home must not serve it again this session.
+      invalidateHomeCache('autoPlaylists', 'quickPicks');
+      showToast("hidden — aura won't pick this for you again. undo in settings.");
+    } catch {
+      showToast("couldn't hide that — try again.");
+    }
+  };
 
   const playFrom = i => {
     player.playQueue(
@@ -109,6 +138,17 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
                       index={i}
                       reason={track.reason}
                       onPress={() => playFrom(i)}
+                      menu={{
+                        extras: isAutoMix
+                          ? [
+                              {
+                                label: "don't show this again",
+                                danger: true,
+                                onPress: () => hideOne(track),
+                              },
+                            ]
+                          : [],
+                      }}
                     />
                   ))}
                 </View>

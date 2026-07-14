@@ -87,11 +87,13 @@ export default function LikedScreen({ navigation }) {
     </View>
   );
 
+  // The heart handles like/unlike, so the menu omits it (web parity).
   const renderItem = ({ item, index }) => (
     <DetailRow
       track={item}
       index={index}
       onPress={() => playFrom(index)}
+      menu={{ omit: ['like'] }}
       right={
         <HeartButton
           trackId={item.id}

@@ -6,6 +6,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { PlayerProvider } from './src/playback/PlayerContext';
 import { PlayerSheet } from './src/overlays/PlayerSheet';
+import { TrackActionsSheet } from './src/overlays/TrackActionsSheet';
+import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
 import { Toast } from './src/components/Toast';
 import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
@@ -27,6 +29,9 @@ function Shell() {
           <RootTabs />
           {/* Inside the container so "up next" can hop to the Queue screen. */}
           <PlayerSheet />
+          {/* Action sheets stack above the player (JSX order = z-order). */}
+          <TrackActionsSheet />
+          <AddToPlaylistSheet />
         </NavigationContainer>
       ) : (
         <AuthScreen />

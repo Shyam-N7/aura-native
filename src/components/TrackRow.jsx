@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
+import { Icon } from './Icon';
+import { openTrackActions } from '../lib/trackActionsSheet';
 import { cleanTitle } from '../utils/title';
 
 // Catalog image urls carry an "NxN" size token (e.g. ..._150x150.jpg) — swap
@@ -36,40 +38,65 @@ export function TrackArt({ track, size = 48, radius = 8, res = 150, round = fals
   );
 }
 
-// One list row: art, title, artist; press plays. The right-side context
-// affordance (⋯ menu) is omitted in Phase 1.
-export function TrackRow({ track, onPress, active = false }) {
+// One list row: art, title, artist; press plays. `menu` ({ omit, extras })
+// adds the ⋯ button + long-press into the track actions sheet.
+export function TrackRow({ track, onPress, active = false, menu }) {
   const { t } = useTheme();
   const title = cleanTitle(track.title);
+  const openMenu = menu ? () => openTrackActions({ track, menu }) : undefined;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`play ${title}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-      <TrackArt track={track} size={48} radius={8} />
-      <View style={styles.meta}>
-        <Text
-          numberOfLines={1}
-          style={[styles.title, { color: active ? t.accent : t.ink }]}>
-          {title}
-        </Text>
-        {!!track.artist && (
-          <Text numberOfLines={1} style={[styles.artist, { color: t.inkSoft }]}>
-            {track.artist}
+    <View style={styles.rowWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`play ${title}`}
+        onPress={onPress}
+        onLongPress={openMenu}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+        <TrackArt track={track} size={48} radius={8} />
+        <View style={styles.meta}>
+          <Text
+            numberOfLines={1}
+            style={[styles.title, { color: active ? t.accent : t.ink }]}>
+            {title}
           </Text>
-        )}
-      </View>
-    </Pressable>
+          {!!track.artist && (
+            <Text
+              numberOfLines={1}
+              style={[styles.artist, { color: t.inkSoft }]}>
+              {track.artist}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+      {menu && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="more"
+          onPress={openMenu}
+          hitSlop={8}
+          style={({ pressed }) => [styles.more, pressed && styles.pressed]}>
+          <Icon name="dots" size={17} color={t.inkFaint} />
+        </Pressable>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  rowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   row: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 7,
+  },
+  more: {
+    paddingVertical: 10,
+    paddingLeft: 8,
   },
   pressed: {
     opacity: 0.6,

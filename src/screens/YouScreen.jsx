@@ -17,6 +17,9 @@ import { getLibrarySummary } from '../api/library';
 import { listLiked } from '../api/likes';
 import { listPlaylists } from '../api/playlists';
 import { getHistory } from '../api/stats';
+import { listHidden, unhideTrack } from '../api/hidden';
+import { invalidateHomeCache } from '../lib/homeCache';
+import { openTrackActions } from '../lib/trackActionsSheet';
 import { useLikes } from '../hooks/useLikes';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { getLastCrash, clearLastCrash } from '../lib/crashLog';
@@ -67,30 +70,43 @@ function PeekFan({ tracks }) {
   );
 }
 
-// One shelf row: 50px art, title, lowercase artist · language sub.
+// One shelf row: 50px art, title, lowercase artist · language sub, ⋯ menu.
 function ShelfRow({ track, onPress }) {
   const { t } = useTheme();
   const title = cleanTitle(track.title);
+  const openMenu = () => openTrackActions({ track, menu: {} });
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`play ${title}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-    >
-      <TrackArt track={track} size={50} radius={4} />
-      <View style={styles.rowMeta}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: t.ink }]}>
-          {title}
-        </Text>
-        <Text
-          numberOfLines={1}
-          style={[label(9.5), { color: t.inkSoft }]}
-        >
-          {(track.artist ?? '').toLowerCase()} · {track.language ?? ''}
-        </Text>
-      </View>
-    </Pressable>
+    <View style={styles.rowWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`play ${title}`}
+        onPress={onPress}
+        onLongPress={openMenu}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        <TrackArt track={track} size={50} radius={4} />
+        <View style={styles.rowMeta}>
+          <Text numberOfLines={1} style={[styles.rowTitle, { color: t.ink }]}>
+            {title}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[label(9.5), { color: t.inkSoft }]}
+          >
+            {(track.artist ?? '').toLowerCase()} · {track.language ?? ''}
+          </Text>
+        </View>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="more"
+        onPress={openMenu}
+        hitSlop={8}
+        style={({ pressed }) => [styles.more, pressed && styles.pressed]}
+      >
+        <Icon name="dots" size={17} color={t.inkFaint} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -124,6 +140,45 @@ export default function YouScreen({ navigation }) {
   const [crash, setCrash] = useState(getLastCrash);
   const [hintOn] = useState(() => hintAvailable('libraryShelf'));
   const alive = useRef(true);
+
+  // Hidden songs — the visible "don't show this again" list (mixes and
+  // auto-radio never pick these). Loaded when the settings shelf opens;
+  // unhide prunes locally so it reacts at once.
+  const [hidden, setHidden] = useState(null);
+  const [hiddenError, setHiddenError] = useState(false);
+  useEffect(() => {
+    if (openShelf !== 'settings') {
+      return undefined;
+    }
+    let live = true;
+    setHiddenError(false);
+    listHidden()
+      .then(h => {
+        if (live) {
+          setHidden(h);
+        }
+      })
+      .catch(() => {
+        if (live) {
+          setHiddenError(true);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [openShelf]);
+
+  const unhideOne = async id => {
+    try {
+      await unhideTrack(id);
+      setHidden(hs => (hs ?? []).filter(h => h.id !== id));
+      // Same staleness as hiding, in reverse.
+      invalidateHomeCache('autoPlaylists', 'quickPicks');
+      showToast('back in the mix.');
+    } catch (err) {
+      showToast(err.message);
+    }
+  };
 
   useEffect(() => {
     if (hintOn) {
@@ -460,6 +515,58 @@ export default function YouScreen({ navigation }) {
                   );
                 })}
 
+                <Text
+                  style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
+                >
+                  made for you
+                </Text>
+                {hidden === null && !hiddenError && (
+                  <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
+                    loading…
+                  </Text>
+                )}
+                {hiddenError && (
+                  <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
+                    couldn't load hidden songs — try reopening settings.
+                  </Text>
+                )}
+                {hidden !== null && !hiddenError && hidden.length === 0 && (
+                  <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
+                    no hidden songs. "don't show this again" on any mix track
+                    lands here.
+                  </Text>
+                )}
+                {(hidden ?? []).map(h => (
+                  <View key={h.id} style={styles.hiddenRow}>
+                    <View style={styles.rowMeta}>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.rowTitle, { color: t.ink }]}
+                      >
+                        {(h.title || '').toLowerCase()}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[label(9.5), { color: t.inkSoft }]}
+                      >
+                        {(h.artist || '').toLowerCase() ||
+                          "aura won't pick this for you"}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`unhide ${h.title}`}
+                      onPress={() => unhideOne(h.id)}
+                      hitSlop={8}
+                      style={({ pressed }) => pressed && styles.pressed}
+                    >
+                      <Text style={[label(9.5), { color: t.accent }]}>
+                        unhide
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+
                 {crash && (
                   <View style={[styles.crashCard, { borderColor: t.line }]}>
                     <Text style={[label(9.5), { color: t.inkFaint }]}>
@@ -569,11 +676,20 @@ const styles = StyleSheet.create({
   },
   fan: { flexDirection: 'row', alignItems: 'center' },
   fanOverlap: { marginLeft: -9 },
+  rowWrap: { flexDirection: 'row', alignItems: 'center' },
   row: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 7,
+  },
+  more: { paddingVertical: 10, paddingLeft: 8 },
+  hiddenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
   },
   pressed: { opacity: 0.6 },
   rowMeta: { flex: 1, minWidth: 0, gap: 3 },

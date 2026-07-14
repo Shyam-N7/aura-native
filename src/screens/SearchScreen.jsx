@@ -256,6 +256,7 @@ export default function SearchScreen({ navigation }) {
                     key={track.id}
                     track={track}
                     onPress={() => playSong(track)}
+                    menu={{}}
                   />
                 ))}
               </View>

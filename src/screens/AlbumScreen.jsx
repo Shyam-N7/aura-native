@@ -90,6 +90,7 @@ export default function AlbumScreen({ route, navigation }) {
                       track={track}
                       index={i}
                       onPress={() => playFrom(i)}
+                      menu={{}}
                     />
                   ))}
                 </View>
