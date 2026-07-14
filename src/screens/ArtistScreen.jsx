@@ -54,7 +54,7 @@ export default function ArtistScreen({ route, navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <ScrollView
+      <ScrollView overScrollMode="always"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 24 },
@@ -143,7 +143,7 @@ export default function ArtistScreen({ route, navigation }) {
             {similar.length > 0 && (
               <>
                 <DetailSection title="Fans also like" sub="Similar artists" />
-                <ScrollView
+                <ScrollView overScrollMode="always"
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.similarRail}

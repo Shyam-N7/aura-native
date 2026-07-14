@@ -10,7 +10,7 @@ import { fonts, label } from '../../theme/tokens';
 export function ArtistRail({ artists, onOpen }) {
   const { t } = useTheme();
   return (
-    <ScrollView
+    <ScrollView overScrollMode="always"
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.rail}

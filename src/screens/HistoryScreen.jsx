@@ -266,7 +266,7 @@ export default function HistoryScreen({ navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <SectionList
+      <SectionList overScrollMode="always"
         sections={status === 'ok' ? days : []}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (

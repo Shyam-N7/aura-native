@@ -517,7 +517,7 @@ export default function AuthScreen() {
       <KeyboardAvoidingView
         style={styles.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
+        <ScrollView overScrollMode="always"
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled">
           <Text style={styles.wordmark}>AURA</Text>

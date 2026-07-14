@@ -198,7 +198,7 @@ export default function SearchScreen({ navigation }) {
             { backgroundColor: t.surface, borderColor: t.line, color: t.ink },
           ]}
         />
-        <ScrollView
+        <ScrollView overScrollMode="always"
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pillRow}>
@@ -225,7 +225,7 @@ export default function SearchScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      <ScrollView
+      <ScrollView overScrollMode="always"
         style={styles.results}
         contentContainerStyle={styles.resultsInner}
         keyboardShouldPersistTaps="handled">

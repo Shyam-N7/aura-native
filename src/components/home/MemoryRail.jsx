@@ -10,7 +10,7 @@ import { cleanTitle } from '../../utils/title';
 export function MemoryRail({ tracks, onPick }) {
   const { t } = useTheme();
   return (
-    <ScrollView
+    <ScrollView overScrollMode="always"
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.rail}

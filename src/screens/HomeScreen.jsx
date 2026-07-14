@@ -183,7 +183,7 @@ export default function HomeScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
       <ScreenFade>
-        <ScrollView
+        <ScrollView overScrollMode="always"
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >

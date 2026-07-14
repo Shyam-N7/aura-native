@@ -48,7 +48,7 @@ export default function AlbumScreen({ route, navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <ScrollView
+      <ScrollView overScrollMode="always"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 24 },
