@@ -32,6 +32,7 @@ import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { QUALITIES } from '../lib/audioQuality';
 import { TrackArt } from '../components/TrackRow';
+import { HeartButton } from '../components/player/HeartButton';
 import { ProgressRibbon } from '../components/player/ProgressRibbon';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
@@ -295,7 +296,14 @@ export function PlayerSheet() {
               <Text style={[label(11), { color: t.inkFaint }]}>
                 {queue.source ?? 'now playing'}
               </Text>
-              <View style={styles.chipSpacer} />
+              <Glass radius={19} style={styles.chip}>
+                <HeartButton
+                  trackId={track.id}
+                  size={20}
+                  color={t.ink}
+                  accent={t.accent}
+                />
+              </Glass>
             </View>
 
             <View
@@ -510,7 +518,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipSpacer: { width: 38 },
   hero: {
     flex: 1,
     alignItems: 'center',

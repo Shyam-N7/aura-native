@@ -3,6 +3,9 @@ import Svg, { Path } from 'react-native-svg';
 
 // One-file stroke icon set on a 24x24 grid. `fill: true` entries (play) render
 // as solid shapes; everything else is round-capped strokes.
+const HEART_D =
+  'M12 20.5 C 5.4 15.2 3 12.2 3 8.9 a4.6 4.6 0 0 1 9 -1.4 a4.6 4.6 0 0 1 9 1.4 c0 3.3 -2.4 6.3 -9 11.6 Z';
+
 const ICONS = {
   home: { d: 'M3 10.5 12 3l9 7.5 M5 9.5 V21 h5 v-6 h4 v6 h5 V9.5' },
   search: {
@@ -29,6 +32,14 @@ const ICONS = {
     d: 'M17 2 l4 4 -4 4 M3 12 V10 a4 4 0 0 1 4 -4 h14 M7 22 l-4 -4 4 -4 M21 12 v2 a4 4 0 0 1 -4 4 H3 M11 10.5 l1.5 -1 v5',
   },
   'chevron-down': { d: 'M6 9 l6 6 6 -6' },
+  'chevron-left': { d: 'M15 5 l-7 7 7 7' },
+  heart: { d: HEART_D },
+  'heart-filled': { d: HEART_D, fill: true },
+  // Toothed cog (not radiating spokes — spokes read as a sun and get mistaken
+  // for the theme toggle). Ported from the web settings-shelf peek.
+  cog: {
+    d: 'M12 9 a3 3 0 1 0 0 6 a3 3 0 1 0 0 -6 M12.22 2 h-.44 a2 2 0 0 0 -2 2 v.18 a2 2 0 0 1 -1 1.73 l-.43.25 a2 2 0 0 1 -2 0 l-.15 -.08 a2 2 0 0 0 -2.73.73 l-.22.38 a2 2 0 0 0 .73 2.73 l.15.1 a2 2 0 0 1 1 1.72 v.51 a2 2 0 0 1 -1 1.74 l-.15.09 a2 2 0 0 0 -.73 2.73 l.22.38 a2 2 0 0 0 2.73.73 l.15 -.08 a2 2 0 0 1 2 0 l.43.25 a2 2 0 0 1 1 1.73 V20 a2 2 0 0 0 2 2 h.44 a2 2 0 0 0 2 -2 v-.18 a2 2 0 0 1 1 -1.73 l.43 -.25 a2 2 0 0 1 2 0 l.15.08 a2 2 0 0 0 2.73 -.73 l.22 -.39 a2 2 0 0 0 -.73 -2.73 l-.15 -.08 a2 2 0 0 1 -1 -1.74 v-.5 a2 2 0 0 1 1 -1.74 l.15 -.09 a2 2 0 0 0 .73 -2.73 l-.22 -.38 a2 2 0 0 0 -2.73 -.73 l-.15.08 a2 2 0 0 1 -2 0 l-.43 -.25 a2 2 0 0 1 -1 -1.73 V4 a2 2 0 0 0 -2 -2 Z',
+  },
   // Theme-cycle glyphs — one per theme, the button always wears the active one.
   sun: {
     d: 'M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8 M12 2.5 v2 M12 19.5 v2 M2.5 12 h2 M19.5 12 h2 M5.3 5.3 l1.4 1.4 M17.3 17.3 l1.4 1.4 M18.7 5.3 l-1.4 1.4 M6.7 17.3 l-1.4 1.4',

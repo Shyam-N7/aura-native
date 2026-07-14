@@ -48,6 +48,16 @@ export default function RootTabs() {
         getComponent={() => require('../screens/QueueScreen').default}
         options={{ animation: 'slide_from_bottom', animationDuration: 360 }}
       />
+      <Stack.Screen
+        name="Liked"
+        getComponent={() => require('../screens/LikedScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="History"
+        getComponent={() => require('../screens/HistoryScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }

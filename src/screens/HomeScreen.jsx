@@ -29,6 +29,7 @@ import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
 import { fonts } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
+import { partOfDay } from '../utils/daypart';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -39,21 +40,6 @@ function greeting() {
     return 'good afternoon';
   }
   return 'good evening';
-}
-
-// Mirrors server daypart boundaries (server/quickPicks.js): 5/12/17/21.
-function daypart() {
-  const h = new Date().getHours();
-  if (h < 5) {
-    return 'night';
-  }
-  if (h < 12) {
-    return 'morning';
-  }
-  if (h < 17) {
-    return 'afternoon';
-  }
-  return h < 21 ? 'evening' : 'night';
 }
 
 // Cache-first section fetch (web homeCache contract): state seeds
@@ -230,7 +216,7 @@ export default function HomeScreen({ navigation }) {
                 title="quick picks"
                 sub={
                   serverRing
-                    ? `your ${daypart()} picks`
+                    ? `your ${partOfDay()} picks`
                     : 'jump back into what you love'
                 }
               />
