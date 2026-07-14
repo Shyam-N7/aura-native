@@ -391,12 +391,12 @@ const styles = StyleSheet.create({
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    rowGap: 14,
+    justifyContent: 'space-between',
     paddingHorizontal: 22,
   },
   skeletonCell: {
-    flexBasis: '47%',
-    flexGrow: 1,
+    flexBasis: '48%',
     aspectRatio: 1,
     height: undefined,
   },

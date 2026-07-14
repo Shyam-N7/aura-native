@@ -51,10 +51,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    rowGap: 14,
+    justifyContent: 'space-between',
     paddingHorizontal: 22,
   },
-  cell: { flexBasis: '47%', flexGrow: 1, gap: 5 },
+  // Fixed half-width so an odd last tile keeps its column (never stretches).
+  cell: { flexBasis: '48%', gap: 5 },
   cover: { width: '100%', aspectRatio: 1, borderRadius: 8 },
   fallback: { alignItems: 'center', justifyContent: 'center' },
   letter: { fontFamily: fonts.semibold, fontSize: 40 },

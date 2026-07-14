@@ -58,10 +58,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    rowGap: 12,
+    justifyContent: 'space-between',
     paddingHorizontal: 22,
   },
-  cell: { flexBasis: '47%', flexGrow: 1 },
+  // Fixed half-width so an odd last tile keeps its column (never stretches).
+  cell: { flexBasis: '48%' },
   tile: {
     minHeight: 150,
     borderRadius: 14,
