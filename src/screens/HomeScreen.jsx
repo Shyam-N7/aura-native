@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getFeatured } from '../api/catalog';
@@ -7,6 +7,9 @@ import { getUser } from '../lib/auth';
 import { showToast } from '../lib/toast';
 import { TopBar } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
+import { PressScale } from '../components/ui/PressScale';
+import { ScreenFade } from '../components/ui/ScreenFade';
+import { elevation } from '../theme/tokens';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -48,20 +51,20 @@ export default function HomeScreen({ navigation }) {
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
-      <View style={styles.content}>
+      <ScreenFade style={styles.content}>
       <Text style={[styles.greeting, { color: t.ink }]}>
         {greeting()}
         {firstName ? `, ${firstName}` : ''}
       </Text>
 
-      <Pressable
+      <PressScale
         accessibilityRole="button"
         accessibilityLabel="play something"
         onPress={playSomething}
-        style={({ pressed }) => [
+        style={[
           styles.card,
           { backgroundColor: t.accentSoft, borderColor: t.line },
-          pressed && styles.pressed,
+          elevation.accentGlow(t.accent),
         ]}>
         <Text style={[styles.cardTitle, { color: t.accent }]}>
           play something
@@ -69,12 +72,12 @@ export default function HomeScreen({ navigation }) {
         <Text style={[styles.cardSub, { color: t.inkSoft }]}>
           {loading ? 'finding songs…' : "starts tonight's set"}
         </Text>
-      </Pressable>
+      </PressScale>
 
       <Text style={[styles.note, { color: t.inkFaint }]}>
         your mixes, library and more arrive in the next build.
       </Text>
-      </View>
+      </ScreenFade>
     </View>
   );
 }
@@ -101,17 +104,16 @@ const styles = StyleSheet.create({
     marginTop: 28,
     gap: 4,
   },
-  pressed: {
-    opacity: 0.7,
-  },
   cardTitle: {
+    fontFamily: 'HankenGrotesk-SemiBold',
     fontSize: 19,
-    fontWeight: '600',
   },
   cardSub: {
+    fontFamily: 'HankenGrotesk-Regular',
     fontSize: 13,
   },
   note: {
+    fontFamily: 'HankenGrotesk-Regular',
     fontSize: 12.5,
     marginTop: 18,
   },

@@ -46,6 +46,7 @@ export default function RootTabs() {
       <Stack.Screen
         name="Queue"
         getComponent={() => require('../screens/QueueScreen').default}
+        options={{ animation: 'slide_from_bottom', animationDuration: 360 }}
       />
     </Stack.Navigator>
   );

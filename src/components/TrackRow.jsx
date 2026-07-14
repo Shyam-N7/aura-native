@@ -80,10 +80,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
+    fontFamily: 'HankenGrotesk-Medium',
     fontSize: 15,
-    fontWeight: '500',
   },
   artist: {
+    fontFamily: 'HankenGrotesk-Regular',
     fontSize: 12.5,
   },
   fallback: {
@@ -91,6 +92,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   letter: {
-    fontWeight: '600',
+    fontFamily: 'HankenGrotesk-SemiBold',
   },
 });

@@ -171,13 +171,11 @@ export default function SearchScreen({ navigation }) {
                 onPress={() => setLang(L)}
                 style={[
                   styles.pill,
-                  {
-                    borderColor: on ? t.accent : t.line,
-                    backgroundColor: on ? t.accentSoft : t.surface,
-                  },
+                  on
+                    ? { borderColor: t.accent, backgroundColor: t.accent }
+                    : { borderColor: t.line },
                 ]}>
-                <Text
-                  style={[styles.pillText, { color: on ? t.accent : t.inkSoft }]}>
+                <Text style={[styles.pillText, { color: on ? t.bg : t.inkSoft }]}>
                   {L}
                 </Text>
               </Pressable>
@@ -322,9 +320,11 @@ const styles = StyleSheet.create({
   input: {
     borderRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
+    fontFamily: 'HankenGrotesk-Regular',
+    fontSize: 18,
+    letterSpacing: -0.09,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   pillRow: {
     gap: 8,
@@ -333,11 +333,14 @@ const styles = StyleSheet.create({
   pill: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 13,
+    paddingHorizontal: 14,
     paddingVertical: 6,
   },
   pillText: {
-    fontSize: 12.5,
+    fontFamily: 'HankenGrotesk-Medium',
+    fontSize: 11,
+    letterSpacing: 0.88,
+    textTransform: 'uppercase',
   },
   results: {
     flex: 1,

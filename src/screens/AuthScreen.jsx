@@ -9,7 +9,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { Keyframe } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
+import { Glass } from '../components/ui/Glass';
+import { GradientBg } from '../components/ui/GradientBg';
+import { radii } from '../theme/tokens';
+import { DUR } from '../theme/motion';
 import { showToast } from '../lib/toast';
 import {
   forgotRequest,
@@ -492,15 +497,33 @@ export default function AuthScreen() {
 
   /* ── Render ─────────────────────────────────────────────────────────── */
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: t.bg }]}>
+    <SafeAreaView style={styles.root}>
+      {/* The web auth page's warm art panel, full-bleed behind a frosted card. */}
+      <GradientBg
+        angle={140}
+        stops={[
+          { offset: 0, color: '#b89a78' },
+          { offset: 0.55, color: '#8a6645' },
+          { offset: 1, color: '#5a4128' },
+        ]}
+      />
+      <GradientBg
+        radial
+        stops={[
+          { offset: 0, color: '#e8cfae', opacity: 0.35 },
+          { offset: 1, color: '#e8cfae', opacity: 0 },
+        ]}
+      />
       <KeyboardAvoidingView
         style={styles.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled">
-          <Text style={[styles.wordmark, { color: t.ink }]}>AURA</Text>
-          <View style={styles.card}>
+          <Text style={styles.wordmark}>AURA</Text>
+          <Animated.View entering={authRise} style={styles.card}>
+            <Glass radius={radii.auth} style={styles.cardGlass}>
+            <View style={styles.cardInner}>
             {/* ──────────── Sign in / sign up ──────────── */}
             {step === 'form' && (
               <>
@@ -784,12 +807,20 @@ export default function AuthScreen() {
                 </View>
               </>
             )}
-          </View>
+            </View>
+            </Glass>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+// Web auth-rise: 600ms settle up into place.
+const authRise = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 18 }, { scale: 0.985 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
+}).duration(DUR.authRise);
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -797,16 +828,30 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   wordmark: {
     alignSelf: 'center',
+    color: 'rgba(248,240,226,0.92)',
+    fontFamily: 'HankenGrotesk-Bold',
     fontSize: 18,
-    fontWeight: '700',
     letterSpacing: 6,
     marginBottom: 28,
   },
   card: { alignSelf: 'center', maxWidth: 420, width: '100%' },
+  cardGlass: { width: '100%' },
+  cardInner: { paddingHorizontal: 24, paddingVertical: 30 },
   head: { marginBottom: 20 },
-  kicker: { fontSize: 12, letterSpacing: 1, marginBottom: 8 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 8 },
-  sub: { fontSize: 14, lineHeight: 20 },
+  kicker: {
+    fontFamily: 'HankenGrotesk-Medium',
+    fontSize: 11,
+    letterSpacing: 0.88,
+    marginBottom: 8,
+    textTransform: 'lowercase',
+  },
+  title: {
+    fontFamily: 'HankenGrotesk-Bold',
+    fontSize: 28,
+    letterSpacing: -0.42,
+    marginBottom: 8,
+  },
+  sub: { fontFamily: 'HankenGrotesk-Regular', fontSize: 14, lineHeight: 20 },
   formError: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
   submit: {
     alignItems: 'center',
