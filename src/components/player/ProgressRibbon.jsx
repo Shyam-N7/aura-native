@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Circle, ClipPath, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, {
+  Circle,
+  ClipPath,
+  Defs,
+  LinearGradient,
+  Path,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 import Animated, {
   Easing,
   runOnJS,
@@ -21,7 +29,15 @@ const SAMPLES = 80;
 // Direct port of the web ProgressRibbon: a per-track seeded sine ribbon whose
 // phase drifts at ~30Hz while playing; the accent stroke is clipped to
 // progress and the thumb rides the wave. All motion runs on the UI thread.
-export function ProgressRibbon({ progress = 0, playing, seed = 'x', accent, dim, height = 60, onSeek }) {
+export function ProgressRibbon({
+  progress = 0,
+  playing,
+  seed = 'x',
+  accent,
+  dim,
+  height = 60,
+  onSeek,
+}) {
   const [width, setWidth] = useState(0);
 
   // Same seed hash as web (verbatim port incl. the bit ops): amp 0.16–0.39, freq 1.4–2.4.
@@ -40,22 +56,32 @@ export function ProgressRibbon({ progress = 0, playing, seed = 'x', accent, dim,
 
   // Smooth the 4Hz progress ticks; a live drag wins over playback.
   useEffect(() => {
-    shownProgress.value = withTiming(progress, { duration: 260, easing: Easing.linear });
+    shownProgress.value = withTiming(progress, {
+      duration: 260,
+      easing: Easing.linear,
+    });
   }, [progress, shownProgress]);
 
-  useFrameCallback((frame) => {
+  useFrameCallback(frame => {
     'worklet';
     if (!playing) {
       return;
     }
     // ~30Hz like the web (each tick advances the wave one step).
-    if (frame.timeSincePreviousFrame == null || frame.timeSincePreviousFrame >= 0) {
-      phase.value = (phase.value + 0.044 * ((frame.timeSincePreviousFrame ?? 33) / 33)) % (Math.PI * 2);
+    if (
+      frame.timeSincePreviousFrame == null ||
+      frame.timeSincePreviousFrame >= 0
+    ) {
+      phase.value =
+        (phase.value + 0.044 * ((frame.timeSincePreviousFrame ?? 33) / 33)) %
+        (Math.PI * 2);
     }
   }, playing);
 
   const effective = useDerivedValue(() =>
-    drag.value >= 0 ? drag.value : Math.min(1, Math.max(0, shownProgress.value)),
+    drag.value >= 0
+      ? drag.value
+      : Math.min(1, Math.max(0, shownProgress.value)),
   );
 
   const wavePath = useDerivedValue(() => {
@@ -75,28 +101,33 @@ export function ProgressRibbon({ progress = 0, playing, seed = 'x', accent, dim,
   });
 
   const pathProps = useAnimatedProps(() => ({ d: wavePath.value }));
-  const clipProps = useAnimatedProps(() => ({ width: Math.max(0, width * effective.value) }));
+  const clipProps = useAnimatedProps(() => ({
+    width: Math.max(0, width * effective.value),
+  }));
   const thumbProps = useAnimatedProps(() => {
     'worklet';
     const p = effective.value;
     const i = p * SAMPLES;
     const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
     const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
-    return { cx: width * p, cy: height / 2 + Math.sin(tt) * amp * height * env };
+    return {
+      cx: width * p,
+      cy: height / 2 + Math.sin(tt) * amp * height * env,
+    };
   });
 
-  const commit = (p) => onSeek?.(p);
+  const commit = p => onSeek?.(p);
 
   const pan = Gesture.Pan()
     .activeOffsetX([-6, 6])
     .failOffsetY([-14, 14])
-    .onBegin((e) => {
+    .onBegin(e => {
       'worklet';
       if (width > 0) {
         drag.value = Math.min(1, Math.max(0, e.x / width));
       }
     })
-    .onUpdate((e) => {
+    .onUpdate(e => {
       'worklet';
       if (width > 0) {
         drag.value = Math.min(1, Math.max(0, e.x / width));
@@ -105,6 +136,9 @@ export function ProgressRibbon({ progress = 0, playing, seed = 'x', accent, dim,
     .onEnd(() => {
       'worklet';
       if (drag.value >= 0) {
+        // Hold the sought position (killing any in-flight smoothing) so the
+        // fill doesn't flash back to the old progress while the engine seeks.
+        shownProgress.value = drag.value;
         runOnJS(commit)(drag.value);
       }
     })
@@ -113,30 +147,44 @@ export function ProgressRibbon({ progress = 0, playing, seed = 'x', accent, dim,
       drag.value = -1;
     });
 
-  const tap = Gesture.Tap().onEnd((e) => {
+  const tap = Gesture.Tap().onEnd(e => {
     'worklet';
     if (width > 0) {
-      runOnJS(commit)(Math.min(1, Math.max(0, e.x / width)));
+      const p = Math.min(1, Math.max(0, e.x / width));
+      shownProgress.value = p;
+      runOnJS(commit)(p);
     }
   });
 
   return (
     <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
-      <View style={[styles.hit, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <View
+        style={[styles.hit, { height }]}
+        onLayout={e => setWidth(e.nativeEvent.layout.width)}
+      >
         {width > 0 && (
           <Svg width={width} height={height}>
             <Defs>
               <ClipPath id="ribbonClip">
-                <AnimatedRect x="0" y="0" height={height} animatedProps={clipProps} />
+                <AnimatedRect
+                  x="0"
+                  y="0"
+                  height={height}
+                  animatedProps={clipProps}
+                />
               </ClipPath>
               <LinearGradient id="ribbonGrad" x1="0" y1="0" x2="1" y2="0">
                 <Stop offset="0" stopColor={accent} stopOpacity="0.85" />
                 <Stop offset="1" stopColor={accent} stopOpacity="1" />
               </LinearGradient>
             </Defs>
+            {/* dim arrives as a solid ink color; the web's hairline register is
+                ink at 10% — kept as strokeOpacity because rn-svg renders rgba()
+                strings opaque on Android. */}
             <AnimatedPath
               animatedProps={pathProps}
               stroke={dim}
+              strokeOpacity={0.1}
               strokeWidth={1.4}
               fill="none"
               strokeLinecap="round"
@@ -149,7 +197,12 @@ export function ProgressRibbon({ progress = 0, playing, seed = 'x', accent, dim,
               strokeLinecap="round"
               clipPath="url(#ribbonClip)"
             />
-            <AnimatedCircle animatedProps={thumbProps} r={9} fill={accent} opacity={0.18} />
+            <AnimatedCircle
+              animatedProps={thumbProps}
+              r={9}
+              fill={accent}
+              opacity={0.18}
+            />
             <AnimatedCircle animatedProps={thumbProps} r={4} fill={accent} />
           </Svg>
         )}

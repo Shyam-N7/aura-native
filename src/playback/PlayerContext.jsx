@@ -438,12 +438,7 @@ export function PlayerProvider({ children }) {
     [enqueueOp],
   );
 
-  // The bead passes its window rect so the sheet can bloom out of it.
-  const originRef = useRef(null);
-  const openPlayer = useCallback(origin => {
-    originRef.current = origin ?? null;
-    setPlayerOpen(true);
-  }, []);
+  const openPlayer = useCallback(() => setPlayerOpen(true), []);
   const closePlayer = useCallback(() => setPlayerOpen(false), []);
 
   // ── boot: player setup, handler wiring, cold restore ─────────────────────
@@ -620,7 +615,7 @@ export function PlayerProvider({ children }) {
   const current = queue.tracks[queue.idx] ?? null;
 
   const ui = useMemo(
-    () => ({ playerOpen, openPlayer, closePlayer, origin: originRef }),
+    () => ({ playerOpen, openPlayer, closePlayer }),
     [playerOpen, openPlayer, closePlayer],
   );
 

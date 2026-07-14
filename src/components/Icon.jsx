@@ -29,7 +29,7 @@ const ICONS = {
     d: 'M17 2 l4 4 -4 4 M3 12 V10 a4 4 0 0 1 4 -4 h14 M7 22 l-4 -4 4 -4 M21 12 v2 a4 4 0 0 1 -4 4 H3 M11 10.5 l1.5 -1 v5',
   },
   'chevron-down': { d: 'M6 9 l6 6 6 -6' },
-  theme: { d: 'M12 4 a8 8 0 1 0 0 16 a8 8 0 1 0 0 -16 M12 4 v16' },
+  theme: { d: 'M21 12.8 A9 9 0 1 1 11.2 3 a7 7 0 0 0 9.8 9.8 Z' },
 };
 
 export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {

@@ -8,14 +8,10 @@ jest.mock('react-native-worklets', () =>
 );
 require('react-native-reanimated').setUpTests();
 
-// Skia ships an official node mock; the blur view becomes a plain View.
+// Skia ships an official node mock.
 jest.mock('@shopify/react-native-skia', () =>
   require('@shopify/react-native-skia/lib/commonjs/mock'),
 );
-jest.mock('@sbaiahmed1/react-native-blur', () => {
-  const { View } = require('react-native');
-  return { BlurView: View };
-});
 
 // react-native-mmkv binds a native TurboModule at import — swap in an
 // in-memory store so storage-backed libs run under jest.

@@ -52,31 +52,32 @@ export default function HomeScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
       <ScreenFade style={styles.content}>
-      <Text style={[styles.greeting, { color: t.ink }]}>
-        {greeting()}
-        {firstName ? `, ${firstName}` : ''}
-      </Text>
-
-      <PressScale
-        accessibilityRole="button"
-        accessibilityLabel="play something"
-        onPress={playSomething}
-        style={[
-          styles.card,
-          { backgroundColor: t.accentSoft, borderColor: t.line },
-          elevation.accentGlow(t.accent),
-        ]}>
-        <Text style={[styles.cardTitle, { color: t.accent }]}>
-          play something
+        <Text style={[styles.greeting, { color: t.ink }]}>
+          {greeting()}
+          {firstName ? `, ${firstName}` : ''}
         </Text>
-        <Text style={[styles.cardSub, { color: t.inkSoft }]}>
-          {loading ? 'finding songs…' : "starts tonight's set"}
-        </Text>
-      </PressScale>
 
-      <Text style={[styles.note, { color: t.inkFaint }]}>
-        your mixes, library and more arrive in the next build.
-      </Text>
+        <PressScale
+          accessibilityRole="button"
+          accessibilityLabel="play something"
+          onPress={playSomething}
+          style={[
+            styles.card,
+            { backgroundColor: t.accentCard, borderColor: t.line },
+            elevation.accentGlow(t.accent),
+          ]}
+        >
+          <Text style={[styles.cardTitle, { color: t.accent }]}>
+            play something
+          </Text>
+          <Text style={[styles.cardSub, { color: t.inkSoft }]}>
+            {loading ? 'finding songs…' : "starts tonight's set"}
+          </Text>
+        </PressScale>
+
+        <Text style={[styles.note, { color: t.inkFaint }]}>
+          your mixes, library and more arrive in the next build.
+        </Text>
       </ScreenFade>
     </View>
   );

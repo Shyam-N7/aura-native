@@ -2,6 +2,9 @@
 // with src/data/themes.js filling the values the CSS never overrides.
 // CSS linear-gradient stage backgrounds become flat stageBgStart/stageBgEnd
 // endpoints since RN has no gradient strings.
+// accentCard = accentSoft pre-blended over bg to an OPAQUE color. Android
+// elevation shadows ghost through translucent fills (the shadow rect shows
+// inside the card), so elevated accent surfaces must use this instead.
 export const themes = {
   dusk: {
     bg: '#e9dfd1',
@@ -12,6 +15,7 @@ export const themes = {
     line: 'rgba(42,34,28,0.10)',
     accent: '#b06a3f',
     accentSoft: 'rgba(176,106,63,0.16)',
+    accentCard: '#e0ccba',
     pageBg: '#d9cdb9',
     stageBgStart: '#d9cdb9',
     stageBgEnd: '#bca790',
@@ -25,6 +29,7 @@ export const themes = {
     line: 'rgba(240,232,220,0.10)',
     accent: '#e09971',
     accentSoft: 'rgba(224,153,113,0.18)',
+    accentCard: '#3e2e23',
     pageBg: '#110e0b',
     stageBgStart: '#0f0c09',
     stageBgEnd: '#1c1813',
@@ -38,6 +43,7 @@ export const themes = {
     line: 'rgba(42,31,35,0.10)',
     accent: '#a8556a',
     accentSoft: 'rgba(168,85,106,0.16)',
+    accentCard: '#e7d0d0',
     pageBg: '#e6d2cf',
     stageBgStart: '#e6d2cf',
     stageBgEnd: '#c89eaa',
@@ -58,18 +64,40 @@ export const fonts = {
 
 // Web type scale (letterSpacing = the CSS em value × the px size).
 export const type = {
-  queueHero: { fontFamily: fonts.regular, fontSize: 44, lineHeight: 43, letterSpacing: -1.32 },
-  searchInput: { fontFamily: fonts.regular, fontSize: 24, letterSpacing: -0.12 },
-  playerTitle: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 29, letterSpacing: -0.39 },
-  sectionTitle: { fontFamily: fonts.semibold, fontSize: 22, letterSpacing: -0.11 },
+  queueHero: {
+    fontFamily: fonts.regular,
+    fontSize: 44,
+    lineHeight: 43,
+    letterSpacing: -1.32,
+  },
+  searchInput: {
+    fontFamily: fonts.regular,
+    fontSize: 24,
+    letterSpacing: -0.12,
+  },
+  playerTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 26,
+    lineHeight: 29,
+    letterSpacing: -0.39,
+  },
+  sectionTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 22,
+    letterSpacing: -0.11,
+  },
   wordmark: { fontFamily: fonts.semibold, fontSize: 20, letterSpacing: -0.4 },
   rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
   body: { fontFamily: fonts.regular, fontSize: 14 },
-  time: { fontFamily: fonts.regular, fontSize: 11, fontVariant: ['tabular-nums'] },
+  time: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+  },
 };
 
 // The web's MonoLabel register: 500 weight, uppercase, tracking 0.08em.
-export const label = (size) => ({
+export const label = size => ({
   fontFamily: fonts.medium,
   fontSize: size,
   letterSpacing: size * 0.08,
@@ -89,34 +117,37 @@ export const radii = {
   input: 12,
 };
 
-// RN Android shadows = elevation (+ shadowColor tint on API 28+). The web's glass
-// inset top-light becomes a 1px hairline View inside Glass instead.
+// RN Android shadows = elevation (+ shadowColor tint on API 28+). OPAQUE
+// backgrounds only — Android renders an elevated translucent view as an opaque
+// white slab (this is why glass chrome carries no elevation at all).
 export const elevation = {
-  card: { elevation: 6, shadowColor: '#000' },
   art: { elevation: 14, shadowColor: '#000' },
-  glass: { elevation: 12, shadowColor: '#000' },
-  bead: { elevation: 10, shadowColor: '#000' },
-  sheet: { elevation: 24, shadowColor: '#000' },
-  toast: { elevation: 10, shadowColor: '#000' },
-  accentGlow: (accent) => ({ elevation: 12, shadowColor: accent }),
+  accentGlow: accent => ({ elevation: 12, shadowColor: accent }),
 };
 
-// Web glass recipe: gradient shimmer + hairline border + inset top-light OVER the blur.
+// Web glass recipe: gradient shimmer + hairline border + inset top-light over
+// the tint. Shimmer is white at these opacities (numeric, for rn-svg's sake).
 export const glass = {
-  gradFrom: 'rgba(255,255,255,0.09)',
-  gradTo: 'rgba(255,255,255,0.02)',
+  shimmerFrom: 0.09,
+  shimmerTo: 0.02,
   border: 'rgba(255,255,255,0.14)',
   insetLight: 'rgba(255,255,255,0.25)',
-  blurAmount: 25,
-  beadGradFrom: 'rgba(255,255,255,0.10)',
   discBg: 'rgba(22,19,16,0.34)',
   discBorder: 'rgba(255,255,255,0.22)',
   midnight: {
-    gradFrom: 'rgba(255,255,255,0.07)',
-    gradTo: 'rgba(255,255,255,0.015)',
+    shimmerFrom: 0.07,
+    shimmerTo: 0.015,
     border: 'rgba(255,255,255,0.10)',
     insetLight: 'rgba(255,255,255,0.12)',
   },
+};
+
+// Glass body: the theme surface at high alpha. Stands in for backdrop blur —
+// over flat theme backgrounds it reads the same, and it can't break or lag.
+export const glassTint = {
+  dusk: 'rgba(244,236,224,0.86)',
+  midnight: 'rgba(35,30,24,0.88)',
+  bloom: 'rgba(251,243,239,0.86)',
 };
 
 // Opaque fill used while goo is fusing (the web swaps glass for color-mix during the
