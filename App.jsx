@@ -9,6 +9,7 @@ import { PlayerSheet } from './src/overlays/PlayerSheet';
 import { TrackActionsSheet } from './src/overlays/TrackActionsSheet';
 import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
 import { SleepTimerSheet } from './src/overlays/SleepTimerSheet';
+import { PresenceBanners } from './src/overlays/PresenceBanners';
 import { Toast } from './src/components/Toast';
 import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
@@ -34,6 +35,8 @@ function Shell() {
           <TrackActionsSheet />
           <AddToPlaylistSheet />
           <SleepTimerSheet />
+          {/* Heartbeats + "playing elsewhere" note + cross-device resume. */}
+          <PresenceBanners />
         </NavigationContainer>
       ) : (
         <AuthScreen />

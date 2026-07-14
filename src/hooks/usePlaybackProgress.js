@@ -1,9 +1,10 @@
 import { useProgress } from 'react-native-track-player';
 
-// The one read-only exception to "only engine.js talks to RNTP": the 4Hz
-// position ticker the scrubber renders from.
-export function usePlaybackProgress() {
-  const { position, duration } = useProgress(250);
+// The one read-only exception to "only engine.js talks to RNTP": the position
+// ticker. Default 4Hz for the scrubber; slower consumers (presence heartbeats)
+// pass their own interval.
+export function usePlaybackProgress(intervalMs = 250) {
+  const { position, duration } = useProgress(intervalMs);
   return {
     position,
     duration,
