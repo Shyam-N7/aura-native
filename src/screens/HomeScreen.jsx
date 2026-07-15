@@ -279,7 +279,12 @@ export default function HomeScreen({ navigation }) {
 
           {(yourPlaylists?.length ?? 0) > 0 && (
             <View>
-              <SectionHeader title="made by you" sub="your playlists" />
+              <SectionHeader
+                title="made by you"
+                sub="your playlists"
+                seeAllLabel="see all playlists"
+                onSeeAll={() => navigation.navigate('Playlists')}
+              />
               <PlaylistGrid
                 items={yourPlaylists.slice(0, 4).map(p => ({
                   id: p.id,
@@ -289,8 +294,8 @@ export default function HomeScreen({ navigation }) {
                     p.trackCount === 1 ? 'track' : 'tracks'
                   }`,
                 }))}
-                onPressItem={() =>
-                  showToast('playlist pages come in a later build')
+                onPressItem={item =>
+                  navigation.navigate('Playlist', { id: item.id })
                 }
               />
             </View>
@@ -301,6 +306,8 @@ export default function HomeScreen({ navigation }) {
               <SectionHeader
                 title="made for you"
                 sub="fresh editions from your plays — skips count"
+                seeAllLabel="see all made for you"
+                onSeeAll={() => navigation.navigate('Playlists')}
               />
               <PlaylistGrid
                 items={visibleAuto.map(a => ({
