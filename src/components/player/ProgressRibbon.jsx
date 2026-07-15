@@ -25,6 +25,10 @@ const AnimatedRect = Animated.createAnimatedComponent(Rect);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const SAMPLES = 80;
+// The wave is inset from the canvas edges so the thumb (r9 halo) and the
+// round line caps draw whole at 0% and 100% instead of getting chopped by
+// the svg bounds (field report: the start looked squared-off).
+const PAD = 10;
 
 // Direct port of the web ProgressRibbon: a per-track seeded sine ribbon whose
 // phase drifts at ~30Hz while playing; the accent stroke is clipped to
@@ -84,14 +88,16 @@ export function ProgressRibbon({
       : Math.min(1, Math.max(0, shownProgress.value)),
   );
 
+  const span = Math.max(0, width - PAD * 2);
+
   const wavePath = useDerivedValue(() => {
     'worklet';
-    if (width <= 0) {
+    if (span <= 0) {
       return 'M 0 0';
     }
     const pts = [];
     for (let i = 0; i <= SAMPLES; i++) {
-      const x = (i / SAMPLES) * width;
+      const x = PAD + (i / SAMPLES) * span;
       const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
       const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
       const y = height / 2 + Math.sin(tt) * amp * height * env;
@@ -102,7 +108,7 @@ export function ProgressRibbon({
 
   const pathProps = useAnimatedProps(() => ({ d: wavePath.value }));
   const clipProps = useAnimatedProps(() => ({
-    width: Math.max(0, width * effective.value),
+    width: Math.max(0, PAD + span * effective.value),
   }));
   const thumbProps = useAnimatedProps(() => {
     'worklet';
@@ -111,7 +117,7 @@ export function ProgressRibbon({
     const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
     const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
     return {
-      cx: width * p,
+      cx: PAD + span * p,
       cy: height / 2 + Math.sin(tt) * amp * height * env,
     };
   });
@@ -123,14 +129,14 @@ export function ProgressRibbon({
     .failOffsetY([-14, 14])
     .onBegin(e => {
       'worklet';
-      if (width > 0) {
-        drag.value = Math.min(1, Math.max(0, e.x / width));
+      if (span > 0) {
+        drag.value = Math.min(1, Math.max(0, (e.x - PAD) / span));
       }
     })
     .onUpdate(e => {
       'worklet';
-      if (width > 0) {
-        drag.value = Math.min(1, Math.max(0, e.x / width));
+      if (span > 0) {
+        drag.value = Math.min(1, Math.max(0, (e.x - PAD) / span));
       }
     })
     .onEnd(() => {
@@ -149,8 +155,8 @@ export function ProgressRibbon({
 
   const tap = Gesture.Tap().onEnd(e => {
     'worklet';
-    if (width > 0) {
-      const p = Math.min(1, Math.max(0, e.x / width));
+    if (span > 0) {
+      const p = Math.min(1, Math.max(0, (e.x - PAD) / span));
       shownProgress.value = p;
       runOnJS(commit)(p);
     }
