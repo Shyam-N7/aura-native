@@ -27,6 +27,7 @@ import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { QUALITIES } from '../lib/audioQuality';
 import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
+import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { TrackArt } from '../components/TrackRow';
 import { HeartButton } from '../components/player/HeartButton';
 import { ProgressRibbon } from '../components/player/ProgressRibbon';
@@ -312,14 +313,26 @@ export function PlayerSheet() {
               <Text style={[label(11), { color: t.inkFaint }]}>
                 {queue.source ?? 'now playing'}
               </Text>
-              <Glass radius={19} style={styles.chip}>
-                <HeartButton
-                  trackId={track.id}
-                  size={20}
-                  color={t.ink}
-                  accent={t.accent}
-                />
-              </Glass>
+              <View style={styles.topCluster}>
+                <PressScale
+                  accessibilityRole="button"
+                  accessibilityLabel="add to playlist"
+                  onPress={() => openAddToPlaylist(track)}
+                  hitSlop={8}
+                >
+                  <Glass radius={19} style={styles.chip}>
+                    <Icon name="plus" size={20} color={t.ink} />
+                  </Glass>
+                </PressScale>
+                <Glass radius={19} style={styles.chip}>
+                  <HeartButton
+                    trackId={track.id}
+                    size={20}
+                    color={t.ink}
+                    accent={t.accent}
+                  />
+                </Glass>
+              </View>
             </View>
 
             <View
@@ -556,6 +569,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  topCluster: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   hero: {
     flex: 1,
     alignItems: 'center',

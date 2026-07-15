@@ -68,12 +68,12 @@ const ICONS = {
   bloom: {
     d: 'M12 3 c1.2 4.2 2.8 5.8 7 7 c-4.2 1.2 -5.8 2.8 -7 7 c-1.2 -4.2 -2.8 -5.8 -7 -7 c4.2 -1.2 5.8 -2.8 7 -7 Z',
   },
-  // Microphone — the lyrics/karaoke entry on the player.
-  lyrics: {
-    d: 'M12 3 a3 3 0 0 1 3 3 v5 a3 3 0 0 1 -6 0 V6 a3 3 0 0 1 3 -3 Z M6 11 a6 6 0 0 0 12 0 M12 17 v4',
-  },
+  // Lines of verse — the lyrics entry on the player (a lyric sheet, not a mic).
+  lyrics: { d: 'M5 6 h14 M5 10 h9 M5 14 h12 M5 18 h7' },
   // Send arrow — the talk composer's submit.
   'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
+  // Checkmark — "already in this playlist" on the add-to-playlist rows.
+  check: { d: 'M4 12 l5 5 L20 6' },
 };
 
 export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {

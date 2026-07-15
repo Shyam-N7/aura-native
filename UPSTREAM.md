@@ -51,3 +51,4 @@ heuristic (≥99.5% + paused), not the web's natural-end event.
 | src/utils/fmtTime.js | src/utils/fmtTime.js | |
 | src/hooks/useRecentSearches.js | src/hooks/useRecentSearches.js | |
 | src/playback/queueModel.js (auto-next part) | src/App.jsx fetchAutoNext/applyAutoRadioToQueue | behavior port, not file port |
+| src/overlays/AddToPlaylistSheet.jsx | src/components/AddToPlaylistSheet.jsx + PlaylistPickerBody.jsx | native-only improvement: for a single track it reads each playlist (getPlaylist) and ticks the ones that already hold it, un-tappable + no "already in" toast (web only learns after tapping). Membership is best-effort (a failed read just omits the tick). |

@@ -9,12 +9,14 @@ import {
 import { useTheme } from '../theme/ThemeContext';
 import {
   listPlaylists,
+  getPlaylist,
   createPlaylist,
   addToPlaylist,
 } from '../api/playlists';
 import { subscribeAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
+import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
 import { fonts, label, radii } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
@@ -30,11 +32,30 @@ function PickerBody({ tracks, onPicked }) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [busyName, setBusyName] = useState(null);
+  // Ids of playlists that already hold this track — shown with a tick and made
+  // un-tappable, so "already in it" is visible up front instead of a toast
+  // after the fact. Only meaningful for a single track (bulk adds keep the
+  // summary toast). Best-effort: a failed membership read just omits the tick.
+  const [contains, setContains] = useState(() => new Set());
+  const single = tracks.length === 1 ? tracks[0] : null;
 
   useEffect(() => {
     const ctl = new AbortController();
     listPlaylists({ signal: ctl.signal })
-      .then(setPlaylists)
+      .then(pls => {
+        setPlaylists(pls);
+        if (single) {
+          pls.forEach(p => {
+            getPlaylist(p.id, { signal: ctl.signal })
+              .then(full => {
+                if ((full.tracks ?? []).some(tr => tr.id === single.id)) {
+                  setContains(prev => new Set(prev).add(p.id));
+                }
+              })
+              .catch(() => {});
+          });
+        }
+      })
       .catch(err => {
         if (err.name !== 'AbortError') {
           showToast(`Couldn't load playlists — ${err.message}`);
@@ -42,7 +63,7 @@ function PickerBody({ tracks, onPicked }) {
         }
       });
     return () => ctl.abort();
-  }, []);
+  }, [single]);
 
   const addAll = async playlistId => {
     let added = 0;
@@ -76,7 +97,8 @@ function PickerBody({ tracks, onPicked }) {
   };
 
   const pick = async playlist => {
-    if (busyName) {
+    // A ticked playlist already holds the track — no-op, no toast.
+    if (busyName || contains.has(playlist.id)) {
       return;
     }
     setBusyName(playlist.name);
@@ -191,29 +213,37 @@ function PickerBody({ tracks, onPicked }) {
         </Text>
       )}
 
-      {(playlists ?? []).map(p => (
-        <Pressable
-          key={p.id}
-          accessibilityRole="button"
-          accessibilityLabel={`add to ${p.name}`}
-          onPress={() => pick(p)}
-          style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-        >
-          <TrackArt
-            track={{ id: p.id, title: p.name, imageUrl: p.coverImageUrl }}
-            size={38}
-            radius={6}
-          />
-          <View style={styles.rowMeta}>
-            <Text numberOfLines={1} style={[styles.rowName, { color: t.ink }]}>
-              {p.name}
-            </Text>
-            <Text style={[label(8.5), { color: t.inkFaint }]}>
-              {p.trackCount} {p.trackCount === 1 ? 'track' : 'tracks'}
-            </Text>
-          </View>
-        </Pressable>
-      ))}
+      {(playlists ?? []).map(p => {
+        const has = contains.has(p.id);
+        return (
+          <Pressable
+            key={p.id}
+            accessibilityRole="button"
+            accessibilityLabel={has ? `in ${p.name}` : `add to ${p.name}`}
+            accessibilityState={{ disabled: has }}
+            onPress={() => pick(p)}
+            style={({ pressed }) => [
+              styles.row,
+              pressed && !has && styles.pressed,
+            ]}
+          >
+            <TrackArt
+              track={{ id: p.id, title: p.name, imageUrl: p.coverImageUrl }}
+              size={38}
+              radius={6}
+            />
+            <View style={styles.rowMeta}>
+              <Text numberOfLines={1} style={[styles.rowName, { color: t.ink }]}>
+                {p.name}
+              </Text>
+              <Text style={[label(8.5), { color: t.inkFaint }]}>
+                {p.trackCount} {p.trackCount === 1 ? 'track' : 'tracks'}
+              </Text>
+            </View>
+            {has && <Icon name="check" size={20} color={t.accent} />}
+          </Pressable>
+        );
+      })}
     </>
   );
 }
