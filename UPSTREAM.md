@@ -33,6 +33,8 @@ Blanket adaptations (apply to every port):
 | src/utils/title.js | src/utils/title.js | |
 | src/api/lyrics.js | src/api/lyrics.js | DOMException → named Error (Hermes has no DOMException) |
 | src/api/talk.js | src/api/talk.js | |
+| src/api/why.js | src/api/why.js | |
+| src/overlays/WhySheet.jsx | src/screens/overlays/WhyPanel.jsx | bottom sheet, not a player panel; entry moved to the track actions menu (native player has no ⋯ menu); mood attached only when confidence ≥ 0.5 |
 | src/api/mood.js | src/api/mood.js | |
 | src/hooks/useTalkHistory.js | src/hooks/useTalkHistory.js | seed is an explicit call (native greeting waits on the mood fetch) |
 | src/screens/TalkScreen.jsx | src/components/chat/TalkAura.jsx + src/screens/desktop/DesktopTalk.jsx | tab screen, not a modal; no now-playing banner (the dock bead stays visible); greeting only claims a mood reading when confidence ≥ 0.5 |

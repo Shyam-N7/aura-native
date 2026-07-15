@@ -9,6 +9,7 @@ import {
   subscribeTrackActions,
 } from '../lib/trackActionsSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
+import { openWhy } from '../lib/whySheet';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
@@ -117,6 +118,14 @@ export function TrackActionsSheet() {
           showToast("couldn't like — try again.");
         });
       },
+    });
+  }
+  if (!omit.includes('why')) {
+    items.push({
+      id: 'why',
+      icon: 'bloom',
+      label: 'why this song',
+      run: () => openWhy(track),
     });
   }
   if (!omit.includes('artist') && track.artist) {

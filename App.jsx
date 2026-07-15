@@ -16,6 +16,7 @@ import { QueueSheet } from './src/overlays/QueueSheet';
 import { TrackActionsSheet } from './src/overlays/TrackActionsSheet';
 import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
 import { SleepTimerSheet } from './src/overlays/SleepTimerSheet';
+import { WhySheet } from './src/overlays/WhySheet';
 import { PresenceBanners } from './src/overlays/PresenceBanners';
 import { Toast } from './src/components/Toast';
 import RootTabs from './src/navigation/RootTabs';
@@ -96,6 +97,7 @@ function Shell() {
           <TrackActionsSheet />
           <AddToPlaylistSheet />
           <SleepTimerSheet />
+          <WhySheet />
           {/* Heartbeats + "playing elsewhere" note + cross-device resume. */}
           <PresenceBanners />
         </NavigationContainer>
