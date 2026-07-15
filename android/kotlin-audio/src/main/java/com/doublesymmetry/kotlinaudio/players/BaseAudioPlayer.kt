@@ -276,6 +276,26 @@ abstract class BaseAudioPlayer internal constructor(
 
     private fun createForwardingPlayer(): ForwardingPlayer {
         return object : ForwardingPlayer(exoPlayer) {
+            // AURA fix: next/previous presses are DELEGATED to the app (the
+            // overrides below post events instead of seeking), so the app
+            // decides what they mean — its auto-radio always has a next song
+            // even on the queue's last item. ExoPlayer, not knowing that,
+            // withholds COMMAND_SEEK_TO_NEXT there, and the notification /
+            // lock screen dropped the next button exactly when auto-radio
+            // would have handled it. Always advertise the delegated commands.
+            override fun getAvailableCommands(): Player.Commands {
+                return super.getAvailableCommands().buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+            }
+
+            override fun isCommandAvailable(command: Int): Boolean {
+                return getAvailableCommands().contains(command)
+            }
+
             override fun play() {
                 playerEventHolder.updateOnPlayerActionTriggeredExternally(MediaSessionCallback.PLAY)
             }
