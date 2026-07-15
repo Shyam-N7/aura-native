@@ -116,7 +116,11 @@ function GapMark({ accent, reduced }) {
 // and color switch with the state (RN can't animate fontSize cheaply, and the
 // centering scroll masks the jump). Cinematic depth-of-field: the web blurs
 // past/upcoming text — RN can't blur text, so opacity alone carries the depth.
+// Handlers arrive stable and take (line, realIdx) so the memo actually holds
+// while the 4Hz position ticker re-renders the parent.
 const LyricLine = memo(function LyricLine({
+  line,
+  realIdx,
   text,
   state, // 'active' | 'past' | 'upcoming'
   cinematic,
@@ -124,8 +128,8 @@ const LyricLine = memo(function LyricLine({
   ink,
   inkSoft,
   inkFaint,
-  onPress,
-  onLayout,
+  onPressLine,
+  onLayoutLine,
 }) {
   const ty = useSharedValue(state === 'past' ? -2 : state === 'active' ? 0 : 6);
   const op = useSharedValue(1);
@@ -175,8 +179,8 @@ const LyricLine = memo(function LyricLine({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={text}
-      onPress={onPress}
-      onLayout={onLayout}
+      onPress={() => onPressLine(line)}
+      onLayout={e => onLayoutLine(realIdx, e.nativeEvent.layout.y)}
     >
       <Animated.Text
         style={[
@@ -222,21 +226,43 @@ function SyncedView({
   const scrollRef = useRef(null);
   const viewHRef = useRef(0);
   const offsetsRef = useRef({});
+  const activeIdxRef = useRef(activeIdx);
+  activeIdxRef.current = activeIdx;
   useEffect(() => {
     offsetsRef.current = {};
   }, [lines]);
 
   // Keep the active line centered (the web's scrollIntoView block:'center').
+  const centerOn = useCallback(
+    idx => {
+      const y = offsetsRef.current[idx];
+      if (y == null || !scrollRef.current) {
+        return;
+      }
+      scrollRef.current.scrollTo({
+        y: Math.max(0, y - viewHRef.current / 2 + 24),
+        animated: !reduced,
+      });
+    },
+    [reduced],
+  );
   useEffect(() => {
-    const y = offsetsRef.current[activeIdx];
-    if (y == null || !scrollRef.current) {
-      return;
-    }
-    scrollRef.current.scrollTo({
-      y: Math.max(0, y - viewHRef.current / 2 + 24),
-      animated: !reduced,
-    });
-  }, [activeIdx, reduced]);
+    centerOn(activeIdx);
+  }, [activeIdx, centerOn]);
+
+  // Offsets land after the first render (and shift when a gap mark mounts or
+  // unmounts above the active line) — re-center off the measurement itself,
+  // so the first open and every layout shift land on the real position.
+  const onLayoutLine = useCallback(
+    (realIdx, y) => {
+      const prev = offsetsRef.current[realIdx];
+      offsetsRef.current[realIdx] = y;
+      if (realIdx === activeIdxRef.current && prev !== y) {
+        centerOn(realIdx);
+      }
+    },
+    [centerOn],
+  );
 
   const lineFor = l => cleanLyric(view === 'en' && l.line_en ? l.line_en : l.line);
 
@@ -267,6 +293,8 @@ function SyncedView({
         return (
           <React.Fragment key={realIdx}>
             <LyricLine
+              line={l}
+              realIdx={realIdx}
               text={lineFor(l)}
               state={isActive ? 'active' : isPast ? 'past' : 'upcoming'}
               cinematic={cinematic}
@@ -274,10 +302,8 @@ function SyncedView({
               ink={ink}
               inkSoft={inkSoft}
               inkFaint={inkFaint}
-              onPress={() => onSeekLine(l)}
-              onLayout={e => {
-                offsetsRef.current[realIdx] = e.nativeEvent.layout.y;
-              }}
+              onPressLine={onSeekLine}
+              onLayoutLine={onLayoutLine}
             />
             {showMarkAfter && <GapMark accent={accent} reduced={reduced} />}
           </React.Fragment>
@@ -409,6 +435,8 @@ export function LyricsOverlay() {
         enter.value = 0;
         enter.value = withTiming(1, { duration: PANEL_IN_MS, easing: SLIDE });
       }
+      // Every open starts romanized, like the web's fresh mount.
+      setView('en');
       setVis('open');
     }
     if (!open && vis === 'open') {
@@ -479,31 +507,45 @@ export function LyricsOverlay() {
       : 'loading';
 
   // While the server is generating synced lyrics, poll so the finished
-  // lyrics replace the "syncing…" state without reopening the overlay.
+  // lyrics replace the "syncing…" state without reopening the overlay. The
+  // abort matters: without it a poll in flight across a track change would
+  // land late and clobber the new track's hit (web parity guard).
   const pending = status === 'ok' && !!hit.data?.pending;
   useEffect(() => {
     if (!open || !pending || !trackId) {
       return undefined;
     }
+    const ctl = new AbortController();
     const id = setInterval(() => {
-      getLyrics(trackId)
+      getLyrics(trackId, { signal: ctl.signal })
         .then(data => setHit({ trackId, data, error: null }))
         .catch(() => {}); // transient — keep polling
     }, POLL_MS);
-    return () => clearInterval(id);
+    return () => {
+      ctl.abort();
+      clearInterval(id);
+    };
   }, [open, pending, trackId]);
 
   // Cinematic idle: 5s without a touch. A tap while cinematic is wake-only —
   // it restores the chrome without seeking to the tapped line (wokeAt guards
-  // the press handler that fires right after the wake).
+  // the press handler that fires right after the wake). Reduced motion never
+  // enters cinematic (deliberate divergence from the web: the dissolve would
+  // be a one-frame snap), so arm() must respect it too — wake() fires from
+  // every touch, including during the closing animation.
   const timerRef = useRef(null);
   const cinRef = useRef(false);
   cinRef.current = cinematic;
+  const openRef = useRef(open);
+  openRef.current = open;
   const wokeAt = useRef(0);
   const arm = useCallback(() => {
     clearTimeout(timerRef.current);
+    if (reduced || !openRef.current) {
+      return;
+    }
     timerRef.current = setTimeout(() => setCinematic(true), IDLE_MS);
-  }, []);
+  }, [reduced]);
   const wake = useCallback(() => {
     if (cinRef.current) {
       wokeAt.current = Date.now();
@@ -580,6 +622,20 @@ export function LyricsOverlay() {
     ],
   }));
 
+  // Stable so LyricLine's memo holds at the 4Hz position tick. Wake-only
+  // taps: the touch that broke cinematic (and its own press, ~a beat later)
+  // must not seek — 400ms covers the press without eating the next real tap.
+  const seekTo = player.seekTo;
+  const onSeekLine = useCallback(
+    l => {
+      if (cinRef.current || Date.now() - wokeAt.current < 400) {
+        return;
+      }
+      seekTo(l.t);
+    },
+    [seekTo],
+  );
+
   if ((!open && vis !== 'closing') || !track) {
     return null;
   }
@@ -593,13 +649,6 @@ export function LyricsOverlay() {
   const seconds = position ?? 0;
   const progress = duration > 0 ? Math.min(1, seconds / duration) : 0;
   const ended = duration > 0 && progress >= 0.995 && !player.isPlaying;
-
-  const seekLine = l => {
-    if (cinematic || Date.now() - wokeAt.current < 600) {
-      return;
-    }
-    player.seekTo(l.t);
-  };
 
   return (
     <View style={styles.root} onTouchStart={wake}>
@@ -665,31 +714,30 @@ export function LyricsOverlay() {
           />
         </Animated.View>
 
-        {/* Cinematic progress hairline along the top edge. */}
-        {cinematic && (
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.progressArc, cinemaInStyle]}
-          >
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress * 100}%`, backgroundColor: t.accent },
-              ]}
-            />
-            <View style={[styles.progressDot, styles.progressDotStart]} />
-            <View
-              style={[
-                styles.progressDot,
-                styles.progressDotEnd,
-                ended && { backgroundColor: t.accent },
-              ]}
-            />
-          </Animated.View>
-        )}
+        {/* Cinematic progress hairline along the top edge. Stays mounted so
+            its 800ms dissolve plays both ways (cin drives the opacity). */}
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.progressArc, cinemaInStyle]}
+        >
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress * 100}%`, backgroundColor: t.accent },
+            ]}
+          />
+          <View style={[styles.progressDot, styles.progressDotStart]} />
+          <View
+            style={[
+              styles.progressDot,
+              styles.progressDotEnd,
+              ended && { backgroundColor: t.accent },
+            ]}
+          />
+        </Animated.View>
 
         {/* Handwritten epigraph — the song title as a movie title card. */}
-        {cinematic && !!track.title && (
+        {!!track.title && (
           <Animated.View
             pointerEvents="none"
             style={[styles.epigraph, cinemaInStyle]}
@@ -817,7 +865,7 @@ export function LyricsOverlay() {
               ink={t.ink}
               inkSoft={t.inkSoft}
               inkFaint={t.inkFaint}
-              onSeekLine={seekLine}
+              onSeekLine={onSeekLine}
               onWakeScroll={wake}
             />
           )}
