@@ -72,6 +72,8 @@ const ICONS = {
   lyrics: {
     d: 'M12 3 a3 3 0 0 1 3 3 v5 a3 3 0 0 1 -6 0 V6 a3 3 0 0 1 3 -3 Z M6 11 a6 6 0 0 0 12 0 M12 17 v4',
   },
+  // Send arrow — the talk composer's submit.
+  'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
 };
 
 export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {

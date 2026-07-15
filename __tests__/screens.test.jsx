@@ -3,7 +3,6 @@ import { Alert } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import HomeScreen from '../src/screens/HomeScreen';
-import TalkScreen from '../src/screens/TalkScreen';
 import YouScreen from '../src/screens/YouScreen';
 import { groupPlaysByDay } from '../src/screens/HistoryScreen';
 import { getFeatured } from '../src/api/catalog';
@@ -152,12 +151,6 @@ test("home greets and begins tonight's set from the hero band", async () => {
   expect(mockPlayQueue).toHaveBeenCalledWith(tracks, 0, "tonight's set");
   expect(mockOpenPlayer).toHaveBeenCalled();
 
-  await ReactTestRenderer.act(() => tree.unmount());
-});
-
-test('talk is an honest placeholder', async () => {
-  const tree = await render(<TalkScreen />);
-  expect(texts(tree.toJSON())).toContain('coming in the next build');
   await ReactTestRenderer.act(() => tree.unmount());
 });
 

@@ -32,6 +32,10 @@ Blanket adaptations (apply to every port):
 | src/lib/audioQuality.js | src/lib/audioQuality.js | storage backend swapped |
 | src/utils/title.js | src/utils/title.js | |
 | src/api/lyrics.js | src/api/lyrics.js | DOMException → named Error (Hermes has no DOMException) |
+| src/api/talk.js | src/api/talk.js | |
+| src/api/mood.js | src/api/mood.js | |
+| src/hooks/useTalkHistory.js | src/hooks/useTalkHistory.js | seed is an explicit call (native greeting waits on the mood fetch) |
+| src/screens/TalkScreen.jsx | src/components/chat/TalkAura.jsx + src/screens/desktop/DesktopTalk.jsx | tab screen, not a modal; no now-playing banner (the dock bead stays visible); greeting only claims a mood reading when confidence ≥ 0.5 |
 | src/lib/lyricsSync.js | src/screens/overlays/LyricsScreen.jsx (activeIdx + gap windows) | extracted pure so it's testable |
 | src/overlays/LyricsOverlay.jsx | src/screens/overlays/LyricsScreen.jsx (+ .css, useCinematicIdle) | fontSize not animated (RN can't, scroll masks it); cinematic depth-of-field = opacity only (RN can't blur text); toggle labels lowercased to the native voice; Fraunces/DancingScript TTFs converted from the web's @fontsource WOFFs |
 | src/utils/fmtTime.js | src/utils/fmtTime.js | |
