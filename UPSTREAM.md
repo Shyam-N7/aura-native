@@ -23,7 +23,8 @@ Blanket adaptations (apply to every port):
 | src/api/hidden.js | src/api/hidden.js | |
 | src/api/likes.js | src/api/likes.js | |
 | src/api/autoPlaylists.js | src/api/autoPlaylists.js | |
-| src/api/playlists.js | src/api/playlists.js | listPlaylists only; rest is Phase 3 |
+| src/api/playlists.js | src/api/playlists.js | |
+| src/lib/time.js | src/lib/time.js | |
 | src/lib/homeCache.js | src/lib/homeCache.js | |
 | src/lib/explicit.js | src/lib/explicit.js | |
 | src/lib/toast.js | src/lib/toast.js | |
