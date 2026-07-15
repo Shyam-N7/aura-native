@@ -1,11 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, {
   Circle,
   Line,
@@ -18,6 +12,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { getSonicDna } from '../api/sonicDna';
 import { Icon } from '../components/Icon';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { PressScale } from '../components/ui/PressScale';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { fonts, label, radii } from '../theme/tokens';
@@ -170,7 +165,7 @@ export default function DnaScreen({ navigation }) {
 
           {status === 'loading' && (
             <View style={styles.center}>
-              <ActivityIndicator color={t.accent} />
+              <AuraLoader label="building your sonic dna" />
             </View>
           )}
 

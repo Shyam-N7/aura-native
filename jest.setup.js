@@ -13,6 +13,11 @@ jest.mock('@shopify/react-native-skia', () =>
   require('@shopify/react-native-skia/lib/commonjs/mock'),
 );
 
+// The Goo metaball is Skia-filter decoration (pointerEvents none). The Skia
+// node mock doesn't provide the Group/Paint/Blur/ColorMatrix primitives it
+// composes, so render it as nothing under jest — its children never paint.
+jest.mock('./src/components/ui/Goo', () => ({ Goo: () => null }));
+
 // react-native-mmkv binds a native TurboModule at import — swap in an
 // in-memory store so storage-backed libs run under jest.
 jest.mock('react-native-mmkv', () => {

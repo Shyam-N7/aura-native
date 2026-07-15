@@ -93,7 +93,10 @@ export function TopBar({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 14, marginBottom: 6 },
+  // zIndex keeps the bar painting above the screen's scroller: the rubber-band
+  // bounce translates the whole scroller, and without this a card could
+  // composite over the translucent bar during an overscroll (field report).
+  wrap: { paddingHorizontal: 14, marginBottom: 6, zIndex: 20 },
   bar: { height: 52, justifyContent: 'center' },
   row: {
     flexDirection: 'row',

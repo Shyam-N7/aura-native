@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
@@ -469,11 +470,7 @@ export default function PlaylistScreen({ route, navigation }) {
       >
         <CrumbBack onPress={() => navigation.goBack()} />
 
-        {status === 'loading' && (
-          <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-            Loading playlist
-          </Text>
-        )}
+        {status === 'loading' && <AuraLoader label="loading playlist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
             This playlist is private or unavailable. If someone shared it, ask

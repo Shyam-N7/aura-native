@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -9,6 +9,7 @@ import { cleanTitle } from '../utils/title';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { PressScale } from '../components/ui/PressScale';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { fonts, label } from '../theme/tokens';
@@ -117,7 +118,7 @@ export default function JournalScreen({ navigation }) {
 
           {status === 'loading' && (
             <View style={styles.center}>
-              <ActivityIndicator color={t.accent} />
+              <AuraLoader label="reading your journal" />
             </View>
           )}
 

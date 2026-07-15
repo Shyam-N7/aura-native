@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeContext';
 import { getWhy } from '../api/why';
 import { getCurrentMood } from '../api/mood';
 import { closeWhy, subscribeWhy } from '../lib/whySheet';
 import { Sheet } from '../components/ui/Sheet';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { cleanTitle } from '../utils/title';
 import { fonts, label } from '../theme/tokens';
 
@@ -114,7 +115,7 @@ export function WhySheet() {
     >
       {status === 'loading' && (
         <View style={styles.loading}>
-          <ActivityIndicator color={t.accent} />
+          <AuraLoader label="reading the room" />
         </View>
       )}
 

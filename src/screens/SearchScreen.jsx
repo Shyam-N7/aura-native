@@ -1,14 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { SearchField } from '../components/search/SearchField';
 import { useTheme } from '../theme/ThemeContext';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
@@ -185,19 +179,14 @@ export default function SearchScreen({ navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TextInput
-          ref={inputRef}
+        <SearchField
+          inputRef={inputRef}
           value={q}
           onChangeText={setQ}
           placeholder="search songs, artists…"
-          placeholderTextColor={t.inkFaint}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
-          style={[
-            styles.input,
-            { backgroundColor: t.surface, borderColor: t.line, color: t.ink },
-          ]}
         />
         <ScrollView overScrollMode="always"
           horizontal
@@ -458,15 +447,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     gap: 10,
-  },
-  input: {
-    borderRadius: 14,
-    borderWidth: 1,
-    fontFamily: 'HankenGrotesk-Regular',
-    fontSize: 18,
-    letterSpacing: -0.09,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
   },
   pillRow: {
     gap: 8,

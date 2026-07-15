@@ -18,6 +18,7 @@ import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, radii } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 
@@ -202,11 +203,7 @@ function PickerBody({ tracks, onPicked }) {
         </Pressable>
       )}
 
-      {playlists === null && (
-        <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-          Loading playlists
-        </Text>
-      )}
+      {playlists === null && <AuraLoader label="loading playlists" />}
       {playlists !== null && playlists.length === 0 && !creating && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
           You don't have any playlists yet. Tap "New playlist" above.

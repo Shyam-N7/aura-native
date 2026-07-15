@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceFlatList } from '../components/ui/Bounce';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { listLiked } from '../api/likes';
@@ -91,11 +92,7 @@ export default function LikedScreen({ navigation }) {
   const header = (
     <View style={styles.header}>
       <CrumbBack onPress={() => navigation.goBack()} />
-      {status === 'loading' && (
-        <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-          Loading liked songs
-        </Text>
-      )}
+      {status === 'loading' && <AuraLoader label="loading liked songs" />}
       {status === 'error' && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
           Couldn't load — {hit.error}

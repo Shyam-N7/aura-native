@@ -326,6 +326,34 @@ export function getActiveExplicitOff() {
   return m ? !!m.explicitOff : !!u.familyMode;
 }
 
+// ── Preferences (onboarding seeds, sensing toggle, dj name) ──────────
+export async function updatePreferences(prefs) {
+  const res = await fetchAuthed('/api/auth/me/preferences', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? 'update failed');
+  }
+  persistUser(data.user);
+  return data.user;
+}
+
+// Read before first paint by App's screen gate — synchronous, from the cached
+// identity (mirrors the web readers). hasOnboarded reads the cached user (the
+// seed caches are for later personalization, not the gate).
+export function hasOnboarded() {
+  return !!getUser()?.hasOnboarded;
+}
+
+// The "sensing" welcome is a per-user preference; default ON when the field is
+// absent (a session cached before it existed) so behaviour is unchanged.
+export function showSensing() {
+  return getUser()?.showSensing !== false;
+}
+
 // ── Listening modes ──────────────────────────────────────────────────
 // Switch the active context. Returns the refreshed user (activeMode + the
 // modes view) and updates the session so the UI reacts at once (home refetches
