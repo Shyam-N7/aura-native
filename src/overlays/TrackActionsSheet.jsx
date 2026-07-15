@@ -124,11 +124,16 @@ export function TrackActionsSheet() {
       id: 'artist',
       icon: 'user',
       label: 'open artist',
-      run: () =>
+      // The artist screen lives in the navigator UNDER the player/queue
+      // overlays — fold those away or the navigation happens invisibly.
+      run: () => {
+        player.ui?.closeQueue?.();
+        player.ui?.closePlayer?.();
         navRef?.navigate('Artist', {
           name: track.artist,
           trackId: track.id,
-        }),
+        });
+      },
     });
   }
 

@@ -75,7 +75,7 @@ export function Sheet({ onClose, closeLabel, header = null, children }) {
   const grip = <View style={[styles.grip, { backgroundColor: t.line }]} />;
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, styles.stack]}>
       <Animated.View
         entering={FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
         exiting={FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
@@ -136,6 +136,11 @@ export function Sheet({ onClose, closeLabel, header = null, children }) {
 }
 
 const styles = StyleSheet.create({
+  // Top of the overlay ladder (player 30, queue 40) so a sheet opened from a
+  // queue row or the player renders over them, not underneath. zIndex only —
+  // elevation on a transparent wrapper is both a stacking trap and the
+  // Android white-slab trap.
+  stack: { zIndex: 50 },
   backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
   card: {
     position: 'absolute',
