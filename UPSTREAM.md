@@ -35,6 +35,14 @@ Blanket adaptations (apply to every port):
 | src/api/talk.js | src/api/talk.js | |
 | src/api/why.js | src/api/why.js | |
 | src/overlays/WhySheet.jsx | src/screens/overlays/WhyPanel.jsx | bottom sheet, not a player panel; entry moved to the track actions menu (native player has no ⋯ menu); mood attached only when confidence ≥ 0.5 |
+| src/api/journal.js | src/api/journal.js | |
+| src/api/sonicDna.js | src/api/sonicDna.js | |
+| src/screens/JournalScreen.jsx | src/screens/desktop/DesktopJournal.jsx | hydrates entries[].tracks (server sends ID strings; the web renders them as objects so its thumbs never show) |
+| src/screens/DnaScreen.jsx | src/screens/desktop/DesktopDna.jsx | unavailable state reads eventsSeen (web reads a `seen` field that never existed); moods show real play counts (web's share% rendered NaN) |
+
+Lyrics overlay: reduced motion never enters cinematic mode (deliberate — the
+800ms dissolve would be a one-frame snap); "song ended" is a position
+heuristic (≥99.5% + paused), not the web's natural-end event.
 | src/api/mood.js | src/api/mood.js | |
 | src/hooks/useTalkHistory.js | src/hooks/useTalkHistory.js | seed is an explicit call (native greeting waits on the mood fetch) |
 | src/screens/TalkScreen.jsx | src/components/chat/TalkAura.jsx + src/screens/desktop/DesktopTalk.jsx | tab screen, not a modal; no now-playing banner (the dock bead stays visible); greeting only claims a mood reading when confidence ≥ 0.5 |

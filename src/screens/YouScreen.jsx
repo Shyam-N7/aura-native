@@ -41,6 +41,7 @@ import { TopBar } from '../components/nav/TopBar';
 import { Avatar } from '../components/Avatar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
+import { PressScale } from '../components/ui/PressScale';
 import { Shelf } from '../components/library/Shelf';
 import { Skeleton } from '../components/home/Skeleton';
 import { TrackArt } from '../components/TrackRow';
@@ -359,6 +360,40 @@ export default function YouScreen({ navigation }) {
               Nothing played yet. Your library fills as you listen.
             </Text>
           )}
+
+          {/* The written-about-you pair: journal + sonic dna. */}
+          <View style={styles.duoRow}>
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel="your journal"
+              onPress={() => navigation.navigate('Journal')}
+              style={[
+                styles.duoCard,
+                { backgroundColor: t.surface, borderColor: t.line },
+              ]}
+            >
+              <Text style={[label(9.5), { color: t.inkFaint }]}>
+                your journal
+              </Text>
+              <Text style={[styles.duoSub, { color: t.inkSoft }]}>
+                what you listened to, and why.
+              </Text>
+            </PressScale>
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel="sonic dna"
+              onPress={() => navigation.navigate('Dna')}
+              style={[
+                styles.duoCard,
+                { backgroundColor: t.surface, borderColor: t.line },
+              ]}
+            >
+              <Text style={[label(9.5), { color: t.inkFaint }]}>sonic dna</Text>
+              <Text style={[styles.duoSub, { color: t.inkSoft }]}>
+                you, as a fingerprint.
+              </Text>
+            </PressScale>
+          </View>
 
           {!loaded ? (
             <View style={styles.shelves}>
@@ -817,6 +852,20 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 13.5,
     paddingHorizontal: 2,
+  },
+  duoRow: { flexDirection: 'row', gap: 10 },
+  duoCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 4,
+  },
+  duoSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
   shelves: { gap: 10 },
   hint: {

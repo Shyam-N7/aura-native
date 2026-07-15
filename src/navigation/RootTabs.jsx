@@ -80,6 +80,16 @@ export default function RootTabs() {
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
+        name="Journal"
+        getComponent={() => require('../screens/JournalScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Dna"
+        getComponent={() => require('../screens/DnaScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
         name="Playlist"
         getComponent={() => require('../screens/PlaylistScreen').default}
         options={{ animation: 'slide_from_right' }}
