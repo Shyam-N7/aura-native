@@ -133,6 +133,8 @@ export function BridgeItinerary({
                 <Image
                   key={s.i}
                   source={{ uri: s.track.imageUrl }}
+                  // The step colour shows through until the art loads (and
+                  // stays if it fails), so a rung is never a hollow ring.
                   style={[
                     styles.art,
                     {
@@ -141,6 +143,7 @@ export function BridgeItinerary({
                       width: r * 2,
                       height: r * 2,
                       borderRadius: r,
+                      backgroundColor: s.col,
                     },
                   ]}
                 />

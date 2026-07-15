@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -85,6 +85,12 @@ export default function BridgesScreen({ navigation }) {
   const [heroBridge, setHeroBridge] = useState(null); // { narrative, tracks }
   const [built, setBuilt] = useState(null); // { narrative, tracks }
   const [building, setBuilding] = useState(false);
+  // A live view of cfg + an in-flight guard so an async curate can (a) reject
+  // its own result if the mood/length changed while it was in flight, and (b)
+  // ignore a double-tap without waiting for the building state to re-render.
+  const cfgRef = useRef(cfg);
+  cfgRef.current = cfg;
+  const buildingRef = useRef(false);
 
   useEffect(() => saveCfg(cfg), [cfg]);
 
@@ -103,6 +109,10 @@ export default function BridgesScreen({ navigation }) {
         });
         if (b.tracks?.length) {
           setHeroBridge(b);
+        } else {
+          // 200 with no playable tracks (sparse affinity) — don't leave the
+          // hero spinning "curating" forever; let the builder lead instead.
+          setSuggestGone(true);
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -125,17 +135,35 @@ export default function BridgesScreen({ navigation }) {
   };
 
   const curate = async () => {
-    if (building) {
+    if (buildingRef.current) {
       return;
     }
+    buildingRef.current = true;
+    // Snapshot the moods/length this build is for — if the user changes them
+    // mid-flight, the resolved (now stale) result must not land in `built`.
+    const snap = {
+      from: cfg.from,
+      to: cfg.to,
+      steps: cfg.steps,
+      langs: cfg.langs.join(','),
+    };
     setBuilding(true);
     try {
       const b = await getBridge({
-        from: cfg.from,
-        to: cfg.to,
-        steps: cfg.steps,
+        from: snap.from,
+        to: snap.to,
+        steps: snap.steps,
         langs: cfg.langs,
       });
+      const now = cfgRef.current;
+      if (
+        now.from !== snap.from ||
+        now.to !== snap.to ||
+        now.steps !== snap.steps ||
+        now.langs.join(',') !== snap.langs
+      ) {
+        return; // config moved on — drop this result
+      }
       if (!b.tracks?.length) {
         showToast("couldn't curate that bridge.");
         return;
@@ -144,6 +172,7 @@ export default function BridgesScreen({ navigation }) {
     } catch (err) {
       showToast(`couldn't curate — ${err.message}`);
     } finally {
+      buildingRef.current = false;
       setBuilding(false);
     }
   };

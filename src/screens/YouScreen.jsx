@@ -4,6 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated';
@@ -12,6 +13,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
   clearMyAvatar,
+  disableFamilyMode,
+  enableFamilyMode,
   getUser,
   logout,
   setMyAvatar,
@@ -171,6 +174,44 @@ export default function YouScreen({ navigation }) {
     const next = !priv;
     setPrivateSession(next);
     showToast(next ? 'private session on.' : 'private session off.');
+  };
+
+  // Family mode — a PIN-gated toggle. Off → reveal a "set a PIN" field; on →
+  // reveal an "enter your PIN to turn off" field. familyMode rides the live
+  // user (enable/disable persistUser, so it reacts at once).
+  const familyOn = !!user?.familyMode;
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
+  const submitFamily = async () => {
+    if (pinBusy) {
+      return;
+    }
+    if (!/^\d{4,6}$/.test(pin)) {
+      showToast('enter a 4–6 digit PIN');
+      return;
+    }
+    setPinBusy(true);
+    try {
+      if (familyOn) {
+        await disableFamilyMode(pin);
+        showToast('family mode is off.');
+      } else {
+        await enableFamilyMode(pin);
+        showToast('family mode is on.');
+      }
+      setPin('');
+      setPinOpen(false);
+    } catch (err) {
+      const left = err.attemptsLeft;
+      showToast(
+        typeof left === 'number'
+          ? `that PIN isn't right — ${left} left`
+          : err.message,
+      );
+    } finally {
+      setPinBusy(false);
+    }
   };
 
   // Profile photo — upload (picker delivers it pre-resized) or remove; the
@@ -684,6 +725,82 @@ export default function YouScreen({ navigation }) {
                 </Pressable>
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  family mode
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="family mode"
+                  accessibilityState={familyOn ? { selected: true } : {}}
+                  onPress={() => {
+                    setPin('');
+                    setPinOpen(o => !o);
+                  }}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text
+                      style={[
+                        styles.rowTitle,
+                        { color: familyOn ? t.accent : t.ink },
+                      ]}
+                    >
+                      family mode
+                    </Text>
+                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
+                      {familyOn
+                        ? 'explicit songs are hidden. enter your PIN to turn it off.'
+                        : 'hide explicit songs. set a PIN to lock it.'}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.dot,
+                      { borderColor: familyOn ? t.accent : t.line },
+                      familyOn && { backgroundColor: t.accent },
+                    ]}
+                  />
+                </Pressable>
+                {pinOpen && (
+                  <View style={styles.pinRow}>
+                    <TextInput
+                      value={pin}
+                      onChangeText={v => setPin(v.replace(/\D/g, ''))}
+                      onSubmitEditing={submitFamily}
+                      placeholder={
+                        familyOn ? 'PIN to turn off' : 'set a 4–6 digit PIN'
+                      }
+                      placeholderTextColor={t.inkFaint}
+                      secureTextEntry
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      accessibilityLabel="family mode PIN"
+                      style={[
+                        styles.pinInput,
+                        { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
+                      ]}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={familyOn ? 'turn off' : 'turn on'}
+                      onPress={submitFamily}
+                      disabled={pinBusy}
+                      style={({ pressed }) => [
+                        styles.pinBtn,
+                        { borderColor: t.accent },
+                        (pinBusy || pressed) && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[label(9.5), { color: t.accent }]}>
+                        {familyOn ? 'turn off' : 'turn on'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   audio quality
                 </Text>
                 {QUALITIES.map(q => {
@@ -969,6 +1086,28 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
+  },
+  pinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  pinInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    letterSpacing: 2,
+  },
+  pinBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   crashCard: {
     borderWidth: 1,

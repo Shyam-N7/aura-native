@@ -6,7 +6,8 @@ import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
 import { getUser } from '../../lib/auth';
-import { themes, type, radii } from '../../theme/tokens';
+import { openModeSheet } from '../../lib/modeSheet';
+import { themes, type, radii, label } from '../../theme/tokens';
 
 // 'auto' rides the end of the cycle: it follows the system light/dark
 // setting (dusk by day, midnight by night).
@@ -22,7 +23,12 @@ const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bloom' };
 export function TopBar({ navigation }) {
   const { name, pref, t, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
-  const initial = (getUser()?.name || 'a').trim()[0]?.toLowerCase();
+  const user = getUser();
+  const initial = (user?.name || 'a').trim()[0]?.toLowerCase();
+  const mode = user?.activeMode ?? 'everyday';
+  const modeLabel = (
+    (user?.modes ?? []).find(m => m.key === mode)?.label ?? mode
+  ).toLowerCase();
 
   const cycleTheme = () => {
     const next =
@@ -36,6 +42,25 @@ export function TopBar({ navigation }) {
         <View style={styles.row}>
           <Text style={[type.wordmark, { color: t.ink }]}>aura</Text>
           <View style={styles.spacer} />
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel="listening mode"
+            onPress={openModeSheet}
+            style={[
+              styles.modePill,
+              { borderColor: mode === 'everyday' ? t.line : t.accent },
+              mode !== 'everyday' && { backgroundColor: t.accentSoft },
+            ]}
+          >
+            <Text
+              style={[
+                label(8.5),
+                { color: mode === 'everyday' ? t.inkSoft : t.accent },
+              ]}
+            >
+              {modeLabel}
+            </Text>
+          </PressScale>
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="switch theme"
@@ -77,6 +102,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   spacer: { flex: 1 },
+  modePill: {
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   chip: {
     width: 32,
     height: 32,

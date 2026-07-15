@@ -326,6 +326,68 @@ export function getActiveExplicitOff() {
   return m ? !!m.explicitOff : !!u.familyMode;
 }
 
+// ── Listening modes ──────────────────────────────────────────────────
+// Switch the active context. Returns the refreshed user (activeMode + the
+// modes view) and updates the session so the UI reacts at once (home refetches
+// the mode-seeded pool). No cross-tab broadcast — that's a web-only concern.
+export async function setActiveMode(key) {
+  const res = await fetchAuthed('/api/modes/active', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw Object.assign(new Error(data.error ?? 'could not switch mode'), {
+      status: res.status,
+      code: data.code,
+    });
+  }
+  persistUser(data.user);
+  return data.user;
+}
+
+// ── Family PIN ───────────────────────────────────────────────────────
+// The PIN lives server-side (bcrypt); the client only ever sees the
+// familyMode boolean. Enable hides explicit + arms the lock; disable needs
+// the PIN (the server throttles wrong tries — the thrown error carries
+// attemptsLeft / retryAfterSec / code for the form to surface).
+export async function enableFamilyMode(pin) {
+  const res = await fetchAuthed('/api/family/enable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw Object.assign(new Error(data.error ?? 'could not enable family mode'), {
+      status: res.status,
+      code: data.code,
+    });
+  }
+  persistUser(data.user);
+  return data.user;
+}
+
+export async function disableFamilyMode(pin) {
+  const res = await fetchAuthed('/api/family/disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw Object.assign(new Error(data.error ?? 'could not disable family mode'), {
+      status: res.status,
+      code: data.code,
+      attemptsLeft: data.attemptsLeft,
+      retryAfterSec: data.retryAfterSec,
+    });
+  }
+  persistUser(data.user);
+  return data.user;
+}
+
 export function logout() {
   // Grab the token before the local clear so the server can still revoke the
   // session; the UI returns to sign-in immediately either way.

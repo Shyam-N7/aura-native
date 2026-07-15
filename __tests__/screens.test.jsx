@@ -31,6 +31,8 @@ jest.mock('../src/lib/auth', () => ({
   subscribeAuth: jest.fn(() => () => {}),
   setMyAvatar: jest.fn(),
   clearMyAvatar: jest.fn(),
+  enableFamilyMode: jest.fn(),
+  disableFamilyMode: jest.fn(),
   logout: jest.fn(),
 }));
 jest.mock('../src/api/catalog', () => ({
