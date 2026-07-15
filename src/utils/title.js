@@ -1,5 +1,4 @@
-// Ported from web src/utils/title.js (cleanLyric stays behind until lyrics
-// arrive in a later phase).
+// Ported from web src/utils/title.js.
 
 // The catalog appends "(From "Movie Name")" to most soundtrack track titles.
 // The song name on its own is what people recognize, so strip the suffix at
@@ -12,6 +11,20 @@ export function cleanTitle(title) {
     .replace(/\s*\(From\s+["“”'][^"“”']*["“”']\)\s*$/iu, '')
     .replace(/\s*\(From\s+[^)]*\)\s*$/iu, '')
     .trim();
+}
+
+// Display normalization for a lyric line: providers leak stage directions in
+// brackets and stray markdown; the lowercase matches the product voice.
+export function cleanLyric(line) {
+  if (!line) {
+    return line;
+  }
+  return line
+    .replace(/[()[\]{}]/g, ' ') // drop the bracket/paren glyphs, keep their content
+    .replace(/[*_~`]/g, '') // markdown-ish junk that sometimes slips through
+    .replace(/\s+/g, ' ') // collapse runs of whitespace
+    .trim()
+    .toLowerCase();
 }
 
 // A dedup key for a track title: the cleaned name, lowercased. Used to

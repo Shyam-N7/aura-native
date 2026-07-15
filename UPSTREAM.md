@@ -30,7 +30,10 @@ Blanket adaptations (apply to every port):
 | src/lib/explicit.js | src/lib/explicit.js | |
 | src/lib/toast.js | src/lib/toast.js | |
 | src/lib/audioQuality.js | src/lib/audioQuality.js | storage backend swapped |
-| src/utils/title.js | src/utils/title.js | cleanLyric stays behind until lyrics (Phase 4) |
+| src/utils/title.js | src/utils/title.js | |
+| src/api/lyrics.js | src/api/lyrics.js | DOMException → named Error (Hermes has no DOMException) |
+| src/lib/lyricsSync.js | src/screens/overlays/LyricsScreen.jsx (activeIdx + gap windows) | extracted pure so it's testable |
+| src/overlays/LyricsOverlay.jsx | src/screens/overlays/LyricsScreen.jsx (+ .css, useCinematicIdle) | fontSize not animated (RN can't, scroll masks it); cinematic depth-of-field = opacity only (RN can't blur text); toggle labels lowercased to the native voice; Fraunces/DancingScript TTFs converted from the web's @fontsource WOFFs |
 | src/utils/fmtTime.js | src/utils/fmtTime.js | |
 | src/hooks/useRecentSearches.js | src/hooks/useRecentSearches.js | |
 | src/playback/queueModel.js (auto-next part) | src/App.jsx fetchAutoNext/applyAutoRadioToQueue | behavior port, not file port |

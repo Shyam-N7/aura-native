@@ -11,6 +11,7 @@ import { PlayerProvider } from './src/playback/PlayerContext';
 import { acceptPlaylistInvite } from './src/api/playlists';
 import { showToast } from './src/lib/toast';
 import { PlayerSheet } from './src/overlays/PlayerSheet';
+import { LyricsOverlay } from './src/overlays/LyricsOverlay';
 import { QueueSheet } from './src/overlays/QueueSheet';
 import { TrackActionsSheet } from './src/overlays/TrackActionsSheet';
 import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
@@ -87,6 +88,8 @@ function Shell() {
         >
           <RootTabs />
           <PlayerSheet />
+          {/* Lyrics ride above the player; closing them lands back there. */}
+          <LyricsOverlay />
           {/* The queue rides above the player; closing it lands back there. */}
           <QueueSheet />
           {/* Action sheets stack above both (JSX order = z-order). */}

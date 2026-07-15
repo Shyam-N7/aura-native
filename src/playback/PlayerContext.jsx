@@ -18,6 +18,7 @@ import {
 } from '../lib/sleepTimer';
 import { getAudioQuality, setAudioQuality } from '../lib/audioQuality';
 import { getTrack } from '../api/catalog';
+import { prefetchLyrics } from '../api/lyrics';
 import * as engine from './engine';
 import * as model from './queueModel';
 import * as autoRadio from './autoRadio';
@@ -81,6 +82,7 @@ export function PlayerProvider({ children }) {
   const [quality, setQualityState] = useState(getAudioQuality);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
 
   // Refs let the service/engine event handlers (subscribed once) read live
   // state without re-registering, mirroring the web viewRef pattern.
@@ -507,6 +509,28 @@ export function PlayerProvider({ children }) {
   // close the player, and closing it lands back wherever you were.
   const openQueue = useCallback(() => setQueueOpen(true), []);
   const closeQueue = useCallback(() => setQueueOpen(false), []);
+  // Lyrics sit between the player (30) and the queue (40) in the overlay
+  // ladder; like the queue, opening them leaves the player where it was.
+  const openLyrics = useCallback(() => setLyricsOpen(true), []);
+  const closeLyrics = useCallback(() => setLyricsOpen(false), []);
+
+  // Warm the lyrics cache for the settled track and its successor so opening
+  // the overlay is instant (web App.jsx parity: 1.2s after the track settles;
+  // the api module dedupes, so repeat fires are free).
+  const currentId = queue.tracks[queue.idx]?.id;
+  const nextId = queue.tracks[queue.idx + 1]?.id;
+  useEffect(() => {
+    if (!currentId) {
+      return undefined;
+    }
+    const id = setTimeout(() => {
+      prefetchLyrics(currentId);
+      if (nextId) {
+        prefetchLyrics(nextId);
+      }
+    }, 1200);
+    return () => clearTimeout(id);
+  }, [currentId, nextId]);
 
   // ── boot: player setup, handler wiring, cold restore ─────────────────────
   useEffect(() => {
@@ -661,6 +685,7 @@ export function PlayerProvider({ children }) {
         userActedRef.current = true; // a cold restore in flight must abort
         setPlayerOpen(false);
         setQueueOpen(false);
+        setLyricsOpen(false);
         setIsPlaying(false);
         setShuffleActive(false);
         autoRadio.reset();
@@ -705,8 +730,21 @@ export function PlayerProvider({ children }) {
       queueOpen,
       openQueue,
       closeQueue,
+      lyricsOpen,
+      openLyrics,
+      closeLyrics,
     }),
-    [playerOpen, openPlayer, closePlayer, queueOpen, openQueue, closeQueue],
+    [
+      playerOpen,
+      openPlayer,
+      closePlayer,
+      queueOpen,
+      openQueue,
+      closeQueue,
+      lyricsOpen,
+      openLyrics,
+      closeLyrics,
+    ],
   );
 
   const value = useMemo(

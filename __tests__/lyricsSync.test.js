@@ -1,0 +1,53 @@
+import {
+  activeIndexFor,
+  gapWindows,
+  MIN_GAP_SEC,
+} from '../src/lib/lyricsSync';
+
+const lines = ts => ts.map((t, i) => ({ t, line: `line ${i}` }));
+
+test('activeIndexFor tracks the last line whose timestamp has passed', () => {
+  const l = lines([5, 10, 20]);
+  expect(activeIndexFor(l, 0)).toBe(-1);
+  expect(activeIndexFor(l, 5)).toBe(0);
+  expect(activeIndexFor(l, 12)).toBe(1);
+  expect(activeIndexFor(l, 99)).toBe(2);
+  expect(activeIndexFor([], 10)).toBe(-1);
+});
+
+test('intro gap surfaces only during a long intro, after its trigger point', () => {
+  const l = lines([12, 20]);
+  // Trigger = max(GAP_AFTER_SEC, 12 * 0.4) = 4.8s.
+  expect(gapWindows(l, 3, 200, -1).inIntroGap).toBe(false);
+  expect(gapWindows(l, 5, 200, -1).inIntroGap).toBe(true);
+  expect(gapWindows(l, 11.9, 200, -1).inIntroGap).toBe(true);
+  // First line sung — intro over.
+  expect(gapWindows(l, 12, 200, 0).inIntroGap).toBe(false);
+  // Short intro (< MIN_GAP_SEC) never shows the mark.
+  const short = lines([MIN_GAP_SEC - 1, 20]);
+  expect(gapWindows(short, 3.5, 200, -1).inIntroGap).toBe(false);
+});
+
+test('between gap gives the active line its vocal window before surfacing', () => {
+  const l = lines([0, 20]);
+  // Gap 20s → trigger = 0 + max(4, 8) = 8s.
+  expect(gapWindows(l, 7, 200, 0).inBetweenGap).toBe(false);
+  expect(gapWindows(l, 9, 200, 0).inBetweenGap).toBe(true);
+  expect(gapWindows(l, 19.9, 200, 0).inBetweenGap).toBe(true);
+  // Next line landed — the gap closes.
+  expect(gapWindows(l, 20, 200, 1).inBetweenGap).toBe(false);
+  // A 4s gap between lines is normal singing, not a break.
+  const tight = lines([0, 4, 8]);
+  expect(gapWindows(tight, 3.5, 200, 0).inBetweenGap).toBe(false);
+});
+
+test('outro gap runs from the last line to the end of the track', () => {
+  const l = lines([0, 100]);
+  // Outro 30s → trigger = 100 + max(4, 12) = 112s.
+  expect(gapWindows(l, 111, 130, 1).inOutroGap).toBe(false);
+  expect(gapWindows(l, 113, 130, 1).inOutroGap).toBe(true);
+  // No duration known → no outro math.
+  expect(gapWindows(l, 113, 0, 1).inOutroGap).toBe(false);
+  // Not on the last line → not an outro.
+  expect(gapWindows(l, 50, 130, 0).inOutroGap).toBe(false);
+});

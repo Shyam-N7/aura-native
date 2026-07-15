@@ -477,6 +477,14 @@ export function PlayerSheet() {
                   color={sleep ? t.accent : t.inkFaint}
                 />
               </PressScale>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel="lyrics"
+                onPress={() => player.ui?.openLyrics?.()}
+                hitSlop={8}
+              >
+                <Icon name="lyrics" size={19} color={t.inkFaint} />
+              </PressScale>
             </View>
 
             {nextTrack ? (

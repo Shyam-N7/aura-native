@@ -68,6 +68,10 @@ const ICONS = {
   bloom: {
     d: 'M12 3 c1.2 4.2 2.8 5.8 7 7 c-4.2 1.2 -5.8 2.8 -7 7 c-1.2 -4.2 -2.8 -5.8 -7 -7 c4.2 -1.2 5.8 -2.8 7 -7 Z',
   },
+  // Microphone — the lyrics/karaoke entry on the player.
+  lyrics: {
+    d: 'M12 3 a3 3 0 0 1 3 3 v5 a3 3 0 0 1 -6 0 V6 a3 3 0 0 1 3 -3 Z M6 11 a6 6 0 0 0 12 0 M12 17 v4',
+  },
 };
 
 export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {
