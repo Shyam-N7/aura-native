@@ -90,6 +90,11 @@ export default function RootTabs() {
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
+        name="Bridges"
+        getComponent={() => require('../screens/BridgesScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
         name="Playlist"
         getComponent={() => require('../screens/PlaylistScreen').default}
         options={{ animation: 'slide_from_right' }}

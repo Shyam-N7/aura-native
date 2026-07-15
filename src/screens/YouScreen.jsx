@@ -395,6 +395,26 @@ export default function YouScreen({ navigation }) {
             </PressScale>
           </View>
 
+          {/* Mood bridges — gradual paths between feelings. */}
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel="mood bridges"
+            onPress={() => navigation.navigate('Bridges')}
+            style={[
+              styles.bridgeCard,
+              { backgroundColor: t.accentCard },
+            ]}
+          >
+            <Text style={[label(9.5), { color: t.inkFaint }]}>mood bridges</Text>
+            <Text style={[styles.bridgeTitle, { color: t.ink }]}>
+              from here to there
+            </Text>
+            <Text style={[styles.duoSub, { color: t.inkSoft }]}>
+              songs threaded so the mood shifts gradually — or let the bridge
+              read you.
+            </Text>
+          </PressScale>
+
           {!loaded ? (
             <View style={styles.shelves}>
               {[0, 1, 2].map(i => (
@@ -866,6 +886,17 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12.5,
     lineHeight: 17,
+  },
+  bridgeCard: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    gap: 4,
+  },
+  bridgeTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
   shelves: { gap: 10 },
   hint: {
