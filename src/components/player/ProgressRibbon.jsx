@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, {
-  Circle,
-  ClipPath,
-  Defs,
-  LinearGradient,
-  Path,
-  Rect,
-  Stop,
-} from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, {
   Easing,
   runOnJS,
@@ -21,7 +13,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const SAMPLES = 80;
@@ -106,10 +97,36 @@ export function ProgressRibbon({
     return pts.join(' ');
   });
 
+  // The completed stretch is its own live path up to the progress point
+  // (fractional last sample so it ends exactly under the thumb). The web
+  // clipped one path instead, but an ANIMATED clip rect never re-evaluates
+  // on this rn-svg/Fabric combo — the fill was invisible in the field.
+  const donePath = useDerivedValue(() => {
+    'worklet';
+    if (span <= 0) {
+      return 'M 0 0';
+    }
+    const end = effective.value * SAMPLES;
+    const pts = [];
+    for (let i = 0; i <= end; i++) {
+      const x = PAD + (i / SAMPLES) * span;
+      const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
+      const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
+      const y = height / 2 + Math.sin(tt) * amp * height * env;
+      pts.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`);
+    }
+    if (end > Math.floor(end) || end === 0) {
+      const x = PAD + (end / SAMPLES) * span;
+      const tt = (end / SAMPLES) * Math.PI * 2 * freq + phase.value;
+      const env = Math.sin((end / SAMPLES) * Math.PI) * 0.7 + 0.3;
+      const y = height / 2 + Math.sin(tt) * amp * height * env;
+      pts.push(`${pts.length === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`);
+    }
+    return pts.join(' ');
+  });
+
   const pathProps = useAnimatedProps(() => ({ d: wavePath.value }));
-  const clipProps = useAnimatedProps(() => ({
-    width: Math.max(0, PAD + span * effective.value),
-  }));
+  const doneProps = useAnimatedProps(() => ({ d: donePath.value }));
   const thumbProps = useAnimatedProps(() => {
     'worklet';
     const p = effective.value;
@@ -170,20 +187,6 @@ export function ProgressRibbon({
       >
         {width > 0 && (
           <Svg width={width} height={height}>
-            <Defs>
-              <ClipPath id="ribbonClip">
-                <AnimatedRect
-                  x="0"
-                  y="0"
-                  height={height}
-                  animatedProps={clipProps}
-                />
-              </ClipPath>
-              <LinearGradient id="ribbonGrad" x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor={accent} stopOpacity="0.85" />
-                <Stop offset="1" stopColor={accent} stopOpacity="1" />
-              </LinearGradient>
-            </Defs>
             {/* dim arrives as a solid ink color; the web's hairline register is
                 ink at 10% — kept as strokeOpacity because rn-svg renders rgba()
                 strings opaque on Android. */}
@@ -196,12 +199,11 @@ export function ProgressRibbon({
               strokeLinecap="round"
             />
             <AnimatedPath
-              animatedProps={pathProps}
-              stroke="url(#ribbonGrad)"
+              animatedProps={doneProps}
+              stroke={accent}
               strokeWidth={2.2}
               fill="none"
               strokeLinecap="round"
-              clipPath="url(#ribbonClip)"
             />
             <AnimatedCircle
               animatedProps={thumbProps}
