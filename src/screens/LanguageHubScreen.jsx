@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getDiscoverHome } from '../api/discover';
@@ -81,7 +82,7 @@ export default function LanguageHubScreen({ route, navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <ScrollView overScrollMode="always"
+      <BounceScrollView
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 24 },
@@ -153,7 +154,7 @@ export default function LanguageHubScreen({ route, navigation }) {
             )}
           </>
         )}
-      </ScrollView>
+      </BounceScrollView>
     </View>
   );
 }

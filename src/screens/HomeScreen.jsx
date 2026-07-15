@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
@@ -183,7 +184,7 @@ export default function HomeScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
       <ScreenFade>
-        <ScrollView overScrollMode="always"
+        <BounceScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
@@ -363,7 +364,7 @@ export default function HomeScreen({ navigation }) {
               />
             </View>
           )}
-        </ScrollView>
+        </BounceScrollView>
       </ScreenFade>
     </View>
   );

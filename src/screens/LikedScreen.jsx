@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  LinearTransition,
-  ReduceMotion,
-} from 'react-native-reanimated';
+import { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BounceFlatList } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { listLiked } from '../api/likes';
@@ -168,8 +166,7 @@ export default function LikedScreen({ navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <Animated.FlatList
-        overScrollMode="always"
+      <BounceFlatList
         data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}

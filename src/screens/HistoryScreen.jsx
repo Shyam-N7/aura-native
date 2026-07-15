@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
-  SectionList,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BounceSectionList } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getHistory, getMusicClockPlays } from '../api/stats';
@@ -266,7 +266,7 @@ export default function HistoryScreen({ navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <SectionList overScrollMode="always"
+      <BounceSectionList
         sections={status === 'ok' ? days : []}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (

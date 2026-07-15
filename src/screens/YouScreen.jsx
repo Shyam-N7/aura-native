@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated';
+import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getUser, logout } from '../lib/auth';
@@ -279,7 +279,7 @@ export default function YouScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
       <ScreenFade>
-        <ScrollView overScrollMode="always"
+        <BounceScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
@@ -695,7 +695,7 @@ export default function YouScreen({ navigation }) {
               </Text>
             </View>
           </Animated.View>
-        </ScrollView>
+        </BounceScrollView>
       </ScreenFade>
     </View>
   );
