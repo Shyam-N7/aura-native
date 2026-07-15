@@ -16,6 +16,7 @@ import { GradientBg } from '../components/ui/GradientBg';
 import { radii } from '../theme/tokens';
 import { DUR } from '../theme/motion';
 import { showToast } from '../lib/toast';
+import { relTime } from '../lib/time';
 import {
   forgotRequest,
   login,
@@ -58,37 +59,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // "— N attempts left" suffix for a wrong-code error (server sends attemptsLeft).
 const attemptsSuffix = n =>
   Number.isFinite(n) ? ` — ${n} attempt${n === 1 ? '' : 's'} left` : '';
-
-// Compact "time ago" for device rows — mirrors web src/lib/time.js relTime.
-function relTime(ms, now = Date.now()) {
-  const t = Number(ms);
-  if (!Number.isFinite(t) || t <= 0) {
-    return '';
-  }
-  const s = Math.max(0, Math.floor((now - t) / 1000));
-  if (s < 45) {
-    return 'just now';
-  }
-  const m = Math.floor(s / 60);
-  if (m < 60) {
-    return `${m}m ago`;
-  }
-  const h = Math.floor(m / 60);
-  if (h < 24) {
-    return `${h}h ago`;
-  }
-  const d = Math.floor(h / 24);
-  if (d < 7) {
-    return `${d}d ago`;
-  }
-  const w = Math.floor(d / 7);
-  if (w < 5) {
-    return `${w}w ago`;
-  }
-  return new Date(t)
-    .toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-    .toLowerCase();
-}
 
 /* ── Small themed pieces ───────────────────────────────────────────────── */
 function Head({ kicker, title, sub }) {
