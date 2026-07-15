@@ -29,16 +29,29 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
         <!-- Playlist share links: /p/PUBLIC_ID (public view) and
-             /playlists?join=TOKEN (invite). Auto-open verification needs
-             /.well-known/assetlinks.json on aurafm.live carrying this app's
-             signing fingerprint; until that ships, Android offers the app in
-             the open-with chooser instead. -->
-        <intent-filter>
+             /playlists?join=TOKEN (invite). The app shares www links
+             (API_BASE = www.aurafm.live), which serves
+             /.well-known/assetlinks.json directly with this app's signing
+             fingerprint — so www auto-verifies and opens straight into the
+             app, no chooser. -->
+        <intent-filter android:autoVerify="true">
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
             <data android:host="www.aurafm.live" />
+            <data android:pathPrefix="/p/" />
+            <data android:path="/playlists" />
+        </intent-filter>
+        <!-- Bare apex 308-redirects to www, and Digital Asset Links
+             verification does not follow redirects — so aurafm.live can't
+             auto-verify. Keep it handled (open-with chooser) so apex links
+             from web shares still reach the app. -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
             <data android:host="aurafm.live" />
             <data android:pathPrefix="/p/" />
             <data android:path="/playlists" />
