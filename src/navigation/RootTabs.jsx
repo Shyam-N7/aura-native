@@ -74,6 +74,16 @@ export default function RootTabs() {
         getComponent={() => require('../screens/CatalogPlaylistScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="Playlists"
+        getComponent={() => require('../screens/PlaylistsScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Playlist"
+        getComponent={() => require('../screens/PlaylistScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }

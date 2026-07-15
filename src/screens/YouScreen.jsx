@@ -390,7 +390,7 @@ export default function YouScreen({ navigation }) {
                     accessibilityRole="button"
                     accessibilityLabel={p.name}
                     onPress={() =>
-                      showToast('playlist pages come in a later build')
+                      navigation.navigate('Playlist', { id: p.id })
                     }
                     style={({ pressed }) => [
                       styles.row,
@@ -415,6 +415,10 @@ export default function YouScreen({ navigation }) {
                     </View>
                   </Pressable>
                 ))}
+                <SeeAll
+                  what="playlists"
+                  onPress={() => navigation.navigate('Playlists')}
+                />
               </Shelf>
 
               <Shelf

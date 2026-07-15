@@ -28,6 +28,21 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <!-- Playlist share links: /p/PUBLIC_ID (public view) and
+             /playlists?join=TOKEN (invite). Auto-open verification needs
+             /.well-known/assetlinks.json on aurafm.live carrying this app's
+             signing fingerprint; until that ships, Android offers the app in
+             the open-with chooser instead. -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+            <data android:host="www.aurafm.live" />
+            <data android:host="aurafm.live" />
+            <data android:pathPrefix="/p/" />
+            <data android:path="/playlists" />
+        </intent-filter>
       </activity>
     </application>
 </manifest>
