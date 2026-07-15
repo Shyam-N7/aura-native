@@ -17,6 +17,7 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
@@ -131,11 +132,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
       >
         <CrumbBack onPress={() => navigation.goBack()} />
 
-        {status === 'loading' && (
-          <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-            Loading playlist
-          </Text>
-        )}
+        {status === 'loading' && <AuraLoader label="loading playlist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
             Couldn't load — {hit.error}

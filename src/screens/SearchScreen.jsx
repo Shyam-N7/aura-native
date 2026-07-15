@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { SearchField } from '../components/search/SearchField';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
@@ -284,9 +285,7 @@ export default function SearchScreen({ navigation }) {
           </>
         )}
 
-        {status === 'loading' && (
-          <Text style={[styles.hint, { color: t.inkFaint }]}>searching…</Text>
-        )}
+        {status === 'loading' && <AuraLoader label="searching" />}
         {status === 'error' && (
           <Text style={[styles.hint, { color: t.inkFaint }]}>
             search failed — {view.error}

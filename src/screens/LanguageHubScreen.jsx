@@ -10,6 +10,7 @@ import {
   CrumbBack,
   DetailSection,
 } from '../components/detail/DetailChassis';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
@@ -97,11 +98,7 @@ export default function LanguageHubScreen({ route, navigation }) {
         </View>
         <Text style={[type.queueHero, { color: t.ink }]}>{lang}.</Text>
 
-        {status === 'loading' && (
-          <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-            Loading {langTitle}
-          </Text>
-        )}
+        {status === 'loading' && <AuraLoader label={`loading ${lang}`} />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
             Couldn't load — {hit.error}

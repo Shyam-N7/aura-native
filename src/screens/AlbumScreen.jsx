@@ -11,6 +11,7 @@ import {
   CountLine,
   DetailRow,
 } from '../components/detail/DetailChassis';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 
 // Album / movie detail, ported from web DesktopAlbumDetail. Indian-cinema
@@ -58,11 +59,7 @@ export default function AlbumScreen({ route, navigation }) {
       >
         <CrumbBack onPress={() => navigation.goBack()} />
 
-        {status === 'loading' && (
-          <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-            Loading {kind}
-          </Text>
-        )}
+        {status === 'loading' && <AuraLoader label={`loading ${kind}`} />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
             Couldn't load — {hit.error}

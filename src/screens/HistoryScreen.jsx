@@ -14,6 +14,7 @@ import { summarizeClock } from '../lib/musicClock';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { TrackArt } from '../components/TrackRow';
 import { CrumbBack } from '../components/detail/DetailChassis';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
@@ -194,11 +195,7 @@ export default function HistoryScreen({ navigation }) {
     <View style={styles.header}>
       <CrumbBack onPress={() => navigation.goBack()} />
       <Text style={[type.queueHero, { color: t.ink }]}>your history.</Text>
-      {status === 'loading' && (
-        <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-          Loading history
-        </Text>
-      )}
+      {status === 'loading' && <AuraLoader label="loading history" />}
       {status === 'error' && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
           Couldn't load your history.

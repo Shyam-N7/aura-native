@@ -14,6 +14,7 @@ import {
   DetailSection,
   DetailRow,
 } from '../components/detail/DetailChassis';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 
 // Artist page, ported from web DesktopArtist: identity hero, top tracks,
@@ -72,11 +73,7 @@ export default function ArtistScreen({ route, navigation }) {
           </Text>
         </View>
 
-        {status === 'loading' && (
-          <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-            Loading artist
-          </Text>
-        )}
+        {status === 'loading' && <AuraLoader label="loading artist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
             Couldn't find that artist — {hit.error}
