@@ -288,6 +288,32 @@ export async function fetchMe() {
   return data.user;
 }
 
+// Profile photo — set to an uploaded Blob URL / clear back to the initial
+// monogram. persistUser refreshes every avatar on screen (web parity).
+export async function setMyAvatar(imageUrl) {
+  const res = await fetchAuthed('/api/auth/me/avatar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageUrl }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? 'update failed');
+  }
+  persistUser(data.user);
+  return data.user;
+}
+
+export async function clearMyAvatar() {
+  const res = await fetchAuthed('/api/auth/me/avatar', { method: 'DELETE' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? 'update failed');
+  }
+  persistUser(data.user);
+  return data.user;
+}
+
 // Whether the active mode hides explicit content — api/related filters through
 // this. Falls back to familyMode for sessions cached before modes existed.
 export function getActiveExplicitOff() {

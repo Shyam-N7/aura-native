@@ -10,7 +10,15 @@ import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimate
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
-import { getUser, logout } from '../lib/auth';
+import {
+  clearMyAvatar,
+  getUser,
+  logout,
+  setMyAvatar,
+  subscribeAuth,
+} from '../lib/auth';
+import { uploadImage } from '../api/uploads';
+import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
 import { QUALITIES } from '../lib/audioQuality';
 import {
@@ -30,6 +38,7 @@ import { useLikes } from '../hooks/useLikes';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { getLastCrash, clearLastCrash } from '../lib/crashLog';
 import { TopBar } from '../components/nav/TopBar';
+import { Avatar } from '../components/Avatar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { Shelf } from '../components/library/Shelf';
@@ -134,7 +143,9 @@ function SeeAll({ what, onPress }) {
 export default function YouScreen({ navigation }) {
   const { t } = useTheme();
   const player = usePlayer();
-  const user = getUser();
+  // Subscribed (not just read) so an avatar change repaints the chip at once.
+  const [user, setUser] = useState(getUser);
+  useEffect(() => subscribeAuth(() => setUser(getUser())), []);
   const { isLiked, ready } = useLikes();
 
   const [summary, setSummary] = useState(null);
@@ -159,6 +170,43 @@ export default function YouScreen({ navigation }) {
     const next = !priv;
     setPrivateSession(next);
     showToast(next ? 'private session on.' : 'private session off.');
+  };
+
+  // Profile photo — upload (picker delivers it pre-resized) or remove; the
+  // cached user updates via persistUser so every avatar on screen refreshes.
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const changePhoto = async () => {
+    if (avatarBusy) {
+      return;
+    }
+    try {
+      const asset = await pickImage('avatar');
+      if (!asset) {
+        return;
+      }
+      setAvatarBusy(true);
+      const { url } = await uploadImage(asset, { kind: 'avatar' });
+      await setMyAvatar(url);
+      showToast('photo updated.');
+    } catch (err) {
+      showToast(`couldn't update photo — ${err.message}`);
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+  const removePhoto = async () => {
+    if (avatarBusy) {
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      await clearMyAvatar();
+      showToast('photo removed.');
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setAvatarBusy(false);
+    }
   };
   const privUntil = privateSessionUntil();
   const privCaption =
@@ -500,6 +548,50 @@ export default function YouScreen({ navigation }) {
                 peek={<Icon name="cog" size={18} color={t.inkFaint} strokeWidth={1.6} />}
               >
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  profile photo
+                </Text>
+                <View style={styles.photoRow}>
+                  <Avatar user={user} size={44} />
+                  <Text
+                    style={[styles.qualityCaption, styles.photoCaption, { color: t.inkSoft }]}
+                  >
+                    {user?.avatarUrl
+                      ? 'your photo'
+                      : 'add a photo, or keep the initial'}
+                  </Text>
+                  {!!user?.avatarUrl && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="remove photo"
+                      disabled={avatarBusy}
+                      onPress={removePhoto}
+                      hitSlop={8}
+                      style={({ pressed }) => pressed && styles.pressed}
+                    >
+                      <Text style={[label(9.5), { color: t.inkSoft }]}>
+                        remove
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={user?.avatarUrl ? 'change photo' : 'add photo'}
+                    disabled={avatarBusy}
+                    onPress={changePhoto}
+                    hitSlop={8}
+                    style={({ pressed }) => pressed && styles.pressed}
+                  >
+                    <Text style={[label(9.5), { color: t.accent }]}>
+                      {avatarBusy
+                        ? 'uploading…'
+                        : user?.avatarUrl
+                        ? 'change'
+                        : 'add photo'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   privacy
                 </Text>
                 <Pressable
@@ -685,11 +777,7 @@ export default function YouScreen({ navigation }) {
           {/* Identity chip — you sign the corner of your own screen.
               Display-only. */}
           <Animated.View layout={CHIP_LAYOUT} style={styles.identity}>
-            <View style={[styles.avatar, { backgroundColor: t.accentSoft }]}>
-              <Text style={[styles.avatarLetter, { color: t.accent }]}>
-                {(user?.name ?? '·').trim()[0]?.toLowerCase() ?? '·'}
-              </Text>
-            </View>
+            <Avatar user={user} size={44} />
             <View style={styles.who}>
               <Text numberOfLines={1} style={[styles.name, { color: t.ink }]}>
                 {user?.name ?? ''}
@@ -836,14 +924,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingTop: 6,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  photoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 14,
+    paddingVertical: 8,
   },
-  avatarLetter: { fontFamily: fonts.semibold, fontSize: 19 },
+  photoCaption: { flex: 1, minWidth: 0 },
   who: { flex: 1, gap: 1 },
   name: { fontFamily: fonts.medium, fontSize: 15.5 },
   email: { fontFamily: fonts.regular, fontSize: 12.5 },

@@ -29,6 +29,9 @@ jest.mock('../src/playback/PlayerContext', () => ({
 jest.mock('../src/lib/auth', () => ({
   getUser: () => ({ name: 'Shyam N', email: 's@x.y' }),
   getActiveExplicitOff: () => false,
+  subscribeAuth: jest.fn(() => () => {}),
+  setMyAvatar: jest.fn(),
+  clearMyAvatar: jest.fn(),
   logout: jest.fn(),
 }));
 jest.mock('../src/api/catalog', () => ({

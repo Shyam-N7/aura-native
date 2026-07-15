@@ -27,6 +27,8 @@ import {
   unsavePlaylist,
 } from '../api/playlists';
 import { API_BASE, getUser } from '../lib/auth';
+import { uploadImage } from '../api/uploads';
+import { pickImage } from '../lib/imagePicker';
 import { relTime } from '../lib/time';
 import { showToast } from '../lib/toast';
 import { storage } from '../storage/mmkv';
@@ -386,6 +388,26 @@ export default function PlaylistScreen({ route, navigation }) {
         },
       ],
     );
+  };
+
+  // Upload a custom cover image (picker delivers it pre-resized).
+  const uploadCover = async () => {
+    try {
+      const asset = await pickImage('cover');
+      if (!asset) {
+        return;
+      }
+      setCoverPicking(false);
+      showToast('Uploading cover…');
+      const { url } = await uploadImage(asset, { kind: 'cover' });
+      const { coverImageUrl: next } = await setPlaylistCover(id, {
+        imageUrl: url,
+      });
+      setHit(h => ({ ...h, data: { ...h.data, coverImageUrl: next } }));
+      showToast('Cover updated.');
+    } catch (err) {
+      showToast(`Couldn't upload — ${err.message}`);
+    }
   };
 
   // Set the cover to a chosen track's art (owner/editor). Optimistic.
@@ -760,8 +782,7 @@ export default function PlaylistScreen({ route, navigation }) {
         </Sheet>
       )}
 
-      {/* Cover picker — any track's art can be the cover. (Uploading a custom
-          image needs a native picker — deferred; the web path stays.) */}
+      {/* Cover picker — upload your own image, or any track's art. */}
       {coverPicking && (
         <Sheet
           onClose={() => setCoverPicking(false)}
@@ -772,6 +793,24 @@ export default function PlaylistScreen({ route, navigation }) {
             </Text>
           }
         >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="upload your own image"
+            onPress={uploadCover}
+            style={({ pressed }) => [
+              styles.uploadRow,
+              { borderColor: t.line },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Icon name="plus" size={16} color={t.accent} />
+            <Text style={[styles.sheetItemText, { color: t.accent }]}>
+              upload your own image
+            </Text>
+          </Pressable>
+          <Text style={[label(9.5), styles.sheetHead, { color: t.inkFaint }]}>
+            or pick from this playlist
+          </Text>
           <View style={styles.coverGrid}>
             {tracks.map(track => (
               <Pressable
@@ -878,5 +917,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     paddingVertical: 10,
+  },
+  uploadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginTop: 4,
   },
 });

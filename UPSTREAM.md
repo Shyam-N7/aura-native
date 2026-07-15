@@ -24,6 +24,7 @@ Blanket adaptations (apply to every port):
 | src/api/likes.js | src/api/likes.js | |
 | src/api/autoPlaylists.js | src/api/autoPlaylists.js | |
 | src/api/playlists.js | src/api/playlists.js | |
+| src/api/uploads.js | src/api/uploads.js | canvas resize swapped for the picker's |
 | src/lib/time.js | src/lib/time.js | |
 | src/lib/homeCache.js | src/lib/homeCache.js | |
 | src/lib/explicit.js | src/lib/explicit.js | |

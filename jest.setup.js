@@ -37,3 +37,9 @@ jest.mock(
   'react-native-safe-area-context',
   () => require('react-native-safe-area-context/jest/mock').default,
 );
+
+// The image picker binds a native module at import — resolve as "backed out"
+// so upload flows are inert under jest.
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(async () => ({ didCancel: true })),
+}));
