@@ -18,6 +18,7 @@ import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
 import { SleepTimerSheet } from './src/overlays/SleepTimerSheet';
 import { WhySheet } from './src/overlays/WhySheet';
 import { ModeSheet } from './src/overlays/ModeSheet';
+import { QualitySheet } from './src/overlays/QualitySheet';
 import { PresenceBanners } from './src/overlays/PresenceBanners';
 import { Toast } from './src/components/Toast';
 import RootTabs from './src/navigation/RootTabs';
@@ -148,6 +149,7 @@ function Shell() {
         <SleepTimerSheet />
         <WhySheet />
         <ModeSheet />
+        <QualitySheet />
         {/* Heartbeats + "playing elsewhere" note + cross-device resume. */}
         <PresenceBanners />
       </NavigationContainer>

@@ -2,6 +2,13 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { PlayerSheet } from '../src/overlays/PlayerSheet';
+import { openQualitySheet } from '../src/lib/qualitySheet';
+
+jest.mock('../src/lib/qualitySheet', () => ({
+  openQualitySheet: jest.fn(),
+  closeQualitySheet: jest.fn(),
+  subscribeQualitySheet: jest.fn(() => () => {}),
+}));
 
 jest.mock('react-native-track-player', () => ({
   useProgress: () => ({ position: 30, duration: 120, buffered: 0 }),
@@ -112,8 +119,9 @@ test('shows the current track with transport, quality and up next', async () => 
   byLabel(tree, 'repeat off').props.onPress();
   expect(p.cycleRepeat).toHaveBeenCalled();
 
-  byLabel(tree, 'quality normal').props.onPress();
-  expect(p.setQuality).toHaveBeenCalledWith('normal');
+  // Quality is now a pill that opens the picker sheet (was inline chips).
+  byLabel(tree, 'audio quality, high').props.onPress();
+  expect(openQualitySheet).toHaveBeenCalled();
 
   byLabel(tree, 'close player').props.onPress();
   expect(p.ui.closePlayer).toHaveBeenCalledTimes(1);

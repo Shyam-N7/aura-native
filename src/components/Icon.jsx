@@ -44,6 +44,8 @@ const ICONS = {
   'queue-add': { d: 'M4 6 h16 M4 12 h16 M4 18 h7 M17.5 15 v6 M14.5 18 h6' },
   heart: { d: HEART_D },
   'heart-filled': { d: HEART_D, fill: true },
+  // Three bars at different heights — a sound-level / audio-quality meter.
+  quality: { d: 'M6 16 V11 M12 16 V6 M18 16 V13', thick: true },
   // Toothed cog (not radiating spokes — spokes read as a sun and get mistaken
   // for the theme toggle). Ported from the web settings-shelf peek.
   cog: {

@@ -24,12 +24,14 @@ import Animated, {
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
+import { useLikes } from '../hooks/useLikes';
 import { QUALITIES } from '../lib/audioQuality';
 import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
+import { openQualitySheet } from '../lib/qualitySheet';
+import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
-import { HeartButton } from '../components/player/HeartButton';
 import { ProgressRibbon } from '../components/player/ProgressRibbon';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
@@ -37,7 +39,7 @@ import { GradientBg } from '../components/ui/GradientBg';
 import { PressScale } from '../components/ui/PressScale';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
-import { type, label, radii, elevation } from '../theme/tokens';
+import { fonts, type, label, radii, elevation } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 
 // Web aura-mp-upnext-in: rise + settle, 340ms.
@@ -100,6 +102,7 @@ export function PlayerSheet() {
   const player = usePlayer();
   const { position, duration } = usePlaybackProgress();
   const reduced = useReducedMotion();
+  const { isLiked, like, unlike } = useLikes();
 
   const track = player.current;
   const open = player.ui?.playerOpen ?? false;
@@ -249,6 +252,15 @@ export function PlayerSheet() {
     heroH > 0 ? heroH - 16 : Number.MAX_SAFE_INTEGER,
   );
   const backdrop = artUrl(track);
+  const liked = isLiked(track.id);
+  const toggleLike = () => {
+    showToast(liked ? 'removed from likes.' : 'liked.');
+    (liked ? unlike(track.id) : like(track.id)).catch(() =>
+      showToast("couldn't like — try again."),
+    );
+  };
+  const qualityLabel =
+    QUALITIES.find(q => q.id === player.quality)?.label ?? 'quality';
 
   // The queue opens as its own sheet above this one — the player stays put
   // and is exactly where you left it when the queue closes.
@@ -310,29 +322,15 @@ export function PlayerSheet() {
                   <Icon name="chevron-down" size={22} color={t.ink} />
                 </Glass>
               </PressScale>
-              <Text style={[label(11), { color: t.inkFaint }]}>
+              {/* Centered source title — balanced by an empty chip-sized view
+                  on the right so it sits dead-centre (field report). */}
+              <Text
+                numberOfLines={1}
+                style={[label(11), styles.topSource, { color: t.inkFaint }]}
+              >
                 {queue.source ?? 'now playing'}
               </Text>
-              <View style={styles.topCluster}>
-                <PressScale
-                  accessibilityRole="button"
-                  accessibilityLabel="add to playlist"
-                  onPress={() => openAddToPlaylist(track)}
-                  hitSlop={8}
-                >
-                  <Glass radius={19} style={styles.chip}>
-                    <Icon name="plus" size={20} color={t.ink} />
-                  </Glass>
-                </PressScale>
-                <Glass radius={19} style={styles.chip}>
-                  <HeartButton
-                    trackId={track.id}
-                    size={20}
-                    color={t.ink}
-                    accent={t.accent}
-                  />
-                </Glass>
-              </View>
+              <View style={styles.chip} />
             </View>
 
             <View
@@ -424,7 +422,9 @@ export function PlayerSheet() {
               </PressScale>
             </View>
 
-            <View style={styles.actions}>
+            {/* Playback modifiers — small icons + a single quality pill that
+                opens the quality picker (was a messy row of 3 quality chips). */}
+            <View style={styles.modifiers}>
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={
@@ -439,33 +439,6 @@ export function PlayerSheet() {
                   color={player.shuffleActive ? t.accent : t.inkFaint}
                 />
               </PressScale>
-              <View style={styles.qualityRow}>
-                {QUALITIES.map(q => {
-                  const on = player.quality === q.id;
-                  return (
-                    <PressScale
-                      key={q.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`quality ${q.label}`}
-                      onPress={() => player.setQuality(q.id)}
-                      style={[
-                        styles.qualityChip,
-                        { borderColor: on ? t.accent : t.line },
-                        on && { backgroundColor: t.accentSoft },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          label(11),
-                          { color: on ? t.accent : t.inkSoft },
-                        ]}
-                      >
-                        {q.label}
-                      </Text>
-                    </PressScale>
-                  );
-                })}
-              </View>
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={`repeat ${player.repeat}`}
@@ -497,6 +470,54 @@ export function PlayerSheet() {
                 hitSlop={8}
               >
                 <Icon name="lyrics" size={19} color={t.inkFaint} />
+              </PressScale>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel={`audio quality, ${qualityLabel}`}
+                onPress={openQualitySheet}
+                style={[styles.qualityPill, { borderColor: t.line }]}
+              >
+                <Icon name="quality" size={15} color={t.inkSoft} />
+                <Text style={[label(10), { color: t.inkSoft }]}>
+                  {qualityLabel}
+                </Text>
+              </PressScale>
+            </View>
+
+            {/* Save actions — prominent and near the bottom (field report). */}
+            <View style={styles.saveRow}>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel={liked ? 'unlike' : 'like'}
+                onPress={toggleLike}
+                style={[
+                  styles.saveBtn,
+                  { borderColor: liked ? t.accent : t.line },
+                  liked && { backgroundColor: t.accentSoft },
+                ]}
+              >
+                <Icon
+                  name={liked ? 'heart-filled' : 'heart'}
+                  size={19}
+                  color={liked ? t.accent : t.ink}
+                  strokeWidth={1.7}
+                />
+                <Text
+                  style={[styles.saveText, { color: liked ? t.accent : t.ink }]}
+                >
+                  {liked ? 'liked' : 'like'}
+                </Text>
+              </PressScale>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel="add to playlist"
+                onPress={() => openAddToPlaylist(track)}
+                style={[styles.saveBtn, { borderColor: t.line }]}
+              >
+                <Icon name="plus" size={19} color={t.ink} />
+                <Text style={[styles.saveText, { color: t.ink }]}>
+                  add to playlist
+                </Text>
               </PressScale>
             </View>
 
@@ -569,7 +590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topCluster: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topSource: { flex: 1, textAlign: 'center' },
   hero: {
     flex: 1,
     alignItems: 'center',
@@ -607,19 +628,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actions: {
+  modifiers: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 16,
+    paddingHorizontal: 4,
   },
-  qualityRow: { flexDirection: 'row', gap: 6 },
-  qualityChip: {
+  qualityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
+  saveRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  saveBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 13,
+  },
+  saveText: { fontFamily: fonts.medium, fontSize: 14 },
   upNext: { marginTop: 16 },
   upNextRow: {
     flexDirection: 'row',
