@@ -35,9 +35,10 @@ const ROW_HEIGHT = 62;
 const SHIFT_MS = 160;
 const EDGE = 90;
 
-// The current row's live line: 'now playing' + a thin bar gliding between the
-// 1Hz position ticks + elapsed/remaining. Isolated so the ticker re-renders
-// only this leaf, never the list.
+// The current row's live line: 'now playing' + a thin bar gliding between
+// the 1Hz position ticks. No times here (field feedback: clutter at row
+// size) — the row's right edge keeps the total, the player owns the clock.
+// Isolated so the ticker re-renders only this leaf, never the list.
 function NowPlayingLine({ t }) {
   const { position, duration } = usePlaybackProgress(1000);
   const frac = duration > 0 ? Math.min(1, position / duration) : 0;
@@ -54,11 +55,6 @@ function NowPlayingLine({ t }) {
           style={[styles.npFill, { backgroundColor: t.accent }, fill]}
         />
       </View>
-      {duration > 0 && (
-        <Text style={[styles.npTime, { color: t.inkFaint }]}>
-          {fmtTime(position)} · -{fmtTime(Math.max(0, duration - position))}
-        </Text>
-      )}
     </View>
   );
 }
@@ -537,10 +533,6 @@ const styles = StyleSheet.create({
   npFill: {
     height: 3,
     borderRadius: 1.5,
-  },
-  npTime: {
-    fontSize: 10.5,
-    fontVariant: ['tabular-nums'],
   },
   time: {
     fontSize: 11.5,

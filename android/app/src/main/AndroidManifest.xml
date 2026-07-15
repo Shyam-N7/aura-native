@@ -5,6 +5,8 @@
          WAKE_LOCK + FOREGROUND_SERVICE* + the MusicService come from react-native-track-player's
          own manifest via merger. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Queue drag-reorder haptics (pickup/drop ticks). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
       android:name=".MainApplication"
