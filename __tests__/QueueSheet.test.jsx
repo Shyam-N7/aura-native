@@ -1,12 +1,17 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
-import QueueScreen from '../src/screens/QueueScreen';
+import { QueueSheet } from '../src/overlays/QueueSheet';
+
+jest.mock('react-native-track-player', () => ({
+  useProgress: () => ({ position: 30, duration: 120, buffered: 0 }),
+}));
 
 const mockJumpTo = jest.fn();
 const mockRemoveAt = jest.fn();
 const mockCycleRepeat = jest.fn();
 const mockToggleShuffle = jest.fn();
+const mockCloseQueue = jest.fn();
 const mockQueue = {
   tracks: [
     { id: 'a', title: 'First Song', artist: 'one', durationSec: 100 },
@@ -16,6 +21,8 @@ const mockQueue = {
   idx: 1,
   source: 'more like this',
 };
+// Mutable so the closed-state test can flip queueOpen before rendering.
+const mockState = { queueOpen: true };
 jest.mock('../src/playback/PlayerContext', () => ({
   usePlayer: () => ({
     current: mockQueue.tracks[1],
@@ -27,6 +34,7 @@ jest.mock('../src/playback/PlayerContext', () => ({
     removeAt: mockRemoveAt,
     cycleRepeat: mockCycleRepeat,
     toggleShuffle: mockToggleShuffle,
+    ui: { queueOpen: mockState.queueOpen, closeQueue: mockCloseQueue },
   }),
 }));
 
@@ -47,16 +55,32 @@ function texts(node) {
 const byLabel = (tree, accessibilityLabel) =>
   tree.root.findAllByProps({ accessibilityLabel })[0];
 
-test('lists the queue with source, count and row actions', async () => {
-  const goBack = jest.fn();
+async function render() {
   let tree;
   await ReactTestRenderer.act(() => {
     tree = ReactTestRenderer.create(
       <ThemeProvider>
-        <QueueScreen navigation={{ goBack }} />
+        <QueueSheet />
       </ThemeProvider>,
     );
   });
+  return tree;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockState.queueOpen = true;
+});
+
+test('renders nothing while the queue ui state is closed', async () => {
+  mockState.queueOpen = false;
+  const tree = await render();
+  expect(tree.toJSON()).toBeNull();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('lists the queue with source, count and row actions', async () => {
+  const tree = await render();
 
   const body = texts(tree.toJSON());
   expect(body).toContain('more like this');
@@ -80,8 +104,11 @@ test('lists the queue with source, count and row actions', async () => {
   byLabel(tree, 'shuffle').props.onPress();
   expect(mockToggleShuffle).toHaveBeenCalled();
 
-  byLabel(tree, 'close queue').props.onPress();
-  expect(goBack).toHaveBeenCalled();
+  // Closing the sheet flips the ui state — the player underneath stays put.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'close queue').props.onPress();
+  });
+  expect(mockCloseQueue).toHaveBeenCalled();
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

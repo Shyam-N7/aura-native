@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
   Image,
@@ -16,7 +10,6 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainerRefContext } from '@react-navigation/native';
 import Animated, {
   Easing,
   Keyframe,
@@ -106,7 +99,6 @@ export function PlayerSheet() {
   const player = usePlayer();
   const { position, duration } = usePlaybackProgress();
   const reduced = useReducedMotion();
-  const navRoot = useContext(NavigationContainerRefContext);
 
   const track = player.current;
   const open = player.ui?.playerOpen ?? false;
@@ -140,6 +132,11 @@ export function PlayerSheet() {
         });
       }
       setVis('open');
+    }
+    // Closed from outside the sheet (sign-out) — resync the mount machine so
+    // the next open still gets its slide-in.
+    if (!open && vis === 'open') {
+      setVis('closed');
     }
   }, [open, vis, reduced, winH, slide, dragY, backdropFade]);
 
@@ -252,11 +249,10 @@ export function PlayerSheet() {
   );
   const backdrop = artUrl(track);
 
+  // The queue opens as its own sheet above this one — the player stays put
+  // and is exactly where you left it when the queue closes.
   const openQueue = () => {
-    close();
-    if (navRoot?.isReady?.()) {
-      navRoot.navigate('Queue');
-    }
+    player.ui?.openQueue?.();
   };
 
   return (
@@ -528,8 +524,10 @@ export function PlayerSheet() {
 const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFillObject,
+    // zIndex only — elevation outranks sibling order on this device, which
+    // buried the action sheets (field report). Overlay ladder: player 30,
+    // queue 40, action sheets 50.
     zIndex: 30,
-    elevation: 30,
     overflow: 'hidden',
   },
   fill: { flex: 1 },

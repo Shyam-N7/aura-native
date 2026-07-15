@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  BackHandler,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -62,11 +64,13 @@ function NowPlayingLine({ t }) {
 // One queue row. Drag-reorder ports the web DesktopQueue math onto fixed-height
 // rows: the dragged row rides the finger (translation + scroll delta), rows
 // between origin and target shift one slot, drop commits reorder(from, to).
-// All motion is UI-thread; only pickup/commit cross to JS. The grip pan
-// activates on the first few px of vertical movement — an instant pickup that
-// also wins the race against the list's scroll gesture (the old long-press
-// arming lost it whenever the finger drifted during the hold, which read as
-// "reorder is broken").
+// All motion is UI-thread; only pickup/commit cross to JS.
+//
+// Arbitration: the grip pan BLOCKS the list's native scroll gesture — a touch
+// on the grip makes the scroll wait, so pickup can't lose the race (the
+// earlier long-press arming, and even plain activation offsets, sometimes
+// did). No scrollEnabled toggling either: that state flip re-rendered the
+// whole list at the exact moment of pickup, which read as jank.
 function Row({
   item,
   index,
@@ -81,7 +85,7 @@ function Row({
   listRef,
   listH,
   count,
-  onDragging,
+  listGesture,
 }) {
   const { t } = useTheme();
   const title = cleanTitle(item.title);
@@ -100,24 +104,34 @@ function Row({
     requestAnimationFrame(() => {
       dragFrom.value = -1;
       dragShift.value = 0;
-      onDragging(false);
     });
   };
 
+  // A second finger on another grip must not fight over the shared drag
+  // slots — first pickup wins, the other pan runs inert.
+  const owns = useSharedValue(false);
+
   const pan = Gesture.Pan()
-    .activeOffsetY([-6, 6])
-    .failOffsetX([-14, 14])
+    .activeOffsetY([-4, 4])
+    .failOffsetX([-16, 16])
+    .blocksExternalGesture(listGesture)
     .onStart(() => {
       'worklet';
+      owns.value = dragFrom.value === -1;
+      if (!owns.value) {
+        return;
+      }
       dragFrom.value = index;
       dragTo.value = index;
       dragShift.value = 0;
       scrollStart.value = scrollY.value;
-      runOnJS(onDragging)(true);
       runOnJS(pickup)();
     })
     .onUpdate(e => {
       'worklet';
+      if (!owns.value) {
+        return;
+      }
       dragShift.value = e.translationY + scrollY.value - scrollStart.value;
       const to = index + Math.round(dragShift.value / ROW_HEIGHT);
       dragTo.value = Math.max(0, Math.min(count - 1, to));
@@ -130,15 +144,21 @@ function Row({
     })
     .onEnd(() => {
       'worklet';
+      if (!owns.value) {
+        return;
+      }
       runOnJS(commit)(dragFrom.value, dragTo.value);
     })
     .onFinalize((_e, success) => {
       'worklet';
+      if (!owns.value) {
+        return;
+      }
       if (!success) {
         dragFrom.value = -1;
         dragShift.value = 0;
-        runOnJS(onDragging)(false);
       }
+      owns.value = false;
     });
 
   const rowStyle = useAnimatedStyle(() => {
@@ -245,22 +265,81 @@ function Row({
   );
 }
 
-// The live queue: tap a row to jump, ✕ to drop it, drag the grip to reorder,
-// shuffle/repeat toggles in the header. The screen itself is sheet-like:
-// dragging the header follows the finger and commits to a dismiss on distance
-// or velocity (the stack keeps the tabs alive underneath via transparentModal).
-export default function QueueScreen({ navigation }) {
+// The live queue as its own overlay ABOVE the player sheet: opening it never
+// closes the player, and closing it lands back exactly where you were (field
+// feedback — the old navigator screen forced the player shut first). Slides
+// up like the player, drags down from its header to dismiss, hardware back
+// closes it first (registered later than the player's handler, LIFO).
+export function QueueSheet() {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
   const player = usePlayer();
+  const reduced = useReducedMotion();
+  const open = player.ui?.queueOpen ?? false;
   const { tracks, idx, source } = player.queue ?? {
     tracks: [],
     idx: -1,
     source: null,
   };
 
-  const [dragging, setDragging] = useState(false);
+  // 'closed' | 'open' | 'closing' — the PlayerSheet mount grammar.
+  const [vis, setVis] = useState('closed');
+  const slide = useSharedValue(winH);
+  const dragY = useSharedValue(0);
+
+  const endClose = useCallback(() => setVis('closed'), []);
+
+  useEffect(() => {
+    if (open && vis === 'closed') {
+      dragY.value = 0;
+      if (reduced) {
+        slide.value = 0;
+      } else {
+        slide.value = winH;
+        slide.value = withSpring(0, SPRING.sheet);
+      }
+      setVis('open');
+    }
+    // Closed from outside the sheet (sign-out) — resync the mount machine so
+    // the next open still gets its slide-in.
+    if (!open && vis === 'open') {
+      setVis('closed');
+    }
+  }, [open, vis, reduced, winH, slide, dragY]);
+
+  const close = useCallback(() => {
+    if (vis === 'closing') {
+      return;
+    }
+    setVis('closing');
+    player.ui?.closeQueue?.();
+    if (reduced) {
+      endClose();
+      return;
+    }
+    slide.value = withTiming(
+      winH,
+      { duration: DUR.sheetOut, easing: EASE.exit },
+      done => {
+        if (done) {
+          runOnJS(endClose)();
+        }
+      },
+    );
+  }, [vis, reduced, endClose, player.ui, winH, slide]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => sub.remove();
+  }, [open, close]);
+
   const dragFrom = useSharedValue(-1);
   const dragTo = useSharedValue(-1);
   const dragShift = useSharedValue(0);
@@ -269,20 +348,16 @@ export default function QueueScreen({ navigation }) {
   const listH = useSharedValue(0);
   const listRef = useAnimatedRef();
 
-  const dragY = useSharedValue(0);
+  // The list's own scroll as an explicit gesture, so row grips can make it
+  // wait (see Row).
+  const listGesture = useMemo(() => Gesture.Native(), []);
 
   const onScroll = useAnimatedScrollHandler(e => {
     scrollY.value = e.contentOffset.y;
   });
 
-  const onDragging = useCallback(on => setDragging(on), []);
-
-  // The drag already slid the screen off — pop without replaying the slide.
-  const finishDismiss = useCallback(() => {
-    navigation.setOptions?.({ animation: 'none' });
-    requestAnimationFrame(() => navigation.goBack());
-  }, [navigation]);
-
+  // Drag-follow dismiss from the header; the close() slide-out starts from
+  // wherever the drag left the sheet (the transforms sum), no jump.
   const dismissPan = Gesture.Pan()
     .activeOffsetY(16)
     .failOffsetY(-16)
@@ -293,27 +368,26 @@ export default function QueueScreen({ navigation }) {
     .onEnd(e => {
       'worklet';
       if (e.velocityY > 900 || dragY.value > winH * 0.22) {
-        dragY.value = withTiming(
-          winH,
-          { duration: DUR.sheetOut, easing: EASE.exit },
-          done => {
-            if (done) {
-              runOnJS(finishDismiss)();
-            }
-          },
-        );
+        runOnJS(close)();
       } else {
         dragY.value = withSpring(0, SPRING.snapback);
       }
     });
 
-  const rootDragStyle = useAnimatedStyle(() => {
+  const sheetStyle = useAnimatedStyle(() => {
     const p = Math.min(1, dragY.value / (winH * 0.5));
     return {
-      transform: [{ translateY: dragY.value }, { scale: 1 - p * 0.04 }],
+      transform: [
+        { translateY: slide.value + dragY.value },
+        { scale: 1 - p * 0.04 },
+      ],
       borderRadius: p * radii.sheet,
     };
   });
+
+  if (!open && vis !== 'closing') {
+    return null;
+  }
 
   const renderItem = ({ item, index }) => (
     <Row
@@ -330,7 +404,7 @@ export default function QueueScreen({ navigation }) {
       listRef={listRef}
       listH={listH}
       count={tracks.length}
-      onDragging={onDragging}
+      listGesture={listGesture}
     />
   );
 
@@ -339,7 +413,7 @@ export default function QueueScreen({ navigation }) {
       style={[
         styles.root,
         { backgroundColor: t.bg, paddingTop: insets.top },
-        rootDragStyle,
+        sheetStyle,
       ]}
     >
       <GestureDetector gesture={dismissPan}>
@@ -349,7 +423,7 @@ export default function QueueScreen({ navigation }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="close queue"
-              onPress={() => navigation.goBack()}
+              onPress={close}
               hitSlop={10}
               style={styles.back}
             >
@@ -400,31 +474,32 @@ export default function QueueScreen({ navigation }) {
           nothing queued yet — play something first.
         </Text>
       ) : (
-        <Animated.FlatList
-          ref={listRef}
-          data={tracks}
-          renderItem={renderItem}
-          keyExtractor={(item, index) => `${item.id}-${index}`}
-          getItemLayout={(_, index) => ({
-            length: ROW_HEIGHT,
-            offset: ROW_HEIGHT * index,
-            index,
-          })}
-          initialScrollIndex={Math.max(0, Math.min(idx, tracks.length - 1))}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          scrollEnabled={!dragging}
-          overScrollMode="always"
-          onLayout={e => {
-            listH.value = e.nativeEvent.layout.height;
-          }}
-          // Shifted neighbours must draw outside their cell while dragging.
-          removeClippedSubviews={false}
-          contentContainerStyle={[
-            styles.list,
-            { paddingBottom: insets.bottom + 24 },
-          ]}
-        />
+        <GestureDetector gesture={listGesture}>
+          <Animated.FlatList
+            ref={listRef}
+            data={tracks}
+            renderItem={renderItem}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
+            getItemLayout={(_, index) => ({
+              length: ROW_HEIGHT,
+              offset: ROW_HEIGHT * index,
+              index,
+            })}
+            initialScrollIndex={Math.max(0, Math.min(idx, tracks.length - 1))}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            overScrollMode="always"
+            onLayout={e => {
+              listH.value = e.nativeEvent.layout.height;
+            }}
+            // Shifted neighbours must draw outside their cell while dragging.
+            removeClippedSubviews={false}
+            contentContainerStyle={[
+              styles.list,
+              { paddingBottom: insets.bottom + 24 },
+            ]}
+          />
+        </GestureDetector>
       )}
     </Animated.View>
   );
@@ -432,7 +507,9 @@ export default function QueueScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
+    // zIndex only — see PlayerSheet.root for the overlay ladder.
+    zIndex: 40,
     overflow: 'hidden',
   },
   sheetGrip: {
@@ -527,12 +604,14 @@ const styles = StyleSheet.create({
   npBar: {
     flex: 1,
     height: 3,
-    borderRadius: 1.5,
+    // Radius past half-height clamps to a true pill, so the caps render
+    // round even at this size (1.5 came out visibly squared-off on device).
+    borderRadius: 999,
     overflow: 'hidden',
   },
   npFill: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: 999,
   },
   time: {
     fontSize: 11.5,

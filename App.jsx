@@ -6,6 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { PlayerProvider } from './src/playback/PlayerContext';
 import { PlayerSheet } from './src/overlays/PlayerSheet';
+import { QueueSheet } from './src/overlays/QueueSheet';
 import { TrackActionsSheet } from './src/overlays/TrackActionsSheet';
 import { AddToPlaylistSheet } from './src/overlays/AddToPlaylistSheet';
 import { SleepTimerSheet } from './src/overlays/SleepTimerSheet';
@@ -29,9 +30,10 @@ function Shell() {
       {user ? (
         <NavigationContainer>
           <RootTabs />
-          {/* Inside the container so "up next" can hop to the Queue screen. */}
           <PlayerSheet />
-          {/* Action sheets stack above the player (JSX order = z-order). */}
+          {/* The queue rides above the player; closing it lands back there. */}
+          <QueueSheet />
+          {/* Action sheets stack above both (JSX order = z-order). */}
           <TrackActionsSheet />
           <AddToPlaylistSheet />
           <SleepTimerSheet />

@@ -37,23 +37,13 @@ function TabsNavigator() {
   );
 }
 
-// Root stack wraps the tabs so Queue opens above them via
-// navigation.navigate('Queue') from anywhere (contract 12).
+// Root stack wraps the tabs for the detail screens. The queue is NOT here:
+// it lives as an overlay sheet above the player (overlays/QueueSheet), so
+// opening it never closes the player underneath.
 export default function RootTabs() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Tabs" component={TabsNavigator} />
-      <Stack.Screen
-        name="Queue"
-        getComponent={() => require('../screens/QueueScreen').default}
-        options={{
-          animation: 'slide_from_bottom',
-          animationDuration: 360,
-          // Keeps the tabs alive underneath so the screen's drag-to-dismiss
-          // reveals the app, not a blank stack background.
-          presentation: 'transparentModal',
-        }}
-      />
       <Stack.Screen
         name="Liked"
         getComponent={() => require('../screens/LikedScreen').default}

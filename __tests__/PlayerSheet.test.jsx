@@ -41,6 +41,7 @@ function basePlayer(overrides = {}) {
       playerOpen: true,
       openPlayer: jest.fn(),
       closePlayer: jest.fn(),
+      openQueue: jest.fn(),
     },
     ...overrides,
   };
@@ -117,9 +118,10 @@ test('shows the current track with transport, quality and up next', async () => 
   byLabel(tree, 'close player').props.onPress();
   expect(p.ui.closePlayer).toHaveBeenCalledTimes(1);
 
-  // No navigation container in this render — "up next" still closes safely.
+  // "Up next" opens the queue sheet ABOVE the player — never closes it.
   byLabel(tree, 'up next, open queue').props.onPress();
-  expect(p.ui.closePlayer).toHaveBeenCalledTimes(2);
+  expect(p.ui.openQueue).toHaveBeenCalled();
+  expect(p.ui.closePlayer).toHaveBeenCalledTimes(1);
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

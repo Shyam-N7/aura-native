@@ -80,6 +80,7 @@ export function PlayerProvider({ children }) {
   const [shuffleActive, setShuffleActive] = useState(false);
   const [quality, setQualityState] = useState(getAudioQuality);
   const [playerOpen, setPlayerOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
 
   // Refs let the service/engine event handlers (subscribed once) read live
   // state without re-registering, mirroring the web viewRef pattern.
@@ -502,6 +503,10 @@ export function PlayerProvider({ children }) {
 
   const openPlayer = useCallback(() => setPlayerOpen(true), []);
   const closePlayer = useCallback(() => setPlayerOpen(false), []);
+  // The queue rides ABOVE the player (its own overlay): opening it must not
+  // close the player, and closing it lands back wherever you were.
+  const openQueue = useCallback(() => setQueueOpen(true), []);
+  const closeQueue = useCallback(() => setQueueOpen(false), []);
 
   // ── boot: player setup, handler wiring, cold restore ─────────────────────
   useEffect(() => {
@@ -655,6 +660,7 @@ export function PlayerProvider({ children }) {
         }
         userActedRef.current = true; // a cold restore in flight must abort
         setPlayerOpen(false);
+        setQueueOpen(false);
         setIsPlaying(false);
         setShuffleActive(false);
         autoRadio.reset();
@@ -692,8 +698,15 @@ export function PlayerProvider({ children }) {
   const current = queue.tracks[queue.idx] ?? null;
 
   const ui = useMemo(
-    () => ({ playerOpen, openPlayer, closePlayer }),
-    [playerOpen, openPlayer, closePlayer],
+    () => ({
+      playerOpen,
+      openPlayer,
+      closePlayer,
+      queueOpen,
+      openQueue,
+      closeQueue,
+    }),
+    [playerOpen, openPlayer, closePlayer, queueOpen, openQueue, closeQueue],
   );
 
   const value = useMemo(
