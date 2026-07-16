@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme/ThemeContext';
-import { glass, glassTint, gooFill } from '../../theme/tokens';
+import { glass, glassTint, glassTintSoft, gooFill } from '../../theme/tokens';
 
 // The web's glass recipe without backdrop-filter: a translucent surface tint,
 // then the 135° white shimmer gradient, hairline border, and a 1px top light
@@ -10,11 +10,13 @@ import { glass, glassTint, gooFill } from '../../theme/tokens';
 // (it paints the white window background instead of the content behind), and
 // over AURA's flat theme backgrounds a tint is visually identical to blur.
 // `solid` swaps the tint for an opaque fill — used during goo windows (the
-// metaball needs alpha to merge against). NEVER add elevation here: Android
+// metaball needs alpha to merge against). `soft` uses the lower-alpha tint for
+// chrome floating over scrolling content. NEVER add elevation here: Android
 // renders an elevated translucent view as an opaque white slab.
-export function Glass({ radius = 26, style, solid = false, children }) {
+export function Glass({ radius = 26, style, solid = false, soft = false, children }) {
   const { name } = useTheme();
   const g = name === 'midnight' ? { ...glass, ...glass.midnight } : glass;
+  const tint = soft ? glassTintSoft[name] : glassTint[name];
 
   return (
     <View
@@ -23,7 +25,7 @@ export function Glass({ radius = 26, style, solid = false, children }) {
         {
           borderRadius: radius,
           borderColor: g.border,
-          backgroundColor: solid ? gooFill[name] : glassTint[name],
+          backgroundColor: solid ? gooFill[name] : tint,
         },
         style,
       ]}

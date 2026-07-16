@@ -16,8 +16,7 @@ const THEME_ORDER = [...Object.keys(themes), 'auto'];
 // the resolved theme's glyph inside an accent ring — the ring is the tell.
 const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bloom' };
 
-// The web's glass top bar: wordmark left, controls right. Mode chip and profile
-// actions arrive with Phase 2 — the profile circle is decorative for now.
+// The web's glass top bar: wordmark left, controls right.
 // `navigation` comes from the hosting screen's props (screens render standalone
 // in tests, so no useNavigation here).
 export function TopBar({ navigation }) {
@@ -81,11 +80,16 @@ export function TopBar({ navigation }) {
           >
             <Icon name="search" size={16} color={t.inkSoft} />
           </PressScale>
-          <View style={[styles.profile, { backgroundColor: t.accentSoft }]}>
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel="open profile"
+            onPress={() => navigation?.navigate('You')}
+            style={[styles.profile, { backgroundColor: t.accentSoft }]}
+          >
             <Text style={[styles.profileText, { color: t.accent }]}>
               {initial}
             </Text>
-          </View>
+          </PressScale>
         </View>
       </Glass>
     </View>

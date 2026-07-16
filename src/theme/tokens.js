@@ -150,6 +150,16 @@ export const glassTint = {
   bloom: 'rgba(251,243,239,0.86)',
 };
 
+// Softer glass body for chrome that FLOATS OVER SCROLLING CONTENT (the dock):
+// at 0.86 nothing ghosts through and the capsule reads as a solid bar. ~0.7
+// lets content shimmer underneath — the closest this stack gets to backdrop
+// blur (capture-based blur is broken on-device; see Glass.jsx).
+export const glassTintSoft = {
+  dusk: 'rgba(244,236,224,0.70)',
+  midnight: 'rgba(35,30,24,0.72)',
+  bloom: 'rgba(251,243,239,0.70)',
+};
+
 // Opaque fill used while goo is fusing (the web swaps glass for color-mix during the
 // morph window so the metaball has alpha to merge): surface nudged ~9% toward white.
 export const gooFill = {

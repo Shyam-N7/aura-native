@@ -164,7 +164,7 @@ export function Dock({ navRef }) {
             />
           </Goo>
         )}
-        <Glass radius={radii.dock} solid={gooActive} style={styles.capsule}>
+        <Glass radius={radii.dock} solid={gooActive} soft style={styles.capsule}>
           <Animated.View style={[styles.row, rowStyle]}>
             {TABS.map((tab, i) => {
               const focused = tabIndex === i;
