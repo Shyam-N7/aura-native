@@ -498,6 +498,35 @@ export function PlayerProvider({ children }) {
     [applyQueue, enqueueOp],
   );
 
+  // Web clearQueue (App.jsx): keep ONLY the currently playing track — the
+  // queue becomes a fresh single-track 'your set' and the shuffle indicator
+  // drops. The confirm lives with the caller; the engine sync rebuilds around
+  // the unchanged current track, so playback is never interrupted.
+  const clearQueue = useCallback(() => {
+    userActedRef.current = true;
+    const q = queueRef.current;
+    const nq = model.clear(q);
+    if (nq === q) {
+      return;
+    }
+    applyQueue(nq);
+    setShuffleActive(false);
+    enqueueOp(async () => {
+      // Gapless-boundary guard: while the clear confirm sat open, the native
+      // player may have advanced past the track the JS model believed was
+      // current (its event lands a beat later). Keep the track that is
+      // ACTUALLY playing — not a finished one restarted from 0:00.
+      const active = await engine.getActiveIndex();
+      if (active != null && active !== q.idx && q.tracks[active]) {
+        const fixed = model.clear({ ...q, idx: active });
+        applyQueue(fixed);
+        return engine.syncQueue(fixed, { startIndex: fixed.idx });
+      }
+      return engine.syncQueue(nq, { startIndex: nq.idx });
+    });
+    showToast('queue cleared.');
+  }, [applyQueue, enqueueOp]);
+
   // Context-menu "play next" / "add to queue" (web enqueueNext/enqueueLast).
   // First insertion flips "tonight's set" → 'your set' inside the model so
   // wrap-around turns off once the user starts curating. With nothing queued
@@ -839,6 +868,7 @@ export function PlayerProvider({ children }) {
       jumpTo,
       removeAt,
       reorder,
+      clearQueue,
       enqueueNext,
       enqueueLast,
       cycleRepeat,
@@ -865,6 +895,7 @@ export function PlayerProvider({ children }) {
       jumpTo,
       removeAt,
       reorder,
+      clearQueue,
       enqueueNext,
       enqueueLast,
       cycleRepeat,

@@ -1,6 +1,7 @@
 import {
   addNext,
   addToEnd,
+  clear,
   createQueue,
   decideNext,
   dedupeAppend,
@@ -223,6 +224,22 @@ describe('reorder', () => {
     expect(reorder(q, 1, 1)).toBe(q);
     expect(reorder(q, -1, 2)).toBe(q);
     expect(reorder(q, 0, 3)).toBe(q);
+  });
+});
+
+describe('clear', () => {
+  test("keeps only the playing track as a fresh 'your set'", () => {
+    const q = clear(q3('more like this', 1));
+    expect(q.tracks.map(x => x.id)).toEqual(['b']);
+    expect(q.idx).toBe(0);
+    expect(q.source).toBe('your set');
+  });
+
+  test('single-track and empty queues are no-ops (same reference)', () => {
+    const single = createQueue([t('a')], 0, 'your set');
+    expect(clear(single)).toBe(single);
+    const empty = createQueue([]);
+    expect(clear(empty)).toBe(empty);
   });
 });
 

@@ -88,6 +88,21 @@ export function reorder(queue, from, to) {
   return { ...queue, tracks, idx };
 }
 
+// Web clearQueue semantics: keep ONLY the currently playing track — the queue
+// collapses to a fresh single-track 'your set' at idx 0. Already-minimal
+// queues (one track or empty) return unchanged (same reference).
+export function clear(queue) {
+  if (queue.tracks.length <= 1) {
+    return queue;
+  }
+  return {
+    ...queue,
+    tracks: [queue.tracks[queue.idx]],
+    idx: 0,
+    source: 'your set',
+  };
+}
+
 // Source flips "tonight's set" → 'your set' on first insertion so wrap-around
 // turns off once the user starts curating (web enqueueNext/enqueueLast).
 const curatedSource = source => (source === WRAP_SOURCE ? 'your set' : source);

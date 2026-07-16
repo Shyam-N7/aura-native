@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
+import { Alert } from 'react-native';
 import { ThemeProvider } from '../src/theme/ThemeContext';
+import { storage } from '../src/storage/mmkv';
 import { QueueSheet } from '../src/overlays/QueueSheet';
 
 jest.mock('react-native-track-player', () => ({
@@ -11,6 +13,7 @@ const mockJumpTo = jest.fn();
 const mockRemoveAt = jest.fn();
 const mockCycleRepeat = jest.fn();
 const mockToggleShuffle = jest.fn();
+const mockClearQueue = jest.fn();
 const mockCloseQueue = jest.fn();
 const mockQueue = {
   tracks: [
@@ -34,8 +37,24 @@ jest.mock('../src/playback/PlayerContext', () => ({
     removeAt: mockRemoveAt,
     cycleRepeat: mockCycleRepeat,
     toggleShuffle: mockToggleShuffle,
+    clearQueue: mockClearQueue,
     ui: { queueOpen: mockState.queueOpen, closeQueue: mockCloseQueue },
   }),
+}));
+
+const mockOpenAddToPlaylist = jest.fn();
+jest.mock('../src/lib/addToPlaylistSheet', () => ({
+  openAddToPlaylist: (...a) => mockOpenAddToPlaylist(...a),
+}));
+const mockCreatePlaylist = jest.fn();
+const mockAddToPlaylist = jest.fn();
+jest.mock('../src/api/playlists', () => ({
+  createPlaylist: (...a) => mockCreatePlaylist(...a),
+  addToPlaylist: (...a) => mockAddToPlaylist(...a),
+}));
+const mockShowToast = jest.fn();
+jest.mock('../src/lib/toast', () => ({
+  showToast: (...a) => mockShowToast(...a),
 }));
 
 // Rendered text only, joined in order (a Text's children can be split).
@@ -70,6 +89,7 @@ async function render() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockState.queueOpen = true;
+  storage.removeItem('aura.queueHidePast');
 });
 
 test('renders nothing while the queue ui state is closed', async () => {
@@ -109,6 +129,128 @@ test('lists the queue with source, count and row actions', async () => {
     byLabel(tree, 'close queue').props.onPress();
   });
   expect(mockCloseQueue).toHaveBeenCalled();
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+const openMenu = tree =>
+  ReactTestRenderer.act(async () => {
+    byLabel(tree, 'queue options').props.onPress();
+  });
+
+test('queue options menu lists every action with plain labels', async () => {
+  const tree = await render();
+  await openMenu(tree);
+
+  expect(byLabel(tree, 'save queue as playlist')).toBeTruthy();
+  expect(byLabel(tree, 'add queue to playlist')).toBeTruthy();
+  expect(byLabel(tree, 'hide past songs')).toBeTruthy();
+  expect(byLabel(tree, 'clear queue')).toBeTruthy();
+
+  // "add queue to playlist" hands over the WHOLE queue — past and current
+  // included, hide-past never filters it (web parity).
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'add queue to playlist').props.onPress();
+  });
+  expect(mockOpenAddToPlaylist).toHaveBeenCalledWith(mockQueue.tracks);
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('clear queue confirms first, then clears through the player context', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const tree = await render();
+  await openMenu(tree);
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'clear queue').props.onPress();
+  });
+
+  // Nothing happens until the alert's destructive button is pressed.
+  expect(mockClearQueue).not.toHaveBeenCalled();
+  const [title, body, buttons] = alert.mock.calls[0];
+  expect(title).toBe('clear queue?');
+  expect(body).toBe("we'll keep the currently playing track.");
+  buttons.find(b => b.style === 'destructive').onPress();
+  expect(mockClearQueue).toHaveBeenCalled();
+
+  alert.mockRestore();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('save queue as playlist creates it and adds every queue track', async () => {
+  mockCreatePlaylist.mockResolvedValue({ id: 'p9', name: 'my queue' });
+  mockAddToPlaylist.mockResolvedValue();
+  const tree = await render();
+  await openMenu(tree);
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'save queue as playlist').props.onPress();
+  });
+  // The name step opens EMPTY (web parity: naming is a conscious act) — a
+  // bare save must be a no-op, not a playlist literally called "my queue".
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'save').props.onPress();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  expect(mockCreatePlaylist).not.toHaveBeenCalled();
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'playlist name').props.onChangeText('my queue');
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'save').props.onPress();
+    await new Promise(r => setTimeout(r, 0));
+  });
+
+  expect(mockCreatePlaylist).toHaveBeenCalledWith({ name: 'my queue' });
+  expect(mockAddToPlaylist.mock.calls).toEqual([
+    ['p9', 'a'],
+    ['p9', 'b'],
+    ['p9', 'c'],
+  ]);
+  expect(mockShowToast).toHaveBeenCalledWith('saved.');
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('hide past songs trims rows before the current track, keeping queue indices', async () => {
+  const tree = await render();
+  await openMenu(tree);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'hide past songs').props.onPress();
+  });
+
+  // The past row is gone and the header counts what is visible.
+  const body = texts(tree.toJSON());
+  expect(body).not.toContain('First Song');
+  expect(body).toContain('2 tracks');
+
+  // Visible rows still act on ABSOLUTE queue indices.
+  byLabel(tree, 'play Third Song').props.onPress();
+  expect(mockJumpTo).toHaveBeenCalledWith(2);
+  byLabel(tree, 'remove Third Song').props.onPress();
+  expect(mockRemoveAt).toHaveBeenCalledWith(2);
+
+  // The row label reflects state and toggles the rows back.
+  await openMenu(tree);
+  expect(byLabel(tree, 'hide past songs')).toBeUndefined();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'show past songs').props.onPress();
+  });
+  expect(texts(tree.toJSON())).toContain('First Song');
+  expect(texts(tree.toJSON())).toContain('3 tracks');
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('hide past persists across opens via the mmkv pref', async () => {
+  storage.setItem('aura.queueHidePast', '1');
+  const tree = await render();
+
+  const body = texts(tree.toJSON());
+  expect(body).not.toContain('First Song');
+  expect(body).toContain('2 tracks');
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

@@ -19,6 +19,7 @@ import {
   logout,
   setMyAvatar,
   subscribeAuth,
+  updatePreferences,
 } from '../lib/auth';
 import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
@@ -211,6 +212,30 @@ export default function YouScreen({ navigation }) {
       );
     } finally {
       setPinBusy(false);
+    }
+  };
+
+  // Welcome screen (the "sensing" intro) — the hard on/off on top of the
+  // once-a-day cadence. Default on for accounts cached before the preference
+  // existed (web parity). Optimistic: the row flips at once and reverts if the
+  // save fails; on success updatePreferences persists the refreshed user, so
+  // the launch gate (App computeFlow → showSensing) reads it next cold start.
+  const [sensingOverride, setSensingOverride] = useState(null);
+  const sensingOn = sensingOverride ?? (user?.showSensing !== false);
+  const sensingBusy = sensingOverride !== null;
+  const toggleSensing = async () => {
+    if (sensingBusy) {
+      return;
+    }
+    const next = !sensingOn;
+    setSensingOverride(next);
+    try {
+      await updatePreferences({ showSensing: next });
+      showToast(next ? 'welcome screen is on.' : 'welcome screen is off.');
+    } catch (err) {
+      showToast(`couldn't update — ${err.message}`);
+    } finally {
+      setSensingOverride(null);
     }
   };
 
@@ -801,6 +826,46 @@ export default function YouScreen({ navigation }) {
                     </Pressable>
                   </View>
                 )}
+
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  welcome screen
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="welcome screen"
+                  accessibilityState={sensingOn ? { selected: true } : {}}
+                  disabled={sensingBusy}
+                  onPress={toggleSensing}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text
+                      style={[
+                        styles.rowTitle,
+                        { color: sensingOn ? t.accent : t.ink },
+                      ]}
+                    >
+                      welcome screen
+                    </Text>
+                    <Text
+                      style={[styles.qualityCaption, { color: t.inkSoft }]}
+                    >
+                      {sensingOn
+                        ? 'a short intro reads your mood when you open aura. shows once a day — tap it to skip.'
+                        : 'skipped — you go straight to your home.'}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.dot,
+                      { borderColor: sensingOn ? t.accent : t.line },
+                      sensingOn && { backgroundColor: t.accent },
+                    ]}
+                  />
+                </Pressable>
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   audio quality

@@ -4,6 +4,7 @@ import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import SearchScreen from '../src/screens/SearchScreen';
 import { searchCatalog } from '../src/api/catalog';
+import { LANGUAGES } from '../src/data/languages';
 
 const mockPlayTrack = jest.fn();
 const mockOpenPlayer = jest.fn();
@@ -133,6 +134,45 @@ test('language pill refetches with the lang filter', async () => {
   });
   expect(searchCatalog).toHaveBeenLastCalledWith('song', {
     lang: 'tamil',
+    langs: ['tamil', 'english'],
+    limit: 12,
+  });
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('offers every catalog language as a pill, not just onboarded ones', async () => {
+  const tree = render();
+
+  // 'all' + the canonical 14 in order (host views repeat each label; dedup).
+  const pillLabels = [
+    ...new Set(
+      tree.root
+        .findAll(
+          n =>
+            typeof n.props.accessibilityLabel === 'string' &&
+            n.props.accessibilityLabel.startsWith('language '),
+        )
+        .map(n => n.props.accessibilityLabel),
+    ),
+  ];
+  expect(pillLabels).toEqual(['all', ...LANGUAGES].map(L => `language ${L}`));
+
+  const input = tree.root.findByType(TextInput);
+  await ReactTestRenderer.act(async () => {
+    input.props.onChangeText('song');
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(350);
+  });
+
+  // A language outside the user's onboarded pair still filters the query.
+  const pill = byLabel(tree, 'language assamese');
+  await ReactTestRenderer.act(async () => {
+    pill.props.onPress();
+  });
+  expect(searchCatalog).toHaveBeenLastCalledWith('song', {
+    lang: 'assamese',
     langs: ['tamil', 'english'],
     limit: 12,
   });

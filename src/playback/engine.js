@@ -138,6 +138,12 @@ export async function syncQueue(queue, { startIndex, positionSec } = {}) {
   }
 }
 
+// The native player's active index RIGHT NOW — can lead the JS model by one
+// event around a gapless boundary (callers use it to resolve that race).
+export function getActiveIndex() {
+  return TrackPlayer.getActiveTrackIndex();
+}
+
 export function play() {
   return TrackPlayer.play();
 }

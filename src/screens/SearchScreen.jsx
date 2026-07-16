@@ -8,6 +8,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { searchCatalog } from '../api/catalog';
+import { LANGUAGES } from '../data/languages';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { dropExplicit } from '../lib/explicit';
 import { TrackRow, TrackArt } from '../components/TrackRow';
@@ -26,6 +27,13 @@ const EMPTY = {
   userPlaylists: [],
   error: null,
 };
+
+// Filter pills: 'all' + the full canonical catalog list (web DesktopSearch
+// parity — the user's own languages are a ranking hint, not the pill source).
+const LANGS = ['all', ...LANGUAGES];
+// The picked language survives screen unmount for the session — web parity
+// (searchCache.js keeps it in a module-scope var, not storage).
+let lastLang = 'all';
 
 // Pre-query trending chips, ported verbatim from web SearchSidebar: a
 // hardcoded in-bundle list per language (no endpoint exists — it changes
@@ -66,14 +74,18 @@ export default function SearchScreen({ navigation }) {
 
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
-  const [lang, setLang] = useState('all');
+  const [lang, setLang] = useState(lastLang);
   const [hit, setHit] = useState(EMPTY);
   const recents = useRecentSearches();
 
-  // The signed-in user's onboarding languages drive the filter pills and the
-  // my-languages-first ranking hint sent with every query.
+  // The signed-in user's onboarding languages drive the my-languages-first
+  // ranking hint sent with every query (the pills offer every language).
   const prefLangs = useMemo(() => getUser()?.seedLanguages ?? [], []);
-  const pills = useMemo(() => ['all', ...prefLangs], [prefLangs]);
+
+  const pickLang = L => {
+    setLang(L);
+    lastLang = L;
+  };
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQ(q), 350);
@@ -192,14 +204,14 @@ export default function SearchScreen({ navigation }) {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pillRow}>
-          {pills.map(L => {
+          {LANGS.map(L => {
             const on = lang === L;
             return (
               <Pressable
                 key={L}
                 accessibilityRole="button"
                 accessibilityLabel={`language ${L}`}
-                onPress={() => setLang(L)}
+                onPress={() => pickLang(L)}
                 style={[
                   styles.pill,
                   on

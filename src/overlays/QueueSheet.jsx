@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   BackHandler,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   Vibration,
   View,
   useWindowDimensions,
@@ -25,18 +27,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
+import { addToPlaylist, createPlaylist } from '../api/playlists';
+import { storage } from '../storage/mmkv';
 import { openTrackActions } from '../lib/trackActionsSheet';
+import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
+import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
+import { Sheet } from '../components/ui/Sheet';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
 import { LONG_LIST } from '../lib/listWindow';
-import { label, radii } from '../theme/tokens';
+import { fonts, label, radii } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 
 const ROW_HEIGHT = 62;
 const SHIFT_MS = 160;
 const EDGE = 90;
+// Hide-past pref — the web key/values verbatim ('aura.queueHidePast', '1'/'0');
+// read once per open, written on toggle.
+const HIDE_PAST_KEY = 'aura.queueHidePast';
+// TrackActionsSheet's danger red — the theme has no dedicated danger token.
+const DANGER = '#b3402e';
 
 // The current row's live line: 'now playing' + a thin bar gliding between
 // the 1Hz position ticks. No times here (field feedback: clutter at row
@@ -85,6 +97,7 @@ function Row({
   scrollStart,
   listRef,
   listH,
+  base,
   count,
   listGesture,
 }) {
@@ -135,7 +148,9 @@ function Row({
       }
       dragShift.value = e.translationY + scrollY.value - scrollStart.value;
       const to = index + Math.round(dragShift.value / ROW_HEIGHT);
-      dragTo.value = Math.max(0, Math.min(count - 1, to));
+      // `base` floors drops at the first RENDERED row — with hide-past on,
+      // the hidden history above the current track is not a drop target.
+      dragTo.value = Math.max(base, Math.min(count - 1, to));
       // Edge auto-scroll (re-triggered per move event).
       if (e.absoluteY < EDGE + 60) {
         scrollTo(listRef, 0, Math.max(0, scrollY.value - 14), false);
@@ -266,6 +281,205 @@ function Row({
   );
 }
 
+// The queue overflow menu — web DesktopQueue's ⋯ actions (save / add / clear)
+// plus its hide-past header toggle, folded into one bottom sheet. Only the
+// queue header opens it, so it keeps local open state instead of a bus; the
+// Sheet chassis (zIndex 50) stacks it over the queue (40). "save queue as
+// playlist" swaps the menu for an inline name step (the AddToPlaylistSheet
+// new-playlist pattern — native has no prompt dialog).
+function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
+  const { t } = useTheme();
+  const [naming, setNaming] = useState(false);
+  // Empty like the web's prompt (and AddToPlaylistSheet): the user must name
+  // it consciously — a bare double-save must not mint twin "my queue"s.
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const tracks = player.queue?.tracks ?? [];
+  const idx = player.queue?.idx ?? 0;
+
+  // Menu items close the sheet first, TrackActionsSheet-style.
+  const act = fn => () => {
+    onClose();
+    fn();
+  };
+
+  // Native's confirm precedent is Alert.alert (sign out, playlist delete /
+  // leave). Clearing keeps the playing track, so the body says so (web copy).
+  const confirmClear = () =>
+    Alert.alert('clear queue?', "we'll keep the currently playing track.", [
+      { text: 'cancel', style: 'cancel' },
+      {
+        text: 'clear',
+        style: 'destructive',
+        onPress: () => player.clearQueue(),
+      },
+    ]);
+
+  const saveQueue = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const playlist = await createPlaylist({ name: trimmed });
+      // Partial-failure tolerant like web's allSettled — one bad track never
+      // aborts the rest; the summary toast owns the arithmetic.
+      let added = 0;
+      for (const track of tracks) {
+        try {
+          await addToPlaylist(playlist.id, track.id);
+          added += 1;
+        } catch {
+          // skipped — reported by the summary toast
+        }
+      }
+      showToast(
+        added === tracks.length
+          ? 'saved.'
+          : `saved ${added} of ${tracks.length}.`,
+      );
+      onClose();
+    } catch (err) {
+      console.warn('[save-queue]', err?.message ?? err);
+      showToast("couldn't save.");
+      setBusy(false);
+    }
+  };
+
+  // animated={false}: this sheet lives under QueueSheet's null gate, which an
+  // external queueOpen flip can hard-unmount mid-animation — the reanimated
+  // 4.2.3/Fabric native-abort class. It pops instead of sliding.
+  if (naming) {
+    return (
+      <Sheet animated={false} onClose={onClose} closeLabel="close queue options">
+        <Text style={[styles.menuTitle, { color: t.ink }]}>
+          save queue as playlist
+        </Text>
+        <Text style={[label(9.5), styles.menuSub, { color: t.inkFaint }]}>
+          {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
+        </Text>
+        {busy ? (
+          <Text style={[styles.menuState, { color: t.inkFaint }]}>
+            saving to {name.trim()}
+          </Text>
+        ) : (
+          <>
+            <TextInput
+              autoFocus
+              accessibilityLabel="playlist name"
+              value={name}
+              onChangeText={setName}
+              onSubmitEditing={saveQueue}
+              placeholder="playlist name"
+              placeholderTextColor={t.inkFaint}
+              cursorColor={t.accent}
+              selectionColor={t.accent}
+              style={[
+                styles.nameInput,
+                { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
+              ]}
+            />
+            <View style={styles.nameActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="cancel"
+                onPress={() => {
+                  setNaming(false);
+                  setName('');
+                }}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text style={[styles.nameBtn, { color: t.inkSoft }]}>
+                  cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="save"
+                disabled={!name.trim()}
+                onPress={saveQueue}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text
+                  style={[
+                    styles.nameBtn,
+                    { color: name.trim() ? t.accent : t.inkFaint },
+                  ]}
+                >
+                  save
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </Sheet>
+    );
+  }
+
+  return (
+    <Sheet animated={false} onClose={onClose} closeLabel="close queue options">
+      <Text style={[styles.menuTitle, { color: t.ink }]}>queue options</Text>
+      {tracks.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="save queue as playlist"
+          onPress={() => setNaming(true)}
+          style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+        >
+          <Text style={[styles.menuLabel, { color: t.ink }]}>
+            save queue as playlist
+          </Text>
+        </Pressable>
+      )}
+      {tracks.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="add queue to playlist"
+          onPress={act(() => openAddToPlaylist(tracks))}
+          style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+        >
+          <Text style={[styles.menuLabel, { color: t.ink }]}>
+            add queue to playlist
+          </Text>
+        </Pressable>
+      )}
+      {/* Web gates this behind currentIdx > 0 — with no past songs the toggle
+          is a silent no-op. `hidePast` keeps it reachable to switch back off. */}
+      {(idx > 0 || hidePast) && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={hidePast ? 'show past songs' : 'hide past songs'}
+          onPress={act(onToggleHidePast)}
+          style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+        >
+          <Text style={[styles.menuLabel, { color: t.ink }]}>
+            {hidePast ? 'show past songs' : 'hide past songs'}
+          </Text>
+        </Pressable>
+      )}
+      {tracks.length > 1 && (
+        <>
+          <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="clear queue"
+            onPress={act(confirmClear)}
+            style={({ pressed }) => [
+              styles.menuItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.menuLabel, { color: DANGER }]}>
+              clear queue
+            </Text>
+          </Pressable>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
 // The live queue as its own overlay ABOVE the player sheet: opening it never
 // closes the player, and closing it lands back exactly where you were (field
 // feedback — the old navigator screen forced the player shut first). Slides
@@ -289,6 +503,17 @@ export function QueueSheet() {
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);
 
+  // Overflow menu + the hide-past pref it toggles.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hidePast, setHidePast] = useState(
+    () => storage.getItem(HIDE_PAST_KEY) === '1',
+  );
+  const toggleHidePast = () => {
+    const nextHidden = !hidePast;
+    storage.setItem(HIDE_PAST_KEY, nextHidden ? '1' : '0');
+    setHidePast(nextHidden);
+  };
+
   const endClose = useCallback(() => setVis('closed'), []);
 
   useEffect(() => {
@@ -306,6 +531,7 @@ export function QueueSheet() {
     // the next open still gets its slide-in.
     if (!open && vis === 'open') {
       setVis('closed');
+      setMenuOpen(false);
     }
   }, [open, vis, reduced, winH, slide, dragY]);
 
@@ -314,6 +540,7 @@ export function QueueSheet() {
       return;
     }
     setVis('closing');
+    setMenuOpen(false);
     player.ui?.closeQueue?.();
     if (reduced) {
       endClose();
@@ -390,24 +617,36 @@ export function QueueSheet() {
     return null;
   }
 
-  const renderItem = ({ item, index }) => (
-    <Row
-      item={item}
-      index={index}
-      isCurrent={index === idx}
-      isPast={index < idx}
-      player={player}
-      dragFrom={dragFrom}
-      dragTo={dragTo}
-      dragShift={dragShift}
-      scrollY={scrollY}
-      scrollStart={scrollStart}
-      listRef={listRef}
-      listH={listH}
-      count={tracks.length}
-      listGesture={listGesture}
-    />
-  );
+  // Hide-past renders only the current track onward (web keeps collapsed rows
+  // in the DOM; a FlatList just gets the tail slice). Rows keep their ABSOLUTE
+  // queue index — jumpTo/removeAt/reorder and the drag math all address the
+  // real queue, so the slice only re-bases what's mounted and the model and
+  // the native player never see a different numbering.
+  const pastHidden = hidePast ? Math.max(0, idx) : 0;
+  const visible = pastHidden ? tracks.slice(pastHidden) : tracks;
+
+  const renderItem = ({ item, index }) => {
+    const at = index + pastHidden;
+    return (
+      <Row
+        item={item}
+        index={at}
+        isCurrent={at === idx}
+        isPast={at < idx}
+        player={player}
+        dragFrom={dragFrom}
+        dragTo={dragTo}
+        dragShift={dragShift}
+        scrollY={scrollY}
+        scrollStart={scrollStart}
+        listRef={listRef}
+        listH={listH}
+        base={pastHidden}
+        count={tracks.length}
+        listGesture={listGesture}
+      />
+    );
+  };
 
   // AURA's prefetched continuation, listed under the last track as what's
   // coming. The context hands this over already deduped against the live queue
@@ -430,7 +669,10 @@ export function QueueSheet() {
             accessibilityLabel={`play next: ${cleanTitle(rt.title)}`}
             onPress={() => player.playAutoNext(i)}
             onLongPress={() => openTrackActions(rt)}
-            style={({ pressed }) => [styles.radioRow, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.radioRow,
+              pressed && styles.pressed,
+            ]}
           >
             <TrackArt track={rt} size={40} radius={4} />
             <View style={styles.meta}>
@@ -452,115 +694,140 @@ export function QueueSheet() {
   };
 
   return (
-    <Animated.View
-      style={[
-        styles.root,
-        { backgroundColor: t.bg, paddingTop: insets.top },
-        sheetStyle,
-      ]}
-    >
-      <GestureDetector gesture={dismissPan}>
-        <View>
-          <View style={[styles.sheetGrip, { backgroundColor: t.line }]} />
-          <View style={styles.header}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="close queue"
-              onPress={close}
-              hitSlop={10}
-              style={styles.back}
-            >
-              <Icon name="chevron-down" size={24} color={t.ink} />
-            </Pressable>
-            <View style={styles.headMeta}>
-              <Text style={[styles.source, { color: t.ink }]}>
-                {source ?? 'up next'}
-              </Text>
-              <Text style={[styles.count, { color: t.inkFaint }]}>
-                {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
-              </Text>
+    <>
+      <Animated.View
+        style={[
+          styles.root,
+          { backgroundColor: t.bg, paddingTop: insets.top },
+          sheetStyle,
+        ]}
+      >
+        <GestureDetector gesture={dismissPan}>
+          <View>
+            <View style={[styles.sheetGrip, { backgroundColor: t.line }]} />
+            <View style={styles.header}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="close queue"
+                onPress={close}
+                hitSlop={10}
+                style={styles.back}
+              >
+                <Icon name="chevron-down" size={24} color={t.ink} />
+              </Pressable>
+              <View style={styles.headMeta}>
+                <Text style={[styles.source, { color: t.ink }]}>
+                  {source ?? 'up next'}
+                </Text>
+                <Text style={[styles.count, { color: t.inkFaint }]}>
+                  {visible.length} {visible.length === 1 ? 'track' : 'tracks'}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  player.shuffleActive ? 'shuffle off' : 'shuffle'
+                }
+                onPress={player.toggleShuffle}
+                hitSlop={8}
+                style={styles.toggle}
+              >
+                <Icon
+                  name="shuffle"
+                  size={20}
+                  color={player.shuffleActive ? t.accent : t.inkFaint}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`repeat ${player.repeat}`}
+                onPress={player.cycleRepeat}
+                hitSlop={8}
+                style={styles.toggle}
+              >
+                <Icon
+                  name={player.repeat === 'one' ? 'repeat-one' : 'repeat'}
+                  size={20}
+                  color={player.repeat !== 'off' ? t.accent : t.inkFaint}
+                />
+              </Pressable>
+              {/* No button on an empty queue — every menu item needs tracks
+                  (or past songs) to act on, so the menu would open bare. */}
+              {tracks.length > 0 && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="queue options"
+                  onPress={() => setMenuOpen(true)}
+                  hitSlop={8}
+                  style={styles.toggle}
+                >
+                  <Icon name="dots" size={20} color={t.inkFaint} />
+                </Pressable>
+              )}
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                player.shuffleActive ? 'shuffle off' : 'shuffle'
-              }
-              onPress={player.toggleShuffle}
-              hitSlop={8}
-              style={styles.toggle}
-            >
-              <Icon
-                name="shuffle"
-                size={20}
-                color={player.shuffleActive ? t.accent : t.inkFaint}
-              />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`repeat ${player.repeat}`}
-              onPress={player.cycleRepeat}
-              hitSlop={8}
-              style={styles.toggle}
-            >
-              <Icon
-                name={player.repeat === 'one' ? 'repeat-one' : 'repeat'}
-                size={20}
-                color={player.repeat !== 'off' ? t.accent : t.inkFaint}
-              />
-            </Pressable>
           </View>
-        </View>
-      </GestureDetector>
-
-      {tracks.length === 0 ? (
-        <Text style={[styles.empty, { color: t.inkFaint }]}>
-          nothing queued yet — play something first.
-        </Text>
-      ) : (
-        <GestureDetector gesture={listGesture}>
-          <Animated.FlatList
-            ref={listRef}
-            data={tracks}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
-            getItemLayout={(_, index) => ({
-              length: ROW_HEIGHT,
-              offset: ROW_HEIGHT * index,
-              index,
-            })}
-            // Jump to the current row ONLY when the list actually overflows
-            // the window. On a list that fits, the native scroll clamps the
-            // jump to zero while the virtualizer still believes the offset —
-            // and with nothing to scroll, no event ever corrects it, so the
-            // rows BEFORE the current one never render (field report: a
-            // 10-track queue showed a void where the past songs belonged).
-            initialScrollIndex={
-              tracks.length * ROW_HEIGHT > winH
-                ? Math.max(0, Math.min(idx, tracks.length - 1))
-                : undefined
-            }
-            // An element, not a component type — a fresh type each render would
-            // remount the batch (and its artwork) on every scroll tick.
-            ListFooterComponent={renderRadio()}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            overScrollMode="always"
-            onLayout={e => {
-              listH.value = e.nativeEvent.layout.height;
-            }}
-            // Shifted neighbours must draw outside their cell while dragging.
-            removeClippedSubviews={false}
-            // A queue can be a whole shared playlist (245 tracks in the
-            // field) — unbounded mounting OOM-killed the app on open.
-            {...LONG_LIST}
-            contentContainerStyle={[
-              styles.list,
-              { paddingBottom: insets.bottom + 24 },
-            ]}
-          />
         </GestureDetector>
+
+        {tracks.length === 0 ? (
+          <Text style={[styles.empty, { color: t.inkFaint }]}>
+            nothing queued yet — play something first.
+          </Text>
+        ) : (
+          <GestureDetector gesture={listGesture}>
+            <Animated.FlatList
+              ref={listRef}
+              data={visible}
+              renderItem={renderItem}
+              // Keyed by ABSOLUTE queue position, so advancing while hide-past
+              // is on only sheds the top row instead of re-keying the rest.
+              keyExtractor={(item, index) => `${item.id}-${index + pastHidden}`}
+              getItemLayout={(_, index) => ({
+                length: ROW_HEIGHT,
+                offset: ROW_HEIGHT * index,
+                index,
+              })}
+              // Jump to the current row ONLY when the list actually overflows
+              // the window. On a list that fits, the native scroll clamps the
+              // jump to zero while the virtualizer still believes the offset —
+              // and with nothing to scroll, no event ever corrects it, so the
+              // rows BEFORE the current one never render (field report: a
+              // 10-track queue showed a void where the past songs belonged).
+              initialScrollIndex={
+                visible.length * ROW_HEIGHT > winH
+                  ? Math.max(0, Math.min(idx - pastHidden, visible.length - 1))
+                  : undefined
+              }
+              // An element, not a component type — a fresh type each render would
+              // remount the batch (and its artwork) on every scroll tick.
+              ListFooterComponent={renderRadio()}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              overScrollMode="always"
+              onLayout={e => {
+                listH.value = e.nativeEvent.layout.height;
+              }}
+              // Shifted neighbours must draw outside their cell while dragging.
+              removeClippedSubviews={false}
+              // A queue can be a whole shared playlist (245 tracks in the
+              // field) — unbounded mounting OOM-killed the app on open.
+              {...LONG_LIST}
+              contentContainerStyle={[
+                styles.list,
+                { paddingBottom: insets.bottom + 24 },
+              ]}
+            />
+          </GestureDetector>
+        )}
+      </Animated.View>
+      {menuOpen && (
+        <QueueOptionsSheet
+          player={player}
+          hidePast={hidePast}
+          onToggleHidePast={toggleHidePast}
+          onClose={() => setMenuOpen(false)}
+        />
       )}
-    </Animated.View>
+    </>
   );
 }
 
@@ -702,4 +969,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 16,
   },
+  // Overflow menu (QueueOptionsSheet) — SleepTimerSheet's row register plus
+  // AddToPlaylistSheet's inline name-input recipe.
+  menuTitle: { fontFamily: fonts.semibold, fontSize: 18 },
+  menuSub: { marginTop: 3, marginBottom: 8 },
+  menuItem: { paddingVertical: 12 },
+  menuLabel: { fontFamily: fonts.medium, fontSize: 15 },
+  menuSeparator: { height: 1, marginVertical: 6 },
+  menuState: {
+    fontFamily: fonts.regular,
+    fontSize: 13.5,
+    paddingVertical: 12,
+  },
+  nameInput: {
+    borderWidth: 1,
+    borderRadius: radii.input,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    marginTop: 2,
+  },
+  nameActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 22,
+    paddingVertical: 10,
+  },
+  nameBtn: { fontFamily: fonts.medium, fontSize: 14.5 },
 });

@@ -82,3 +82,62 @@ describe('PlayerProvider sign-out reset', () => {
     await ReactTestRenderer.act(() => tree.unmount());
   });
 });
+
+// Clear must go through the model → applyQueue → engine.syncQueue path so the
+// JS queue and the native queue can never disagree (the desync crash class).
+describe('PlayerProvider clearQueue', () => {
+  beforeEach(() => {
+    __resetMock();
+    global.fetch = jest.fn(() => Promise.reject(new Error('offline')));
+    storage.setItem('aura.authToken', 'jwt');
+    storage.setItem('aura.authUser', JSON.stringify({ id: 1, name: 'aura' }));
+    storage.setItem(
+      'aura.queue',
+      JSON.stringify({
+        tracks: [
+          { id: 't1', title: 'one' },
+          { id: 't2', title: 'two' },
+          { id: 't3', title: 'three' },
+        ],
+        idx: 1,
+        source: 'more like this',
+      }),
+    );
+  });
+
+  afterEach(() => {
+    clearSession();
+    delete global.fetch;
+  });
+
+  test('keeps only the playing track and mirrors it into the native queue', async () => {
+    let ctx;
+    function Grab() {
+      ctx = usePlayer();
+      return null;
+    }
+    let tree;
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(
+        <PlayerProvider>
+          <Grab />
+        </PlayerProvider>,
+      );
+    });
+    await flush(tree);
+    expect(__getMockState().queue).toHaveLength(3);
+
+    await ReactTestRenderer.act(async () => {
+      ctx.clearQueue();
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(ctx.queue.tracks.map(x => x.id)).toEqual(['t2']);
+    expect(ctx.queue.idx).toBe(0);
+    expect(ctx.queue.source).toBe('your set');
+    expect(ctx.shuffleActive).toBe(false);
+    expect(__getMockState().queue.map(x => x.id)).toEqual(['t2']);
+
+    await ReactTestRenderer.act(() => tree.unmount());
+  });
+});

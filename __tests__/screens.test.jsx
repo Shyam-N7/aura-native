@@ -6,6 +6,7 @@ import HomeScreen from '../src/screens/HomeScreen';
 import YouScreen from '../src/screens/YouScreen';
 import { groupPlaysByDay } from '../src/screens/HistoryScreen';
 import { getFeatured } from '../src/api/catalog';
+import { updatePreferences } from '../src/lib/auth';
 import { invalidateHomeCache } from '../src/lib/homeCache';
 import { _resetLikesStore } from '../src/hooks/useLikes';
 
@@ -33,6 +34,7 @@ jest.mock('../src/lib/auth', () => ({
   clearMyAvatar: jest.fn(),
   enableFamilyMode: jest.fn(),
   disableFamilyMode: jest.fn(),
+  updatePreferences: jest.fn(() => Promise.resolve({})),
   logout: jest.fn(),
 }));
 jest.mock('../src/api/catalog', () => ({
@@ -191,6 +193,35 @@ test('you is the library: your year, accordion shelves, settings', async () => {
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'settings').props.onPress();
   });
+
+  // Welcome-screen toggle: on by default (pref absent), optimistic flip while
+  // the save is in flight, reverts when the save fails.
+  expect(byLabel(tree, 'welcome screen').props.accessibilityState).toEqual({
+    selected: true,
+  });
+  expect(texts(tree.toJSON())).toContain(
+    'a short intro reads your mood when you open aura',
+  );
+  let resolveUpdate;
+  updatePreferences.mockImplementationOnce(
+    () => new Promise(r => (resolveUpdate = r)),
+  );
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'welcome screen').props.onPress();
+  });
+  expect(updatePreferences).toHaveBeenCalledWith({ showSensing: false });
+  expect(texts(tree.toJSON())).toContain(
+    'skipped — you go straight to your home.',
+  );
+  await ReactTestRenderer.act(async () => resolveUpdate({}));
+  updatePreferences.mockRejectedValueOnce(new Error('offline'));
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'welcome screen').props.onPress();
+  });
+  expect(texts(tree.toJSON())).toContain(
+    'a short intro reads your mood when you open aura',
+  );
+
   byLabel(tree, 'quality low').props.onPress();
   expect(mockSetQuality).toHaveBeenCalledWith('low');
   byLabel(tree, 'sign out').props.onPress();

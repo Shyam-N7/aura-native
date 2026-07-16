@@ -29,7 +29,19 @@ import { DUR, SPRING } from '../../theme/motion';
 // the drag zone while children scroll underneath (dragging the list itself
 // must keep scrolling it — only the header/grip dismisses, like every
 // platform sheet).
-export function Sheet({ onClose, closeLabel, header = null, children }) {
+//
+// `animated={false}` opts out of the entering/exiting pair. Required for any
+// sheet nested under ANOTHER component's null gate (e.g. the queue options
+// sheet inside QueueSheet): the parent can hard-unmount it mid-animation, and
+// reanimated 4.2.3/Fabric aborts natively on unmount-mid-entering/exiting —
+// this device's documented crash class. Such sheets pop instead of sliding.
+export function Sheet({
+  onClose,
+  closeLabel,
+  header = null,
+  animated = true,
+  children,
+}) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -77,8 +89,16 @@ export function Sheet({ onClose, closeLabel, header = null, children }) {
   return (
     <View style={[StyleSheet.absoluteFill, styles.stack]}>
       <Animated.View
-        entering={FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
-        exiting={FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
+        entering={
+          animated
+            ? FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)
+            : undefined
+        }
+        exiting={
+          animated
+            ? FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)
+            : undefined
+        }
         style={[StyleSheet.absoluteFill, styles.backdrop]}
       >
         <Pressable
@@ -89,12 +109,18 @@ export function Sheet({ onClose, closeLabel, header = null, children }) {
         />
       </Animated.View>
       <Animated.View
-        entering={SlideInDown.duration(DUR.upNext).reduceMotion(
-          ReduceMotion.System,
-        )}
-        exiting={SlideOutDown.duration(DUR.dot).reduceMotion(
-          ReduceMotion.System,
-        )}
+        entering={
+          animated
+            ? SlideInDown.duration(DUR.upNext).reduceMotion(
+                ReduceMotion.System,
+              )
+            : undefined
+        }
+        exiting={
+          animated
+            ? SlideOutDown.duration(DUR.dot).reduceMotion(ReduceMotion.System)
+            : undefined
+        }
         onLayout={e => {
           cardH.value = e.nativeEvent.layout.height;
         }}
