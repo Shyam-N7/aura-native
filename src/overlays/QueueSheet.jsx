@@ -528,7 +528,17 @@ export function QueueSheet() {
               offset: ROW_HEIGHT * index,
               index,
             })}
-            initialScrollIndex={Math.max(0, Math.min(idx, tracks.length - 1))}
+            // Jump to the current row ONLY when the list actually overflows
+            // the window. On a list that fits, the native scroll clamps the
+            // jump to zero while the virtualizer still believes the offset —
+            // and with nothing to scroll, no event ever corrects it, so the
+            // rows BEFORE the current one never render (field report: a
+            // 10-track queue showed a void where the past songs belonged).
+            initialScrollIndex={
+              tracks.length * ROW_HEIGHT > winH
+                ? Math.max(0, Math.min(idx, tracks.length - 1))
+                : undefined
+            }
             // An element, not a component type — a fresh type each render would
             // remount the batch (and its artwork) on every scroll tick.
             ListFooterComponent={renderRadio()}
