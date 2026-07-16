@@ -21,13 +21,20 @@ import { useTheme } from '../../theme/ThemeContext';
 import { fonts, label } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 
-// The web QuickPicksSpinner rebuilt as a native fidget wheel: 8 discs on a
-// ring you can grab and spin (friction coast on release), tap a disc to play.
+// The web QuickPicksSpinner rebuilt as a native fidget wheel: discs on a ring
+// you can grab and spin (friction coast on release), tap a disc to play.
 // Geometry ports the web CSS: ring min(330, 84vw), discs 24% of the ring on a
 // 38%-radius circle starting at -90°. Web's manual scroll-vs-spin intent lock
 // is replaced by gesture config: horizontal-ish drags spin, vertical drags
 // fall through to the page ScrollView.
-const DISC_COUNT = 8;
+//
+// Six, not web's eight. A title box is 100px wide but eight discs sit only
+// ~96px apart, so on web ~two titles are always buried under a neighbouring
+// disc's artwork — and which two changes as the ring turns. At 60° spacing the
+// discs are ~125px apart and every title clears every disc by ~17px, so the
+// picks keep full-size art AND readable two-line titles. The ring is the whole
+// point of the surface; six legible picks beat eight with two unreadable.
+export const DISC_COUNT = 6;
 // Web coast: velocity × 0.96 per 60Hz frame, capped at 46°/frame. withDecay's
 // deceleration is per-ms: 0.96^60 per second → 0.9976^1000.
 const DECELERATION = 0.9976;

@@ -255,10 +255,9 @@ export function PlayerSheet() {
   // (App.jsx) feeds MobilePlayer the same two values from autoNextDisplay /
   // autoNextLoading; without them the slot just goes blank at the queue end.
   const auto = player.autoNext;
-  const forThisTrack = !!track?.id && auto?.seedId === track.id;
-  const nextTrack =
-    queuedNext ?? (forThisTrack ? auto?.candidates?.[0] ?? null : null);
-  const findingNext = !nextTrack && forThisTrack && !!auto?.loading;
+  const nextTrack = queuedNext ?? player.autoNextTracks?.[0] ?? null;
+  const findingNext =
+    !nextTrack && !!auto?.loading && auto.seedId === track?.id;
   // Cap the art by the hero row's real height too — with the keyboard up (or
   // any squeezed window) a width-only size overflows onto the title below.
   const artSize = Math.min(

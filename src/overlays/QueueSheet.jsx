@@ -408,6 +408,48 @@ export function QueueSheet() {
     />
   );
 
+  // AURA's prefetched continuation, listed under the last track as what's
+  // coming. The context hands this over already deduped against the live queue
+  // and only while it's actually reachable, so row i is queue position idx+1+i
+  // and tapping one fills the whole batch in and plays from there.
+  const radioBatch = player.autoNextTracks;
+  const renderRadio = () => {
+    if (!radioBatch?.length) {
+      return null;
+    }
+    return (
+      <View style={[styles.radio, { borderTopColor: t.line }]}>
+        <Text style={[label(9), { color: t.inkFaint }, styles.radioLabel]}>
+          up next · picked by aura
+        </Text>
+        {radioBatch.map((rt, i) => (
+          <Pressable
+            key={`${rt.id}-${i}`}
+            accessibilityRole="button"
+            accessibilityLabel={`play next: ${cleanTitle(rt.title)}`}
+            onPress={() => player.playAutoNext(i)}
+            onLongPress={() => openTrackActions(rt)}
+            style={({ pressed }) => [styles.radioRow, pressed && styles.pressed]}
+          >
+            <TrackArt track={rt} size={40} radius={4} />
+            <View style={styles.meta}>
+              <Text numberOfLines={1} style={[styles.title, { color: t.ink }]}>
+                {cleanTitle(rt.title)}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.artist, { color: t.inkSoft }]}
+              >
+                {rt.artist ?? ''}
+              </Text>
+            </View>
+            <Text style={[label(9), { color: t.accent }]}>play</Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <Animated.View
       style={[
@@ -486,6 +528,9 @@ export function QueueSheet() {
               index,
             })}
             initialScrollIndex={Math.max(0, Math.min(idx, tracks.length - 1))}
+            // An element, not a component type — a fresh type each render would
+            // remount the batch (and its artwork) on every scroll tick.
+            ListFooterComponent={renderRadio()}
             onScroll={onScroll}
             scrollEventThrottle={16}
             overScrollMode="always"
@@ -563,6 +608,23 @@ const styles = StyleSheet.create({
   },
   past: {
     opacity: 0.55,
+  },
+  radio: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  radioLabel: {
+    paddingHorizontal: 6,
+    marginBottom: 4,
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 56,
+    borderRadius: 10,
+    paddingHorizontal: 6,
   },
   grip: {
     width: 30,

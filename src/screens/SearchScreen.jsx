@@ -9,7 +9,6 @@ import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { searchCatalog } from '../api/catalog';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
-import { showToast } from '../lib/toast';
 import { dropExplicit } from '../lib/explicit';
 import { TrackRow, TrackArt } from '../components/TrackRow';
 import {
@@ -424,7 +423,7 @@ export default function SearchScreen({ navigation }) {
                         }`}
                         t={t}
                         onPress={() =>
-                          showToast('playlist pages come in a later build')
+                          navigation.navigate('Playlist', { id: p.id })
                         }
                       />
                     ))}

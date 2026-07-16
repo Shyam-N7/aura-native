@@ -195,7 +195,64 @@ export function PlayerProvider({ children }) {
   // Subscribing here — above the noteQueueState effect — means the first
   // prefetch of a session can't publish before we're listening.
   const [autoNext, setAutoNext] = useState(autoRadio.getAutoNext);
-  useEffect(() => autoRadio.subscribe(setAutoNext), []);
+  const autoNextRef = useRef(autoNext);
+  useEffect(
+    () =>
+      autoRadio.subscribe(s => {
+        autoNextRef.current = s;
+        setAutoNext(s);
+      }),
+    [],
+  );
+
+  // The continuation as the queue should SHOW it: deduped against the live
+  // queue, so the list is exactly what gets appended and row i is exactly
+  // queue position idx + 1 + i. (Web lists the raw candidates and dedupes only
+  // on apply, so a dropped cover silently shifts what its rows play.) Null
+  // unless the batch is actually reachable — off the last track, on a wrapping
+  // source, or under repeat, it would never play.
+  const autoNextTracks = useMemo(() => {
+    const seed = queue.tracks[queue.idx];
+    if (
+      !autoNext.candidates?.length ||
+      !seed?.id ||
+      autoNext.seedId !== seed.id ||
+      queue.idx !== queue.tracks.length - 1 ||
+      queue.source === "tonight's set" ||
+      repeat !== 'off'
+    ) {
+      return null;
+    }
+    const extended = model.dedupeAppend(queue, autoNext.candidates);
+    return extended === queue ? null : extended.tracks.slice(queue.tracks.length);
+  }, [autoNext, queue, repeat]);
+
+  // Play the batch starting from row `offset` (web consumeAutoNext's jump).
+  // Recomputed from the live refs rather than trusting the rendered list, so a
+  // queue edit between paint and tap can't append against a stale queue.
+  const playAutoNext = useCallback(
+    (offset = 0) => {
+      const q = queueRef.current;
+      const extended = model.dedupeAppend(q, autoNextRef.current?.candidates);
+      if (extended === q) {
+        return;
+      }
+      const freshCount = extended.tracks.length - q.tracks.length;
+      const jump = Math.min(Math.max(0, offset), freshCount - 1);
+      const seeded = { ...extended, source: 'more like this' };
+      const target = { ...seeded, idx: q.idx + 1 + jump };
+      autoRadio.reset();
+      applyQueue(target);
+      setIsPlaying(true);
+      enqueueOp(async () => {
+        // Append around the still-current seed, then hop onto the batch.
+        await engine.syncQueue(seeded, { startIndex: q.idx });
+        await engine.skipToIndex(target.idx);
+        await engine.play();
+      });
+    },
+    [applyQueue, enqueueOp],
+  );
 
   // Shared by the 'ended' path and a next-press on the last track. Appends
   // the prefetched continuation (source flips to 'more like this') and
@@ -760,6 +817,8 @@ export function PlayerProvider({ children }) {
       current,
       queue,
       autoNext,
+      autoNextTracks,
+      playAutoNext,
       isPlaying,
       repeat,
       shuffleActive,
@@ -784,6 +843,8 @@ export function PlayerProvider({ children }) {
       current,
       queue,
       autoNext,
+      autoNextTracks,
+      playAutoNext,
       isPlaying,
       repeat,
       shuffleActive,

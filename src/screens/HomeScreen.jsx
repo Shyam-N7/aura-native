@@ -18,7 +18,7 @@ import { TopBar } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { SectionHeader } from '../components/home/SectionHeader';
-import { QuickPicksWheel } from '../components/home/QuickPicksWheel';
+import { QuickPicksWheel, DISC_COUNT } from '../components/home/QuickPicksWheel';
 import { HeroBand } from '../components/home/HeroBand';
 import { MemoryRail } from '../components/home/MemoryRail';
 import { ArtistRail } from '../components/home/ArtistRail';
@@ -115,7 +115,9 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   // Quick-picks fallback chain (web DesktopHome): server ring ≥4 after the
-  // family filter → most played ≥4 → recently played ≥4 → the pool; slice 8.
+  // family filter → most played ≥4 → recently played ≥4 → the pool. Sliced to
+  // the wheel's own capacity so the impressions logged below are exactly the
+  // picks that rendered.
   const served = dropExplicit(quickPicks ?? [], explicitOff);
   const serverRing = served.length >= 4;
   const picks = (
@@ -126,7 +128,7 @@ export default function HomeScreen({ navigation }) {
       : (recent?.length ?? 0) >= 4
       ? recent
       : pool.tracks
-  ).slice(0, 8);
+  ).slice(0, DISC_COUNT);
 
   // Log SHOWN picks so the ranker can demote never-played ones — only when
   // the server ring is what rendered; the local fallback is never logged.
