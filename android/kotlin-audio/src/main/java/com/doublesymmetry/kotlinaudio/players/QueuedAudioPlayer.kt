@@ -1,6 +1,7 @@
 package com.doublesymmetry.kotlinaudio.players
 
 import android.content.Context
+import android.util.Log
 import com.doublesymmetry.kotlinaudio.models.*
 import com.doublesymmetry.kotlinaudio.players.components.getAudioItemHolder
 import com.google.android.exoplayer2.C
@@ -207,7 +208,14 @@ class QueuedAudioPlayer(
             exoPlayer.seekTo(index, C.TIME_UNSET)
             exoPlayer.prepare()
         } catch (e: IllegalSeekPositionException) {
-            throw Error("This item index $index does not exist. The size of the queue is ${queue.size} items.")
+            // Upstream rethrows java.lang.Error here, which escapes every handler
+            // (MusicModule launches on a MainScope with none) and kills the
+            // process. A JS-model/native-queue race can always produce a stale
+            // index; an impossible jump must degrade to a no-op, never a death.
+            Log.e(
+                "QueuedAudioPlayer",
+                "jumpToItem($index) out of range (queue=${queue.size}); ignored"
+            )
         }
     }
 

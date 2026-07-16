@@ -188,6 +188,10 @@ export function PlayerProvider({ children }) {
     [applyQueue, enqueueOp],
   );
 
+  // A user action during the cold restore window wins over the restore.
+  // Declared above the auto-radio block: playAutoNext is a user intent too.
+  const userActedRef = useRef(false);
+
   // ── auto-radio ───────────────────────────────────────────────────────────
   // Render mirror of the prefetch store: on the last track of a queue there's
   // no next track to show, so the player reads this to surface the
@@ -232,6 +236,10 @@ export function PlayerProvider({ children }) {
   // queue edit between paint and tap can't append against a stale queue.
   const playAutoNext = useCallback(
     (offset = 0) => {
+      // A user intent like every other — without this, a cold restore still in
+      // flight replays its stale queue OVER the batch we just applied, and the
+      // model/native queues diverge (ending in an out-of-range native skip).
+      userActedRef.current = true;
       const q = queueRef.current;
       const extended = model.dedupeAppend(q, autoNextRef.current?.candidates);
       if (extended === q) {
@@ -355,8 +363,6 @@ export function PlayerProvider({ children }) {
   );
 
   // ── user intents ─────────────────────────────────────────────────────────
-  // A user action during the cold restore window wins over the restore.
-  const userActedRef = useRef(false);
 
   const playQueue = useCallback(
     (tracks, idx = 0, source = "tonight's set") => {

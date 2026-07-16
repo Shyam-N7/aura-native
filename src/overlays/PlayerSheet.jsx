@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
   Easing,
-  Keyframe,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -43,12 +42,6 @@ import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
 import { fonts, type, label, radii, elevation } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
-
-// Web aura-mp-upnext-in: rise + settle, 340ms.
-const upNextEnter = new Keyframe({
-  0: { opacity: 0, transform: [{ translateY: 12 }, { scale: 0.985 }] },
-  100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
-}).duration(DUR.upNext);
 
 const artUrl = (track, res = 500) =>
   track?.imageUrl ? track.imageUrl.replace(/\d+x\d+/, `${res}x${res}`) : null;
@@ -285,45 +278,42 @@ export function PlayerSheet() {
   // One slot, three states: the next song, the placeholder while auto-radio
   // finds one, or a reserved gap. The placeholder is the same box as the pill
   // so the swap to the real thing shifts nothing (web reserves it likewise).
+  // Deliberately NO entering animation here (web animates the rise): under
+  // auto-radio the slot flips state around every track boundary, and
+  // reanimated 4.2.3/Fabric can abort natively when a view is unmounted while
+  // its entering animation is in flight — a field-reported crash class on
+  // this device (native death, so the JS crash card never writes).
   const upNextSlot = () => {
     if (nextTrack) {
       return (
-        <Animated.View entering={upNextEnter}>
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="up next, open queue"
-            onPress={openQueue}
-          >
-            <Glass radius={radii.pill} style={styles.upNext}>
-              <View style={styles.upNextRow}>
-                <TrackArt track={nextTrack} size={28} radius={5} />
-                <View style={styles.upNextMeta}>
-                  <Text style={[label(7.5), { color: t.inkFaint }]}>
-                    up next
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.upNextTitle, { color: t.ink }]}
-                  >
-                    {cleanTitle(nextTrack.title)}
-                  </Text>
-                </View>
-                <View style={styles.chevRight}>
-                  <Icon name="chevron-down" size={16} color={t.inkFaint} />
-                </View>
+        <PressScale
+          accessibilityRole="button"
+          accessibilityLabel="up next, open queue"
+          onPress={openQueue}
+        >
+          <Glass radius={radii.pill} style={styles.upNext}>
+            <View style={styles.upNextRow}>
+              <TrackArt track={nextTrack} size={28} radius={5} />
+              <View style={styles.upNextMeta}>
+                <Text style={[label(7.5), { color: t.inkFaint }]}>up next</Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.upNextTitle, { color: t.ink }]}
+                >
+                  {cleanTitle(nextTrack.title)}
+                </Text>
               </View>
-            </Glass>
-          </PressScale>
-        </Animated.View>
+              <View style={styles.chevRight}>
+                <Icon name="chevron-down" size={16} color={t.inkFaint} />
+              </View>
+            </View>
+          </Glass>
+        </PressScale>
       );
     }
     if (findingNext) {
       return (
-        <Animated.View
-          entering={upNextEnter}
-          accessible
-          accessibilityLabel="finding next song"
-        >
+        <View accessible accessibilityLabel="finding next song">
           <Glass radius={radii.pill} style={styles.upNext}>
             <View style={styles.upNextRow}>
               <Skeleton height={28} radius={5} style={styles.skelArt} />
@@ -338,7 +328,7 @@ export function PlayerSheet() {
               </View>
             </View>
           </Glass>
-        </Animated.View>
+        </View>
       );
     }
     return <View style={styles.upNextSpacer} />;
