@@ -33,8 +33,18 @@ export function TrackArt({ track, size = 48, radius = 8, res = 150, round = fals
       </View>
     );
   }
+  // resizeMethod="resize" decodes at roughly the view size. Catalog art is
+  // already served small via the url token, but token-less sources (custom
+  // playlist covers are whatever the member uploaded — camera photos) would
+  // otherwise decode at full resolution: tens of MB for a 48px thumb, on the
+  // phone this app keeps getting OOM-killed on.
   return (
-    <Image source={{ uri }} onError={() => setFailed(true)} style={shape} />
+    <Image
+      source={{ uri }}
+      onError={() => setFailed(true)}
+      resizeMethod="resize"
+      style={shape}
+    />
   );
 }
 

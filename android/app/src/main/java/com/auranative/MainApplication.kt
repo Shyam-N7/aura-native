@@ -1,9 +1,11 @@
 package com.auranative
 
 import android.app.Application
+import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import com.facebook.drawee.backends.pipeline.Fresco
 import com.facebook.imagepipeline.cache.MemoryCacheParams
 import com.facebook.imagepipeline.core.ImagePipelineConfig
 import com.facebook.react.PackageList
@@ -17,19 +19,20 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
 
   override val reactHost: ReactHost by lazy {
     // Fresco (RN's image pipeline) budgets its decoded-bitmap cache from the
-    // heap class — ~64MB on this device — and image-heavy browsing (home
-    // shelves + a 245-track shared playlist) filled it: Graphics alone
-    // measured ~107MB PSS with the queue open, feeding the kernel OOM kills
-    // this phone is prone to. 40MB still holds ~450 list thumbnails.
+    // heap class — ~64MB on this device — and image-heavy browsing filled it:
+    // Graphics measured 133MB PSS with player+queue open on a phone whose
+    // kernel OOM-kills the biggest resident app. List art is 150px (~90KB
+    // decoded), so 24MB still holds ~270 covers; onTrimMemory below drops
+    // even that under pressure.
     val frescoConfig =
       ImagePipelineConfig.newBuilder(this)
         .setBitmapMemoryCacheParamsSupplier {
           MemoryCacheParams(
-            40 * 1024 * 1024, // cache budget (bytes)
-            256, // max entries
-            40 * 1024 * 1024, // eviction queue budget
-            64, // eviction queue entries
-            8 * 1024 * 1024, // largest single entry
+            24 * 1024 * 1024, // cache budget (bytes)
+            192, // max entries
+            24 * 1024 * 1024, // eviction queue budget
+            48, // eviction queue entries
+            4 * 1024 * 1024, // largest single entry
           )
         }
         .build()
@@ -65,5 +68,23 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+  }
+
+  /**
+   * This 5.5GB ColorOS device kernel-OOM-kills the biggest resident app under
+   * pressure — twice observed at foreground importance. Cached bitmaps are
+   * the one big block we can shed instantly, so drop them on every trim
+   * signal from RUNNING_LOW up. That range includes UI_HIDDEN: exactly the
+   * screen-off listening case, where the UI's image caches are dead weight
+   * and survival is what matters.
+   */
+  override fun onTrimMemory(level: Int) {
+    super.onTrimMemory(level)
+    if (level >= TRIM_MEMORY_RUNNING_LOW) {
+      if (Fresco.hasBeenInitialized()) {
+        Fresco.getImagePipeline().clearMemoryCaches()
+      }
+      Coil.imageLoader(this).memoryCache?.clear()
+    }
   }
 }

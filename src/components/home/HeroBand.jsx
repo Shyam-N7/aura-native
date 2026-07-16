@@ -23,7 +23,9 @@ export function HeroBand({ track, loading, onBegin }) {
     return null;
   }
 
-  const backdrop = artUrl(track, 500);
+  // Blurred to a wash — 150px decodes/blurs ~11× cheaper than 500px, and
+  // radius 8/150 ≈ the old 28/500. The sharp 92px art below stays at 500.
+  const backdrop = artUrl(track, 150);
   return (
     <View style={styles.pad}>
       <PressScale
@@ -35,7 +37,7 @@ export function HeroBand({ track, loading, onBegin }) {
         {backdrop && (
           <Image
             source={{ uri: backdrop }}
-            blurRadius={28}
+            blurRadius={8}
             style={StyleSheet.absoluteFill}
           />
         )}

@@ -258,7 +258,10 @@ export function PlayerSheet() {
     360,
     heroH > 0 ? heroH - 16 : Number.MAX_SAFE_INTEGER,
   );
-  const backdrop = artUrl(track);
+  // 150px source for the backdrop: it's blurred to a color wash anyway, and
+  // the blur runs on the decoded bitmap — 150² is ~11× less memory and blur
+  // work than 500². Radius scales with the bitmap, so 14/150 ≈ the old 48/500.
+  const backdrop = artUrl(track, 150);
   const liked = isLiked(track.id);
   const toggleLike = () => {
     showToast(liked ? 'removed from likes.' : 'liked.');
@@ -353,7 +356,7 @@ export function PlayerSheet() {
             >
               <Image
                 source={{ uri: backdrop }}
-                blurRadius={48}
+                blurRadius={14}
                 style={[styles.backdrop, { width: winW, height: winH }]}
               />
             </Animated.View>

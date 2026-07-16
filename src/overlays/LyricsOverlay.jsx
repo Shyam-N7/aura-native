@@ -54,8 +54,8 @@ const POLL_MS = 25000; // 'pending' (server still generating) re-poll
 const PANEL_RADIUS = 24;
 const SLIDE = Easing.bezier(0.22, 1, 0.36, 1);
 
-const artUrl = track =>
-  track?.imageUrl ? track.imageUrl.replace(/\d+x\d+/, '500x500') : null;
+const artUrl = (track, res = 500) =>
+  track?.imageUrl ? track.imageUrl.replace(/\d+x\d+/, `${res}x${res}`) : null;
 
 // Equalizer-style "music is playing" mark — five vertical bars bouncing on
 // asymmetric staggered timings (web aura-lyrics-gap-bar: 1000ms, scaleY
@@ -641,6 +641,9 @@ export function LyricsOverlay() {
   }
 
   const cover = artUrl(track);
+  // The ambient layer is blurred to a wash — a 150px source is ~11× cheaper
+  // to decode/blur/upload than 500px, and radius 14/150 ≈ the old 48/500.
+  const coverSoft = artUrl(track, 150);
   const data = status === 'ok' ? hit.data : null;
   const hasEnglish = !!data?.has_english;
   // If the server didn't produce a romanization (already-Latin track), keep
@@ -684,8 +687,8 @@ export function LyricsOverlay() {
             style={[StyleSheet.absoluteFill, styles.clip, kenBurns]}
           >
             <Animated.Image
-              source={{ uri: cover }}
-              blurRadius={48}
+              source={{ uri: coverSoft }}
+              blurRadius={14}
               style={[StyleSheet.absoluteFill, tintSoftStyle]}
               resizeMode="cover"
             />
