@@ -12,6 +12,7 @@ import { getMostPlayed, getTopArtists, getRecentlyPlayed } from '../api/stats';
 import { listPlaylists } from '../api/playlists';
 import { listAutoPlaylists } from '../api/autoPlaylists';
 import { getDiscoverHome } from '../api/discover';
+import { getRelated } from '../api/related';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
 import { TopBar } from '../components/nav/TopBar';
@@ -21,6 +22,7 @@ import { SectionHeader } from '../components/home/SectionHeader';
 import { QuickPicksWheel, DISC_COUNT } from '../components/home/QuickPicksWheel';
 import { HeroBand } from '../components/home/HeroBand';
 import { MemoryRail } from '../components/home/MemoryRail';
+import { RelatedRail } from '../components/home/RelatedRail';
 import { ArtistRail } from '../components/home/ArtistRail';
 import { StationsGrid } from '../components/home/StationsGrid';
 import { PlaylistGrid } from '../components/home/PlaylistGrid';
@@ -113,6 +115,37 @@ export default function HomeScreen({ navigation }) {
       stale = true;
     };
   }, []);
+
+  // "More like {your newest listen}" — the same related-tracks engine that
+  // picks the radio, surfaced as a browsable shelf (field ask: more real
+  // recommendations on home). Seeded by the latest history entry; cached with
+  // the seed so returning to Home is instant and a NEW listen re-seeds it.
+  const moreLikeSeed = recent?.[0] ?? null;
+  const [moreLike, setMoreLike] = useState(() => homeCache.moreLike ?? null);
+  useEffect(() => {
+    if (!moreLikeSeed?.id || homeCache.moreLike?.seedId === moreLikeSeed.id) {
+      return undefined;
+    }
+    let stale = false;
+    getRelated(moreLikeSeed.id, { lang: moreLikeSeed.language, limit: 12 })
+      .then(list => {
+        const entry = {
+          seedId: moreLikeSeed.id,
+          seedTitle: cleanTitle(moreLikeSeed.title),
+          tracks: list.filter(x => x.id !== moreLikeSeed.id),
+        };
+        homeCache.moreLike = entry;
+        if (!stale) {
+          setMoreLike(entry);
+        }
+      })
+      .catch(() => {
+        // Transient — the shelf just doesn't render this visit.
+      });
+    return () => {
+      stale = true;
+    };
+  }, [moreLikeSeed]);
 
   // Quick-picks fallback chain (web DesktopHome): server ring ≥4 after the
   // family filter → most played ≥4 → recently played ≥4 → the pool. Sliced to
@@ -247,6 +280,24 @@ export default function HomeScreen({ navigation }) {
                 sub={`${recent.length} tracks to pick up from`}
               />
               <MemoryRail tracks={recent} onPick={pickLive} />
+            </View>
+          )}
+
+          {(moreLike?.tracks?.length ?? 0) > 0 && (
+            <View>
+              <SectionHeader
+                title={`more like ${moreLike.seedTitle}`}
+                sub="because you played it recently"
+              />
+              <RelatedRail
+                tracks={moreLike.tracks}
+                onPick={(_, i) => {
+                  // The rail is the recommended set — queue it whole, start
+                  // at the tapped tile.
+                  player.playQueue(moreLike.tracks, i, 'more like this');
+                  player.ui?.openPlayer?.();
+                }}
+              />
             </View>
           )}
 
