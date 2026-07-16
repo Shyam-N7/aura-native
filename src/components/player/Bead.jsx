@@ -11,13 +11,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Glass } from '../ui/Glass';
 import { PressScale } from '../ui/PressScale';
-import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
 import { usePlaybackProgress } from '../../hooks/usePlaybackProgress';
-import { glass } from '../../theme/tokens';
-import { DUR, EASE, PRESS } from '../../theme/motion';
+import { DUR, EASE } from '../../theme/motion';
 
 export const BEAD_SIZE = 52;
 const RING_R = 24.75;
@@ -26,8 +24,11 @@ const RING_C = 2 * Math.PI * RING_R;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // The web dock's now-playing bead: a 52px glass disc that buds off the capsule —
-// progress ring, circular art, and a small play/pause disc. Tapping the body
-// opens the player.
+// progress ring and circular art. The whole bead is ONE target: open the
+// player. Web overlays a small play/pause disc here, but two targets cannot
+// share a 52px circle at finger size — field reports (twice) of taps meant to
+// open the player toggling playback instead. Play/pause lives one tap away in
+// the player, the notification, and the lock screen.
 export function Bead() {
   const { t } = useTheme();
   const player = usePlayer();
@@ -107,23 +108,6 @@ export function Bead() {
           </Svg>
         </Glass>
       </PressScale>
-      <PressScale
-        to={PRESS.disc}
-        accessibilityRole="button"
-        accessibilityLabel={player.isPlaying ? 'pause' : 'play'}
-        onPress={player.togglePlay}
-        hitSlop={8}
-        style={[
-          styles.toggle,
-          { backgroundColor: glass.discBg, borderColor: glass.discBorder },
-        ]}
-      >
-        <Icon
-          name={player.isPlaying ? 'pause' : 'play'}
-          size={11}
-          color="#fff"
-        />
-      </PressScale>
     </Animated.View>
   );
 }
@@ -138,15 +122,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   art: { position: 'absolute', left: 4, top: 4 },
-  toggle: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

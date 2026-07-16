@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getDiscoverHome } from '../api/discover';
@@ -86,7 +87,7 @@ export default function LanguageHubScreen({ route, navigation }) {
       <BounceScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         showsVerticalScrollIndicator={false}
       >

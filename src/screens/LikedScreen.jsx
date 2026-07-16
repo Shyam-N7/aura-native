@@ -4,6 +4,7 @@ import { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceFlatList } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { listLiked } from '../api/likes';
@@ -18,6 +19,7 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
+import { LONG_LIST } from '../lib/listWindow';
 import { fonts, label, type } from '../theme/tokens';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
@@ -169,11 +171,12 @@ export default function LikedScreen({ navigation }) {
         keyExtractor={item => item.id}
         itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
+        {...LONG_LIST}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         showsVerticalScrollIndicator={false}
       />

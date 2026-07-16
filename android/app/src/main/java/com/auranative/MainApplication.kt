@@ -4,19 +4,39 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import com.facebook.imagepipeline.cache.MemoryCacheParams
+import com.facebook.imagepipeline.core.ImagePipelineConfig
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.facebook.react.shell.MainPackageConfig
 
 class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
 
   override val reactHost: ReactHost by lazy {
+    // Fresco (RN's image pipeline) budgets its decoded-bitmap cache from the
+    // heap class — ~64MB on this device — and image-heavy browsing (home
+    // shelves + a 245-track shared playlist) filled it: Graphics alone
+    // measured ~107MB PSS with the queue open, feeding the kernel OOM kills
+    // this phone is prone to. 40MB still holds ~450 list thumbnails.
+    val frescoConfig =
+      ImagePipelineConfig.newBuilder(this)
+        .setBitmapMemoryCacheParamsSupplier {
+          MemoryCacheParams(
+            40 * 1024 * 1024, // cache budget (bytes)
+            256, // max entries
+            40 * 1024 * 1024, // eviction queue budget
+            64, // eviction queue entries
+            8 * 1024 * 1024, // largest single entry
+          )
+        }
+        .build()
     getDefaultReactHost(
       context = applicationContext,
       packageList =
-        PackageList(this).packages.apply {
+        PackageList(this, MainPackageConfig(frescoConfig)).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
         },

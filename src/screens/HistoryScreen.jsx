@@ -7,11 +7,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceSectionList } from '../components/ui/Bounce';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getHistory, getMusicClockPlays } from '../api/stats';
 import { summarizeClock } from '../lib/musicClock';
 import { openTrackActions } from '../lib/trackActionsSheet';
+import { LONG_LIST } from '../lib/listWindow';
 import { TrackArt } from '../components/TrackRow';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
@@ -275,9 +277,10 @@ export default function HistoryScreen({ navigation }) {
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         stickySectionHeadersEnabled={false}
+        {...LONG_LIST}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         showsVerticalScrollIndicator={false}
       />

@@ -33,22 +33,22 @@ test('renders nothing without a loaded track', async () => {
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
-test('wires play/pause and open player', async () => {
+test('the whole bead is one open-player target', async () => {
   mockState.player = {
     current: { id: 't1', title: 'Some Song', artist: 'someone' },
     isPlaying: false,
-    togglePlay: jest.fn(),
     ui: { playerOpen: false, openPlayer: jest.fn() },
   };
   const tree = await render();
 
-  byLabel(tree, 'play').props.onPress();
-  expect(mockState.player.togglePlay).toHaveBeenCalled();
-
-  // The bead measures itself for the morph origin; without a native host the
-  // measure path falls back to a plain open call.
   byLabel(tree, 'open player').props.onPress();
   expect(mockState.player.ui.openPlayer).toHaveBeenCalled();
+
+  // The play/pause disc is gone on purpose: two targets can't share a 52px
+  // circle at finger size (field misfires) — the bead only opens the player.
+  expect(tree.root.findAllByProps({ accessibilityLabel: 'play' })).toHaveLength(
+    0,
+  );
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

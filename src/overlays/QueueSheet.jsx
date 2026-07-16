@@ -30,6 +30,7 @@ import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
+import { LONG_LIST } from '../lib/listWindow';
 import { label, radii } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 
@@ -539,6 +540,9 @@ export function QueueSheet() {
             }}
             // Shifted neighbours must draw outside their cell while dragging.
             removeClippedSubviews={false}
+            // A queue can be a whole shared playlist (245 tracks in the
+            // field) — unbounded mounting OOM-killed the app on open.
+            {...LONG_LIST}
             contentContainerStyle={[
               styles.list,
               { paddingBottom: insets.bottom + 24 },

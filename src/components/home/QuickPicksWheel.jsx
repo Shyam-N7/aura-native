@@ -28,13 +28,12 @@ import { cleanTitle } from '../../utils/title';
 // is replaced by gesture config: horizontal-ish drags spin, vertical drags
 // fall through to the page ScrollView.
 //
-// Six, not web's eight. A title box is 100px wide but eight discs sit only
-// ~96px apart, so on web ~two titles are always buried under a neighbouring
-// disc's artwork — and which two changes as the ring turns. At 60° spacing the
-// discs are ~125px apart and every title clears every disc by ~17px, so the
-// picks keep full-size art AND readable two-line titles. The ring is the whole
-// point of the surface; six legible picks beat eight with two unreadable.
-export const DISC_COUNT = 6;
+// Web's eight picks, but discs at 20% of the ring (web: 24%) and titles on ONE
+// line: at 24% a 100px title box always sat buried under a neighbouring disc's
+// artwork (~two titles unreadable at any rotation). Shrinking the art clears
+// every title past every disc by ~5px while keeping all eight suggestions —
+// field feedback picked density over bigger art when titles stay readable.
+export const DISC_COUNT = 8;
 // Web coast: velocity × 0.96 per 60Hz frame, capped at 46°/frame. withDecay's
 // deceleration is per-ms: 0.96^60 per second → 0.9976^1000.
 const DECELERATION = 0.9976;
@@ -43,7 +42,7 @@ const HINT_MS = 4200;
 
 function Disc({ track, index, ringSize, rot, playing, accent, ink, onPick }) {
   const reduced = useReducedMotion();
-  const discSize = ringSize * 0.24;
+  const discSize = ringSize * 0.2;
   const radius = ringSize * 0.38;
   const angle = (-90 + index * (360 / DISC_COUNT)) * (Math.PI / 180);
   const cx = ringSize / 2 + radius * Math.cos(angle) - discSize / 2;
@@ -84,7 +83,7 @@ function Disc({ track, index, ringSize, rot, playing, accent, ink, onPick }) {
         <TrackArt track={track} size={discSize - (playing ? 8 : 0)} round />
       </Pressable>
       <Text
-        numberOfLines={2}
+        numberOfLines={1}
         style={[
           styles.discName,
           {

@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
@@ -245,7 +246,7 @@ export default function PlaylistsScreen({ navigation }) {
       <BounceScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"

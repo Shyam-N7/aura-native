@@ -10,8 +10,10 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BounceScrollView } from '../components/ui/Bounce';
+import { BounceFlatList } from '../components/ui/Bounce';
+import { LONG_LIST } from '../lib/listWindow';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
@@ -455,20 +457,55 @@ export default function PlaylistScreen({ route, navigation }) {
     player.ui?.openPlayer?.();
   };
 
+  // Rows are windowed FlatList data — a shared playlist can be hundreds of
+  // tracks, and mounting them all on open (the old ScrollView map) was the
+  // measured OOM-kill spike. Everything above the rows rides as the header.
+  const renderRow = ({ item: track, index: i }) => (
+    <DetailRow
+      track={track}
+      index={i}
+      highlight={query}
+      reason={
+        shared && track.addedBy
+          ? `added by ${
+              track.addedBy.userId === myId ? 'you' : track.addedBy.name
+            }`
+          : undefined
+      }
+      onPress={() => playFrom(i)}
+      menu={{
+        extras: canEdit
+          ? [
+              {
+                label: 'remove from this playlist',
+                danger: true,
+                onPress: () => removeTrack(track),
+              },
+            ]
+          : [],
+      }}
+    />
+  );
+
   return (
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
-      <BounceScrollView
+      <BounceFlatList
+        data={status === 'ok' ? shown : []}
+        renderItem={renderRow}
+        keyExtractor={item => item.id}
+        {...LONG_LIST}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-      >
-        <CrumbBack onPress={() => navigation.goBack()} />
+        ListHeaderComponent={
+          <View style={styles.head}>
+            <CrumbBack onPress={() => navigation.goBack()} />
 
         {status === 'loading' && <AuraLoader label="loading playlist" />}
         {status === 'error' && (
@@ -642,42 +679,13 @@ export default function PlaylistScreen({ route, navigation }) {
                     No matches for "{query.trim()}".
                   </Text>
                 )}
-                <View style={styles.list}>
-                  {shown.map((track, i) => (
-                    <DetailRow
-                      key={track.id}
-                      track={track}
-                      index={i}
-                      highlight={query}
-                      reason={
-                        shared && track.addedBy
-                          ? `added by ${
-                              track.addedBy.userId === myId
-                                ? 'you'
-                                : track.addedBy.name
-                            }`
-                          : undefined
-                      }
-                      onPress={() => playFrom(i)}
-                      menu={{
-                        extras: canEdit
-                          ? [
-                              {
-                                label: 'remove from this playlist',
-                                danger: true,
-                                onPress: () => removeTrack(track),
-                              },
-                            ]
-                          : [],
-                      }}
-                    />
-                  ))}
-                </View>
               </>
             )}
           </>
         )}
-      </BounceScrollView>
+          </View>
+        }
+      />
 
       {/* Who can see this — the web's anchored share menu as a sheet. */}
       {shareOpen && (
@@ -809,7 +817,9 @@ export default function PlaylistScreen({ route, navigation }) {
             or pick from this playlist
           </Text>
           <View style={styles.coverGrid}>
-            {tracks.map(track => (
+            {/* A sample is plenty for picking a cover — the full playlist
+                would mount hundreds of 76px tiles inside this sheet. */}
+            {tracks.slice(0, 24).map(track => (
               <Pressable
                 key={track.id}
                 accessibilityRole="button"
@@ -829,7 +839,11 @@ export default function PlaylistScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 10, gap: 7 },
+  content: { paddingHorizontal: 20, paddingTop: 10 },
+  // The old content gap, now scoped to the header block so it can't leak
+  // 7px seams between the windowed rows; marginBottom keeps the old
+  // ListTools→first-row breathing room (styles.list's marginTop).
+  head: { gap: 7, marginBottom: 8 },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
   cover: {
     width: 148,
@@ -887,7 +901,6 @@ const styles = StyleSheet.create({
   empty: { marginTop: 18, gap: 5 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
-  list: { marginTop: 8 },
   pressed: { opacity: 0.6 },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   sheetHead: { marginTop: 12, marginBottom: 2 },

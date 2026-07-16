@@ -21,6 +21,7 @@ import { ModeSheet } from './src/overlays/ModeSheet';
 import { QualitySheet } from './src/overlays/QualitySheet';
 import { PresenceBanners } from './src/overlays/PresenceBanners';
 import { Toast } from './src/components/Toast';
+import { Dock } from './src/components/nav/Dock';
 import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
 import { SensingScreen } from './src/screens/SensingScreen';
@@ -138,6 +139,9 @@ function Shell() {
         onReady={() => Linking.getInitialURL().then(handleLink)}
       >
         <RootTabs />
+        {/* The dock floats above every screen, detail pages included (web
+            parity); the player and sheets still stack over it. */}
+        <Dock navRef={navRef} />
         <PlayerSheet />
         {/* Lyrics ride above the player; closing them lands back there. */}
         <LyricsOverlay />

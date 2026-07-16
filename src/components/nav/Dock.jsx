@@ -20,6 +20,18 @@ import { DUR, EASE } from '../../theme/motion';
 
 const TAB_ICONS = { Home: 'home', Search: 'search', Talk: 'chat', You: 'user' };
 
+// The dock is an app-level overlay, not the tab navigator's tabBar: detail
+// screens (playlist, artist, liked…) live on the ROOT stack above the tabs,
+// and as a tabBar the dock vanished on all of them (field report). The tab
+// set is static, so it needs no descriptors — just the container ref for the
+// active index and navigation.
+const TABS = [
+  { name: 'Home', label: 'home' },
+  { name: 'Search', label: 'search' },
+  { name: 'Talk', label: 'talk' },
+  { name: 'You', label: 'you' },
+];
+
 // How much vertical room the floating chrome needs under scrolling content.
 export const DOCK_CLEARANCE = 96;
 
@@ -57,12 +69,36 @@ function DockTab({ route, focused, label: tabLabel, tint, accent, onPress }) {
 // The web's "mercury dock": a floating glass capsule with the now-playing bead
 // budding off its left end. Content scrolls underneath (screens pad by
 // DOCK_CLEARANCE); when a track loads the bead metaball-fuses out of the capsule.
-export function Dock({ state, descriptors, navigation }) {
+export function Dock({ navRef }) {
   const { name, t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
   const reduced = useReducedMotion();
   const hasTrack = !!player.current;
+
+  // Active tab, read off the container: root stack route 0 is the Tabs
+  // navigator; its nested index is the focused tab (0 until it has state).
+  const [tabIndex, setTabIndex] = useState(0);
+  useEffect(() => {
+    const update = () => {
+      try {
+        const root = navRef?.getRootState?.();
+        setTabIndex(root?.routes?.[0]?.state?.index ?? 0);
+      } catch {
+        // Container not ready yet — keep the default.
+      }
+    };
+    update();
+    return navRef?.addListener?.('state', update);
+  }, [navRef]);
+
+  // Navigating to the Tabs route pops any detail screens off the root stack
+  // AND focuses the tapped tab — one gesture gets you home from anywhere.
+  const goTab = (tabName, focused) => {
+    if (!focused && navRef?.isReady?.()) {
+      navRef.navigate('Tabs', { screen: tabName });
+    }
+  };
 
   const [width, setWidth] = useState(0);
   const [gooActive, setGooActive] = useState(false);
@@ -130,29 +166,17 @@ export function Dock({ state, descriptors, navigation }) {
         )}
         <Glass radius={radii.dock} solid={gooActive} style={styles.capsule}>
           <Animated.View style={[styles.row, rowStyle]}>
-            {state.routes.map((route, i) => {
-              const focused = state.index === i;
-              const { options } = descriptors[route.key];
-              const tabLabel = options.tabBarLabel ?? route.name.toLowerCase();
-              const onPress = () => {
-                const event = navigation.emit({
-                  type: 'tabPress',
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-                if (!focused && !event.defaultPrevented) {
-                  navigation.navigate(route.name);
-                }
-              };
+            {TABS.map((tab, i) => {
+              const focused = tabIndex === i;
               return (
                 <DockTab
-                  key={route.key}
-                  route={route}
+                  key={tab.name}
+                  route={tab}
                   focused={focused}
-                  label={tabLabel}
+                  label={tab.label}
                   tint={focused ? t.accent : t.inkFaint}
                   accent={t.accent}
-                  onPress={onPress}
+                  onPress={() => goTab(tab.name, focused)}
                 />
               );
             })}

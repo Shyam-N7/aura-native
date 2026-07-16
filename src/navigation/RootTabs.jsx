@@ -1,18 +1,20 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Dock } from '../components/nav/Dock';
 
 const Tabs = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const renderDock = props => <Dock {...props} />;
+// The dock is NOT this navigator's tabBar: detail screens live on the root
+// stack above the tabs, and a tabBar-slot dock vanished on all of them. App
+// renders the Dock as an overlay above the whole navigator instead.
+const noTabBar = () => null;
 
 // getComponent (not component) keeps screen modules unloaded until first
 // focus, so feature agents can rewrite them without touching this file.
 function TabsNavigator() {
   return (
-    <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={renderDock}>
+    <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={noTabBar}>
       <Tabs.Screen
         name="Home"
         getComponent={() => require('../screens/HomeScreen').default}
