@@ -24,7 +24,7 @@ import { MemoryRail } from '../components/home/MemoryRail';
 import { ArtistRail } from '../components/home/ArtistRail';
 import { StationsGrid } from '../components/home/StationsGrid';
 import { PlaylistGrid } from '../components/home/PlaylistGrid';
-import { Skeleton } from '../components/home/Skeleton';
+import { Skeleton } from '../components/ui/Skeleton';
 import { ModeMixCard } from '../components/home/ModeMixCard';
 import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
 import { fonts } from '../theme/tokens';

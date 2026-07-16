@@ -46,7 +46,7 @@ import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { PressScale } from '../components/ui/PressScale';
 import { Shelf } from '../components/library/Shelf';
-import { Skeleton } from '../components/home/Skeleton';
+import { Skeleton } from '../components/ui/Skeleton';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label } from '../theme/tokens';

@@ -107,6 +107,57 @@ test('a batch with nothing fresh returns null', async () => {
   expect(await autoRadio.extend(radioQueue())).toBeNull();
 });
 
+// ── the player's "up next" slot reads this store ─────────────────────────────
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+const CLEAR = { seedId: null, candidates: null, loading: false };
+
+test('the store publishes loading, then the prefetched pick', async () => {
+  getRelated.mockResolvedValue([t('x', 'Fresh One')]);
+  const seen = [];
+  const unsub = autoRadio.subscribe(s => seen.push(s));
+
+  autoRadio.noteQueueState(radioQueue(), 'off');
+  expect(autoRadio.getAutoNext()).toEqual({
+    seedId: 'seed',
+    candidates: null,
+    loading: true,
+  });
+
+  await settle();
+  expect(autoRadio.getAutoNext()).toEqual({
+    seedId: 'seed',
+    candidates: [t('x', 'Fresh One')],
+    loading: false,
+  });
+  expect(seen).toHaveLength(2);
+  unsub();
+});
+
+test('a failed prefetch stops "finding next song" rather than hanging on it', async () => {
+  getRelated.mockRejectedValue(new Error('down'));
+  autoRadio.noteQueueState(radioQueue(), 'off');
+  expect(autoRadio.getAutoNext().loading).toBe(true);
+
+  await settle();
+  expect(autoRadio.getAutoNext()).toEqual(CLEAR);
+});
+
+test('extend consumes the store, and leaving the last track clears it', async () => {
+  getRelated.mockResolvedValue([t('x', 'Fresh One')]);
+  const q = radioQueue();
+
+  autoRadio.noteQueueState(q, 'off');
+  await autoRadio.extend(q);
+  expect(autoRadio.getAutoNext()).toEqual(CLEAR);
+
+  autoRadio.noteQueueState(q, 'off');
+  await settle();
+  expect(autoRadio.getAutoNext().candidates).toHaveLength(1);
+  autoRadio.noteQueueState(createQueue([t('a'), t('b')], 0, 'your pick'), 'off');
+  expect(autoRadio.getAutoNext()).toEqual(CLEAR);
+});
+
 test('a failed prefetch clears state so extend can fetch fresh', async () => {
   getRelated
     .mockRejectedValueOnce(new Error('a'))

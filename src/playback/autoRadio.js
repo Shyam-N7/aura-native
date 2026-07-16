@@ -11,8 +11,34 @@ import { dedupeAppend } from './queueModel';
 // id AND normalized title, flipping source to 'more like this' (web
 // applyAutoRadioToQueue). Every fetch retries once on failure so a single
 // network blip can't end the session.
+//
+// The prefetch is also the player's "up next" slot. Nothing sits after the last
+// track IN the queue, so without this the sheet has nothing to show at the exact
+// moment auto-radio is deciding what plays next. Subscribers get the prefetched
+// pick, or the fact that we're still finding it (web autoNextDisplay /
+// autoNextLoading).
 
 let state = { seedId: null, promise: null };
+// Snapshot handed to React. Replaced (never mutated) only when it actually
+// changes, so subscribers can compare by reference.
+let snapshot = { seedId: null, candidates: null, loading: false };
+const listeners = new Set();
+
+export function getAutoNext() {
+  return snapshot;
+}
+
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+function publish(next) {
+  snapshot = next;
+  listeners.forEach(fn => fn(snapshot));
+}
 
 const fetchBatch = seed =>
   getRelated(seed.id, { lang: seed.language, limit: 15 }).catch(() =>
@@ -21,6 +47,9 @@ const fetchBatch = seed =>
 
 export function reset() {
   state = { seedId: null, promise: null };
+  if (snapshot.seedId !== null || snapshot.loading) {
+    publish({ seedId: null, candidates: null, loading: false });
+  }
 }
 
 export function noteQueueState(queue, repeat = 'off') {
@@ -46,6 +75,15 @@ export function noteQueueState(queue, repeat = 'off') {
       return [];
     });
   state = { seedId: seed.id, promise };
+  publish({ seedId: seed.id, candidates: null, loading: true });
+  promise.then(list => {
+    // A reset (queue moved on / both fetches failed) or a newer seed supersedes
+    // this batch — only the live prefetch may publish.
+    if (state.promise !== promise) {
+      return;
+    }
+    publish({ seedId: seed.id, candidates: list, loading: false });
+  });
 }
 
 // Returns the queue extended with the continuation batch (idx untouched — the

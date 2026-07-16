@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
-import { Skeleton } from './Skeleton';
+import { Skeleton } from '../ui/Skeleton';
 import { fonts, label } from '../../theme/tokens';
 import { artUrl } from '../../utils/artUrl';
 import { cleanTitle } from '../../utils/title';

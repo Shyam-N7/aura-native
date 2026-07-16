@@ -11,6 +11,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  cancelAnimation,
   Easing,
   Keyframe,
   runOnJS,
@@ -37,6 +38,7 @@ import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { PressScale } from '../components/ui/PressScale';
+import { Skeleton } from '../components/ui/Skeleton';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
 import { fonts, type, label, radii, elevation } from '../theme/tokens';
@@ -185,9 +187,12 @@ export function PlayerSheet() {
   }, [open, close]);
 
   // Breathing accent glow behind the play button, playing only (web aura-breathe).
+  // Gated on `open` as well: the sheet stays mounted for the whole session, so
+  // without it this infinite animation keeps ticking the UI thread behind a
+  // closed player — including screen-off playback, where nothing renders it.
   const playing = player.isPlaying;
   useEffect(() => {
-    if (playing && !reduced) {
+    if (playing && open && !reduced) {
       breathe.value = withRepeat(
         withTiming(1.08, {
           duration: DUR.breathe / 2,
@@ -196,10 +201,11 @@ export function PlayerSheet() {
         -1,
         true,
       );
-    } else {
-      breathe.value = withTiming(0.85, { duration: 300 });
+      return () => cancelAnimation(breathe);
     }
-  }, [playing, reduced, breathe]);
+    breathe.value = withTiming(0.85, { duration: 300 });
+    return undefined;
+  }, [playing, open, reduced, breathe]);
 
   // Drag-follow dismiss. On commit the shared close() runs — its slide-out
   // starts from wherever the drag left the sheet (the transforms sum), so the
@@ -243,7 +249,16 @@ export function PlayerSheet() {
   }
 
   const queue = player.queue ?? { tracks: [], idx: -1, source: null };
-  const nextTrack = queue.tracks[queue.idx + 1] ?? null;
+  const queuedNext = queue.tracks[queue.idx + 1] ?? null;
+  // On the last track nothing follows IN the queue — auto-radio is what plays
+  // next, so show its prefetched pick, or that we're still finding it. Web
+  // (App.jsx) feeds MobilePlayer the same two values from autoNextDisplay /
+  // autoNextLoading; without them the slot just goes blank at the queue end.
+  const auto = player.autoNext;
+  const forThisTrack = !!track?.id && auto?.seedId === track.id;
+  const nextTrack =
+    queuedNext ?? (forThisTrack ? auto?.candidates?.[0] ?? null : null);
+  const findingNext = !nextTrack && forThisTrack && !!auto?.loading;
   // Cap the art by the hero row's real height too — with the keyboard up (or
   // any squeezed window) a width-only size overflows onto the title below.
   const artSize = Math.min(
@@ -266,6 +281,68 @@ export function PlayerSheet() {
   // and is exactly where you left it when the queue closes.
   const openQueue = () => {
     player.ui?.openQueue?.();
+  };
+
+  // One slot, three states: the next song, the placeholder while auto-radio
+  // finds one, or a reserved gap. The placeholder is the same box as the pill
+  // so the swap to the real thing shifts nothing (web reserves it likewise).
+  const upNextSlot = () => {
+    if (nextTrack) {
+      return (
+        <Animated.View entering={upNextEnter}>
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel="up next, open queue"
+            onPress={openQueue}
+          >
+            <Glass radius={radii.pill} style={styles.upNext}>
+              <View style={styles.upNextRow}>
+                <TrackArt track={nextTrack} size={28} radius={5} />
+                <View style={styles.upNextMeta}>
+                  <Text style={[label(7.5), { color: t.inkFaint }]}>
+                    up next
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.upNextTitle, { color: t.ink }]}
+                  >
+                    {cleanTitle(nextTrack.title)}
+                  </Text>
+                </View>
+                <View style={styles.chevRight}>
+                  <Icon name="chevron-down" size={16} color={t.inkFaint} />
+                </View>
+              </View>
+            </Glass>
+          </PressScale>
+        </Animated.View>
+      );
+    }
+    if (findingNext) {
+      return (
+        <Animated.View
+          entering={upNextEnter}
+          accessible
+          accessibilityLabel="finding next song"
+        >
+          <Glass radius={radii.pill} style={styles.upNext}>
+            <View style={styles.upNextRow}>
+              <Skeleton height={28} radius={5} style={styles.skelArt} />
+              <View style={styles.upNextMeta}>
+                <Text style={[label(7.5), { color: t.inkFaint }]}>up next</Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.upNextTitle, { color: t.inkFaint }]}
+                >
+                  finding next song…
+                </Text>
+              </View>
+            </View>
+          </Glass>
+        </Animated.View>
+      );
+    }
+    return <View style={styles.upNextSpacer} />;
   };
 
   return (
@@ -521,41 +598,7 @@ export function PlayerSheet() {
               </PressScale>
             </View>
 
-            {nextTrack ? (
-              <Animated.View entering={upNextEnter}>
-                <PressScale
-                  accessibilityRole="button"
-                  accessibilityLabel="up next, open queue"
-                  onPress={openQueue}
-                >
-                  <Glass radius={radii.pill} style={styles.upNext}>
-                    <View style={styles.upNextRow}>
-                      <TrackArt track={nextTrack} size={28} radius={5} />
-                      <View style={styles.upNextMeta}>
-                        <Text style={[label(7.5), { color: t.inkFaint }]}>
-                          up next
-                        </Text>
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.upNextTitle, { color: t.ink }]}
-                        >
-                          {cleanTitle(nextTrack.title)}
-                        </Text>
-                      </View>
-                      <View style={styles.chevRight}>
-                        <Icon
-                          name="chevron-down"
-                          size={16}
-                          color={t.inkFaint}
-                        />
-                      </View>
-                    </View>
-                  </Glass>
-                </PressScale>
-              </Animated.View>
-            ) : (
-              <View style={styles.upNextSpacer} />
-            )}
+            {upNextSlot()}
           </View>
         </View>
       </GestureDetector>
@@ -666,6 +709,8 @@ const styles = StyleSheet.create({
   },
   upNextMeta: { flex: 1, gap: 1 },
   upNextTitle: { fontFamily: 'HankenGrotesk-Medium', fontSize: 13.5 },
+  // Stands in for the 28px TrackArt while auto-radio resolves the next song.
+  skelArt: { width: 28 },
   chevRight: { transform: [{ rotate: '-90deg' }] },
   upNextSpacer: { height: 44, marginTop: 16 },
 });

@@ -5,7 +5,7 @@ import { PressScale } from '../ui/PressScale';
 import { GradientBg } from '../ui/GradientBg';
 import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
-import { Skeleton } from './Skeleton';
+import { Skeleton } from '../ui/Skeleton';
 import { fonts, label, radii } from '../../theme/tokens';
 import { artUrl } from '../../utils/artUrl';
 import { cleanTitle } from '../../utils/title';

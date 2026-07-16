@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -21,10 +22,14 @@ export function ModeMixCard({ modeLabel, tracks, loading, onPlayAll }) {
   const reduced = useReducedMotion();
   const pulse = useSharedValue(0.4);
 
+  // Cancel on the way out: once the pool lands the dot is no longer rendered,
+  // but an uncancelled withRepeat keeps ticking for as long as home is mounted.
   useEffect(() => {
-    if (loading && !reduced) {
-      pulse.value = withRepeat(withTiming(1, { duration: 700 }), -1, true);
+    if (!loading || reduced) {
+      return undefined;
     }
+    pulse.value = withRepeat(withTiming(1, { duration: 700 }), -1, true);
+    return () => cancelAnimation(pulse);
   }, [loading, pulse, reduced]);
 
   const dotStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));

@@ -189,6 +189,14 @@ export function PlayerProvider({ children }) {
   );
 
   // ── auto-radio ───────────────────────────────────────────────────────────
+  // Render mirror of the prefetch store: on the last track of a queue there's
+  // no next track to show, so the player reads this to surface the
+  // continuation it's about to play (or "finding next song" while it resolves).
+  // Subscribing here — above the noteQueueState effect — means the first
+  // prefetch of a session can't publish before we're listening.
+  const [autoNext, setAutoNext] = useState(autoRadio.getAutoNext);
+  useEffect(() => autoRadio.subscribe(setAutoNext), []);
+
   // Shared by the 'ended' path and a next-press on the last track. Appends
   // the prefetched continuation (source flips to 'more like this') and
   // advances; dead end on the ended path pauses with a toast, web-style.
@@ -751,6 +759,7 @@ export function PlayerProvider({ children }) {
     () => ({
       current,
       queue,
+      autoNext,
       isPlaying,
       repeat,
       shuffleActive,
@@ -774,6 +783,7 @@ export function PlayerProvider({ children }) {
     [
       current,
       queue,
+      autoNext,
       isPlaying,
       repeat,
       shuffleActive,

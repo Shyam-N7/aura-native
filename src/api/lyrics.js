@@ -15,6 +15,20 @@ import { fetchAuthed } from '../lib/auth';
 const cache = new Map(); // trackId -> terminal data (synced / not-available)
 const inflight = new Map(); // trackId -> Promise<data> while a request is open
 
+// One entry is a whole romanized lyric sheet (often 40–80 timed lines), and
+// auto-radio can play for hours without a re-launch, so the cache is capped
+// rather than left to grow for the life of the process. Map iterates in
+// insertion order, so the oldest song drops out first — re-opening it just
+// re-fetches from the server cache, which is the fast path anyway.
+const CACHE_MAX = 60;
+
+function cacheTerminal(trackId, data) {
+  if (cache.size >= CACHE_MAX) {
+    cache.delete(cache.keys().next().value);
+  }
+  cache.set(trackId, data);
+}
+
 // Hermes has no DOMException — an Error wearing the AbortError name keeps the
 // web's `err.name === 'AbortError'` checks working.
 function abortError() {
@@ -73,7 +87,7 @@ export function getLyrics(trackId, { signal } = {}) {
         // Cache only terminal results. A 'pending' (still generating) result
         // must stay re-fetchable so the overlay's re-poll sees fresh state.
         if (data && !data.pending) {
-          cache.set(trackId, data);
+          cacheTerminal(trackId, data);
         }
         return data;
       })
