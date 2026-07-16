@@ -1,6 +1,17 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { Glass } from '../ui/Glass';
 import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
@@ -8,6 +19,10 @@ import { useTheme } from '../../theme/ThemeContext';
 import { getUser } from '../../lib/auth';
 import { openModeSheet } from '../../lib/modeSheet';
 import { themes, type, radii, label } from '../../theme/tokens';
+import { EASE, SPRING } from '../../theme/motion';
+
+// Resting halo opacity once the wordmark's bloom settles.
+const AURA_REST = 0.34;
 
 // 'auto' rides the end of the cycle: it follows the system light/dark
 // setting (dusk by day, midnight by night).
@@ -35,11 +50,116 @@ export function TopBar({ navigation }) {
     setTheme(next);
   };
 
+  // "aura arrives with its aura": an accent halo blooms behind the wordmark,
+  // breathes twice, and settles to a resting glow. Finite sequence — nothing
+  // ticks after it lands. Replays on tab focus via the raw listener pattern
+  // (ScreenFade's — screens still render standalone under jest).
+  const reduced = useReducedMotion();
+  const aura = useSharedValue(0);
+  const squish = useSharedValue(0);
+
+  const bloom = useCallback(() => {
+    cancelAnimation(aura);
+    if (reduced) {
+      aura.value = AURA_REST;
+      return;
+    }
+    aura.value = withSequence(
+      withTiming(0.6, { duration: 700, easing: EASE.enter }),
+      withRepeat(
+        withSequence(
+          withTiming(0.3, { duration: 1400, easing: EASE.settle }),
+          withTiming(0.6, { duration: 1400, easing: EASE.settle }),
+        ),
+        2,
+      ),
+      withTiming(AURA_REST, { duration: 900, easing: EASE.exit }),
+    );
+  }, [aura, reduced]);
+
+  useEffect(() => {
+    bloom();
+    const unsub = navigation?.addListener?.('focus', bloom);
+    return () => {
+      cancelAnimation(aura);
+      cancelAnimation(squish);
+      unsub?.();
+    };
+  }, [navigation, bloom, aura, squish]);
+
+  // Tapping the wordmark squashes it like jelly; the release springs it back
+  // and squeezes out a fresh aura pulse. Purely tactile — hidden from
+  // accessibility so screen readers don't announce a do-nothing button.
+  const pressIn = () => {
+    if (reduced) return;
+    cancelAnimation(squish);
+    squish.value = withTiming(1, { duration: 90, easing: EASE.exit });
+  };
+  const pressOut = () => {
+    if (reduced) return;
+    squish.value = withSpring(0, SPRING.snapback);
+    bloom();
+  };
+
+  const auraStyle = useAnimatedStyle(() => ({
+    opacity: aura.value,
+    transform: [{ scale: 0.88 + aura.value * 0.28 }],
+  }));
+  const squishStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scaleX: 1 + squish.value * 0.1 },
+      { scaleY: 1 - squish.value * 0.16 },
+    ],
+  }));
+
   return (
     <View style={[styles.wrap, { marginTop: insets.top + 10 }]}>
       <Glass radius={radii.pill} style={styles.bar}>
         <View style={styles.row}>
-          <Text style={[type.wordmark, { color: t.ink }]}>aura</Text>
+          <Pressable
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            onPressIn={pressIn}
+            onPressOut={pressOut}
+            style={styles.brand}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.auraGlow, auraStyle]}
+            >
+              <Svg width="100%" height="100%">
+                <Defs>
+                  {/* Solid stopColor + numeric stopOpacity — rn-svg renders
+                      rgba() stop strings opaque on Android. */}
+                  <RadialGradient
+                    id="wordmarkAura"
+                    cx="50%"
+                    cy="50%"
+                    rx="50%"
+                    ry="50%"
+                  >
+                    <Stop offset="0" stopColor={t.accent} stopOpacity={0.5} />
+                    <Stop
+                      offset="0.65"
+                      stopColor={t.accent}
+                      stopOpacity={0.16}
+                    />
+                    <Stop offset="1" stopColor={t.accent} stopOpacity={0} />
+                  </RadialGradient>
+                </Defs>
+                <Ellipse
+                  cx="50%"
+                  cy="50%"
+                  rx="50%"
+                  ry="50%"
+                  fill="url(#wordmarkAura)"
+                />
+              </Svg>
+            </Animated.View>
+            <Animated.View style={squishStyle}>
+              <Text style={[type.wordmark, { color: t.ink }]}>aura</Text>
+            </Animated.View>
+          </Pressable>
           <View style={styles.spacer} />
           <PressScale
             accessibilityRole="button"
@@ -102,6 +222,8 @@ const styles = StyleSheet.create({
   // composite over the translucent bar during an overscroll (field report).
   wrap: { paddingHorizontal: 14, marginBottom: 6, zIndex: 20 },
   bar: { height: 52, justifyContent: 'center' },
+  brand: { justifyContent: 'center' },
+  auraGlow: { position: 'absolute', left: -22, right: -22, top: -8, bottom: -8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

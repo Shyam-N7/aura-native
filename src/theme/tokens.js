@@ -86,7 +86,7 @@ export const type = {
     fontSize: 22,
     letterSpacing: -0.11,
   },
-  wordmark: { fontFamily: fonts.semibold, fontSize: 20, letterSpacing: -0.4 },
+  wordmark: { fontFamily: fonts.semibold, fontSize: 24, letterSpacing: -0.48 },
   rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
   body: { fontFamily: fonts.regular, fontSize: 14 },
   time: {
