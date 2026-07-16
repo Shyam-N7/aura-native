@@ -209,7 +209,7 @@ test('save queue as playlist creates it and adds every queue track', async () =>
     ['p9', 'b'],
     ['p9', 'c'],
   ]);
-  expect(mockShowToast).toHaveBeenCalledWith('saved.');
+  expect(mockShowToast).toHaveBeenCalledWith('saved.', { tick: true });
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

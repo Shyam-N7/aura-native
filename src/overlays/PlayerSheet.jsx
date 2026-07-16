@@ -33,6 +33,7 @@ import { openQualitySheet } from '../lib/qualitySheet';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { ProgressRibbon } from '../components/player/ProgressRibbon';
+import { LikeBurst } from '../components/player/HeartButton';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
@@ -565,12 +566,14 @@ export function PlayerSheet() {
                   liked && { backgroundColor: t.accentSoft },
                 ]}
               >
-                <Icon
-                  name={liked ? 'heart-filled' : 'heart'}
-                  size={19}
-                  color={liked ? t.accent : t.ink}
-                  strokeWidth={1.7}
-                />
+                <LikeBurst liked={liked} accent={t.accent} size={19}>
+                  <Icon
+                    name={liked ? 'heart-filled' : 'heart'}
+                    size={19}
+                    color={liked ? t.accent : t.ink}
+                    strokeWidth={1.7}
+                  />
+                </LikeBurst>
                 <Text
                   style={[styles.saveText, { color: liked ? t.accent : t.ink }]}
                 >

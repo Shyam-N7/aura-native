@@ -92,7 +92,7 @@ test('a not-yet-containing playlist still adds and confirms', async () => {
     byLabel(tree, 'add to Workout').props.onPress();
   });
   expect(mockAddToPlaylist).toHaveBeenCalledWith('p2', 'trk');
-  expect(mockShowToast).toHaveBeenCalledWith('Added to Workout.');
+  expect(mockShowToast).toHaveBeenCalledWith('added to Workout.', { tick: true });
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

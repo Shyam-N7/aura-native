@@ -7,11 +7,13 @@ let counter = 0;
 // subscriber — the fire-and-forget bus never silently drops it.
 let pending = null;
 
-export function showToast(message) {
+// opts.tick renders the toast with an animated green check — for successes
+// worth celebrating (added to playlist, queue saved), not every message.
+export function showToast(message, opts = {}) {
   if (!message) {
     return;
   }
-  const event = { id: ++counter, message };
+  const event = { id: ++counter, message, tick: !!opts.tick };
   if (subscribers.size === 0) {
     pending = event;
     return;

@@ -337,6 +337,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
         added === tracks.length
           ? 'saved.'
           : `saved ${added} of ${tracks.length}.`,
+        { tick: true },
       );
       onClose();
     } catch (err) {
