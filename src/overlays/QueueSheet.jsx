@@ -35,6 +35,7 @@ import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
+import { SheetRow } from '../components/ui/SheetRow';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
 import { LONG_LIST } from '../lib/listWindow';
@@ -47,8 +48,6 @@ const EDGE = 90;
 // Hide-past pref — the web key/values verbatim ('aura.queueHidePast', '1'/'0');
 // read once per open, written on toggle.
 const HIDE_PAST_KEY = 'aura.queueHidePast';
-// TrackActionsSheet's danger red — the theme has no dedicated danger token.
-const DANGER = '#b3402e';
 
 // The current row's live line: 'now playing' + a thin bar gliding between
 // the 1Hz position ticks. No times here (field feedback: clutter at row
@@ -417,63 +416,60 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
     );
   }
 
+  // TrackActionsSheet's anatomy exactly: context head (art + what this menu
+  // is about), then icon rows — one sheet language everywhere.
   return (
     <Sheet animated={false} onClose={onClose} closeLabel="close queue options">
-      <Text style={[styles.menuTitle, { color: t.ink }]}>queue options</Text>
-      {tracks.length > 0 && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="save queue as playlist"
-          onPress={() => setNaming(true)}
-          style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-        >
-          <Text style={[styles.menuLabel, { color: t.ink }]}>
-            save queue as playlist
+      <View style={styles.menuHead}>
+        <TrackArt track={tracks[idx]} size={44} radius={6} />
+        <View style={styles.menuHeadMeta}>
+          <Text
+            numberOfLines={1}
+            style={[styles.menuHeadTitle, { color: t.ink }]}
+          >
+            queue options
           </Text>
-        </Pressable>
+          <Text
+            numberOfLines={1}
+            style={[styles.menuHeadSub, { color: t.inkSoft }]}
+          >
+            {player.queue?.source ?? 'your set'} · {tracks.length}{' '}
+            {tracks.length === 1 ? 'track' : 'tracks'}
+          </Text>
+        </View>
+      </View>
+      {tracks.length > 0 && (
+        <SheetRow
+          icon="plus"
+          label="save queue as playlist"
+          onPress={() => setNaming(true)}
+        />
       )}
       {tracks.length > 0 && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="add queue to playlist"
+        <SheetRow
+          icon="queue-add"
+          label="add queue to playlist"
           onPress={act(() => openAddToPlaylist(tracks))}
-          style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-        >
-          <Text style={[styles.menuLabel, { color: t.ink }]}>
-            add queue to playlist
-          </Text>
-        </Pressable>
+        />
       )}
       {/* Web gates this behind currentIdx > 0 — with no past songs the toggle
           is a silent no-op. `hidePast` keeps it reachable to switch back off. */}
       {(idx > 0 || hidePast) && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={hidePast ? 'show past songs' : 'hide past songs'}
+        <SheetRow
+          icon={hidePast ? 'eye' : 'eye-off'}
+          label={hidePast ? 'show past songs' : 'hide past songs'}
           onPress={act(onToggleHidePast)}
-          style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-        >
-          <Text style={[styles.menuLabel, { color: t.ink }]}>
-            {hidePast ? 'show past songs' : 'hide past songs'}
-          </Text>
-        </Pressable>
+        />
       )}
       {tracks.length > 1 && (
         <>
           <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="clear queue"
+          <SheetRow
+            icon="close"
+            danger
+            label="clear queue"
             onPress={act(confirmClear)}
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.menuLabel, { color: DANGER }]}>
-              clear queue
-            </Text>
-          </Pressable>
+          />
         </>
       )}
     </Sheet>
@@ -973,8 +969,15 @@ const styles = StyleSheet.create({
   // AddToPlaylistSheet's inline name-input recipe.
   menuTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   menuSub: { marginTop: 3, marginBottom: 8 },
-  menuItem: { paddingVertical: 12 },
-  menuLabel: { fontFamily: fonts.medium, fontSize: 15 },
+  menuHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 10,
+  },
+  menuHeadMeta: { flex: 1, minWidth: 0, gap: 2 },
+  menuHeadTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  menuHeadSub: { fontFamily: fonts.regular, fontSize: 12.5 },
   menuSeparator: { height: 1, marginVertical: 6 },
   menuState: {
     fontFamily: fonts.regular,

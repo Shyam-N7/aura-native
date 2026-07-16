@@ -76,6 +76,12 @@ const ICONS = {
   'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
   // Checkmark — "already in this playlist" on the add-to-playlist rows.
   check: { d: 'M4 12 l5 5 L20 6' },
+  eye: {
+    d: 'M2.5 12 C5 7.7 8.3 5.5 12 5.5 s7 2.2 9.5 6.5 C19 16.3 15.7 18.5 12 18.5 S5 16.3 2.5 12 Z M12 12 m-2.6 0 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0',
+  },
+  'eye-off': {
+    d: 'M2.5 12 C5 7.7 8.3 5.5 12 5.5 s7 2.2 9.5 6.5 C19 16.3 15.7 18.5 12 18.5 S5 16.3 2.5 12 Z M12 12 m-2.6 0 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M5 4 l14.5 16',
+  },
 };
 
 export function Icon({ name, size = 24, color = '#000', strokeWidth = 1.8 }) {

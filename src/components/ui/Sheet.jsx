@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  BackHandler,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -86,86 +97,105 @@ export function Sheet({
 
   const grip = <View style={[styles.grip, { backgroundColor: t.line }]} />;
 
+  // A native Modal window, not a zIndex layer: sheets open from anywhere —
+  // including deep inside a screen, where no zIndex can beat the app-level
+  // dock overlay (field report: the dock painted over the playlist visibility
+  // sheet). A separate window wins by construction. animationType="none"
+  // because the chassis plays its own entering/exiting; the inner
+  // GestureHandlerRootView is required for the pan gesture to work inside a
+  // Modal on Android.
   return (
-    <View style={[StyleSheet.absoluteFill, styles.stack]}>
-      <Animated.View
-        entering={
-          animated
-            ? FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)
-            : undefined
-        }
-        exiting={
-          animated
-            ? FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)
-            : undefined
-        }
-        style={[StyleSheet.absoluteFill, styles.backdrop]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={closeLabel}
-          onPress={onClose}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-      <Animated.View
-        entering={
-          animated
-            ? SlideInDown.duration(DUR.upNext).reduceMotion(
-                ReduceMotion.System,
-              )
-            : undefined
-        }
-        exiting={
-          animated
-            ? SlideOutDown.duration(DUR.dot).reduceMotion(ReduceMotion.System)
-            : undefined
-        }
-        onLayout={e => {
-          cardH.value = e.nativeEvent.layout.height;
-        }}
-        style={[
-          styles.card,
-          header && styles.cardCapped,
-          { backgroundColor: t.surface, paddingBottom: insets.bottom + 14 },
-          dragStyle,
-        ]}
-      >
-        {header ? (
-          <>
-            <GestureDetector gesture={pan}>
-              <View style={styles.body}>
-                {grip}
-                {header}
-              </View>
-            </GestureDetector>
-            <ScrollView
-              overScrollMode="always"
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollBody}
-            >
-              {children}
-            </ScrollView>
-          </>
-        ) : (
-          <GestureDetector gesture={pan}>
-            <View style={styles.body}>
-              {grip}
-              {children}
-            </View>
-          </GestureDetector>
-        )}
-      </Animated.View>
-    </View>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
+    >
+      <GestureHandlerRootView style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, styles.stack]}>
+          <Animated.View
+            entering={
+              animated
+                ? FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)
+                : undefined
+            }
+            exiting={
+              animated
+                ? FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)
+                : undefined
+            }
+            style={[StyleSheet.absoluteFill, styles.backdrop]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={closeLabel}
+              onPress={onClose}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+          <Animated.View
+            entering={
+              animated
+                ? SlideInDown.duration(DUR.upNext).reduceMotion(
+                    ReduceMotion.System,
+                  )
+                : undefined
+            }
+            exiting={
+              animated
+                ? SlideOutDown.duration(DUR.dot).reduceMotion(
+                    ReduceMotion.System,
+                  )
+                : undefined
+            }
+            onLayout={e => {
+              cardH.value = e.nativeEvent.layout.height;
+            }}
+            style={[
+              styles.card,
+              header && styles.cardCapped,
+              { backgroundColor: t.surface, paddingBottom: insets.bottom + 14 },
+              dragStyle,
+            ]}
+          >
+            {header ? (
+              <>
+                <GestureDetector gesture={pan}>
+                  <View style={styles.body}>
+                    {grip}
+                    {header}
+                  </View>
+                </GestureDetector>
+                <ScrollView
+                  overScrollMode="always"
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.scrollBody}
+                >
+                  {children}
+                </ScrollView>
+              </>
+            ) : (
+              <GestureDetector gesture={pan}>
+                <View style={styles.body}>
+                  {grip}
+                  {children}
+                </View>
+              </GestureDetector>
+            )}
+          </Animated.View>
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  // Top of the overlay ladder (player 30, queue 40) so a sheet opened from a
-  // queue row or the player renders over them, not underneath. zIndex only —
-  // elevation on a transparent wrapper is both a stacking trap and the
-  // Android white-slab trap.
+  // The Modal window already floats above the whole app; zIndex kept for the
+  // ladder's bookkeeping (player 30, queue 40, sheets 50). Never elevation —
+  // on a transparent wrapper it's both a stacking trap and the white-slab trap.
   stack: { zIndex: 50 },
   backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
   card: {

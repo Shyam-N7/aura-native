@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { NavigationContainerRefContext } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -12,8 +12,8 @@ import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { openWhy } from '../lib/whySheet';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
-import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
+import { SheetRow } from '../components/ui/SheetRow';
 import { fonts } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 
@@ -21,29 +21,6 @@ import { cleanTitle } from '../utils/title';
 // long-press / ⋯ on any row opens it). Base actions in fixed order, each
 // omittable per surface; per-surface extras land below a separator. One
 // instance mounts in App; rows publish over the trackActionsSheet bus.
-
-// Reads on every theme; the chassis has no dedicated danger token.
-const DANGER = '#b3402e';
-
-function Item({ icon, label, danger, onPress }) {
-  const { t } = useTheme();
-  const color = danger ? DANGER : t.ink;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-    >
-      {icon ? (
-        <Icon name={icon} size={19} color={danger ? DANGER : t.inkSoft} />
-      ) : (
-        <View style={styles.iconGap} />
-      )}
-      <Text style={[styles.itemLabel, { color }]}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export function TrackActionsSheet() {
   const { t } = useTheme();
@@ -166,7 +143,7 @@ export function TrackActionsSheet() {
       </View>
 
       {items.map(item => (
-        <Item
+        <SheetRow
           key={item.id}
           icon={item.icon}
           label={item.label}
@@ -177,7 +154,7 @@ export function TrackActionsSheet() {
         <View style={[styles.separator, { backgroundColor: t.line }]} />
       )}
       {extras.map(extra => (
-        <Item
+        <SheetRow
           key={extra.label}
           label={extra.label}
           danger={extra.danger}
@@ -198,14 +175,5 @@ const styles = StyleSheet.create({
   headMeta: { flex: 1, minWidth: 0, gap: 2 },
   headTitle: { fontFamily: fonts.medium, fontSize: 15 },
   headArtist: { fontFamily: fonts.regular, fontSize: 12.5 },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 12,
-  },
-  pressed: { opacity: 0.6 },
-  iconGap: { width: 19 },
-  itemLabel: { fontFamily: fonts.medium, fontSize: 15 },
   separator: { height: 1, marginVertical: 6 },
 });
