@@ -152,6 +152,8 @@ function PickerBody({ tracks, onPicked }) {
             onSubmitEditing={submitNew}
             placeholder="Name your playlist"
             placeholderTextColor={t.inkFaint}
+            cursorColor={t.accent}
+            selectionColor={t.accent}
             style={[
               styles.input,
               { color: t.ink, borderColor: t.line, backgroundColor: t.bg },

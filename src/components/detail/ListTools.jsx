@@ -210,6 +210,8 @@ export function ListTools({ query, onQuery, sort, onSort, sorts }) {
               onChangeText={onQuery}
               placeholder="find in songs"
               placeholderTextColor={t.inkFaint}
+              cursorColor={t.accent}
+              selectionColor={t.accent}
               returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}

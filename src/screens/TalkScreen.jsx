@@ -305,6 +305,8 @@ export default function TalkScreen({ navigation }) {
           onChangeText={setDraft}
           placeholder={`tell ${dj} how it feels…`}
           placeholderTextColor={t.inkFaint}
+          cursorColor={t.accent}
+          selectionColor={t.accent}
           style={[styles.input, { color: t.ink }]}
           returnKeyType="send"
           onSubmitEditing={() => send(draft)}

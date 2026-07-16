@@ -14,6 +14,8 @@ export function Field({ label, error, labelRight, ...input }) {
       </View>
       <TextInput
         placeholderTextColor={t.inkFaint}
+        cursorColor={t.accent}
+        selectionColor={t.accent}
         style={[
           styles.input,
           { backgroundColor: t.surface, borderColor: t.line, color: t.ink },

@@ -773,6 +773,8 @@ export default function YouScreen({ navigation }) {
                         familyOn ? 'PIN to turn off' : 'set a 4–6 digit PIN'
                       }
                       placeholderTextColor={t.inkFaint}
+                      cursorColor={t.accent}
+                      selectionColor={t.accent}
                       secureTextEntry
                       keyboardType="number-pad"
                       maxLength={6}

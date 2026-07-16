@@ -117,6 +117,8 @@ export function SearchField({ inputRef, value, onChangeText, ...inputProps }) {
             focus.value = withTiming(0, { duration: 300 });
           }}
           placeholderTextColor={t.inkFaint}
+          cursorColor={t.accent}
+          selectionColor={t.accent}
           style={[styles.input, { color: t.ink }]}
           {...inputProps}
         />
