@@ -2,9 +2,21 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { LyricsOverlay } from '../src/overlays/LyricsOverlay';
+import { HINT_KARAOKE, hintDone } from '../src/lib/hints';
+import { storage } from '../src/storage/mmkv';
 
 jest.mock('react-native-track-player', () => ({
   useProgress: () => ({ position: 30, duration: 120, buffered: 0 }),
+}));
+
+// The real likes store boots with a network fetch on first use — a live TLS
+// socket that can outlast the test process. The header heart only reads it.
+jest.mock('../src/hooks/useLikes', () => ({
+  useLikes: () => ({
+    isLiked: () => false,
+    like: jest.fn(async () => {}),
+    unlike: jest.fn(async () => {}),
+  }),
 }));
 
 const mockGetLyrics = jest.fn();
@@ -34,6 +46,7 @@ function basePlayer(overrides = {}) {
     queue: { tracks: [TRACK], idx: 0, source: 'more like this' },
     isPlaying: true,
     seekTo: jest.fn(),
+    togglePlay: jest.fn(),
     ui: {
       lyricsOpen: true,
       openLyrics: jest.fn(),
@@ -85,6 +98,7 @@ async function render() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  storage.removeItem('aura.hintsDone');
   mockState.player = basePlayer();
   mockGetLyrics.mockResolvedValue(SYNCED);
 });
@@ -157,6 +171,48 @@ test('plain (untimed) lyrics carry the not-synced caption', async () => {
   const body = texts(tree.toJSON());
   expect(body).toContain('words without time');
   expect(body).toContain("these lyrics aren't synced to the music.");
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('karaoke: hint shows until first entry, stage sings and taps play/pause', async () => {
+  const tree = await render();
+
+  // In-place discovery — the hint line sits with the pill, not in a tour.
+  expect(texts(tree.toJSON())).toContain(
+    'new — tap karaoke to sing along, line by line.',
+  );
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'karaoke').props.onPress();
+  });
+  // Entering retires the hint for good and swaps the pill label.
+  expect(hintDone(HINT_KARAOKE)).toBe(true);
+  const body = texts(tree.toJSON());
+  expect(body).not.toContain('new — tap karaoke');
+  expect(byLabel(tree, 'exit karaoke')).toBeTruthy();
+  // 30s in: line 2 (t=28) is on stage, line 3 (t=60) previews below.
+  expect(body).toContain('second words');
+  expect(body).toContain('third words');
+
+  // A tap on the stage itself is play/pause (karaoke ergonomics).
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'pause').props.onPress();
+  });
+  expect(mockState.player.togglePlay).toHaveBeenCalled();
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('karaoke: paused stage rests the coming line with a plain cue', async () => {
+  mockState.player = basePlayer({ isPlaying: false });
+  const tree = await render();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'karaoke').props.onPress();
+  });
+  const body = texts(tree.toJSON());
+  // Never an empty stage: the cue names the state, the tap label flips.
+  expect(body).toContain('paused — tap the words to continue');
+  expect(byLabel(tree, 'play')).toBeTruthy();
   await ReactTestRenderer.act(() => tree.unmount());
 });
 

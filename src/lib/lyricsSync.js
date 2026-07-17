@@ -60,6 +60,25 @@ export function gapWindows(lines, seconds, durationSec, activeIdx) {
   return { inIntroGap, inBetweenGap, inOutroGap };
 }
 
+// Countdown into the next sung line. During an instrumental window the stage
+// shows the gap mark; across the final COUNTDOWN_SEC before the next line
+// lands it hands over to a depleting-dots countdown (the classic karaoke
+// "get ready" cue) so the singer knows exactly when to come back in. Returns
+// seconds remaining, or null outside the window / when nothing follows.
+export const COUNTDOWN_SEC = 5;
+
+export function nextLineIn(lines, seconds, activeIdx) {
+  const next = lines[activeIdx + 1];
+  if (!next) {
+    return null;
+  }
+  const remain = next.t - seconds;
+  if (remain <= 0 || remain > COUNTDOWN_SEC) {
+    return null;
+  }
+  return remain;
+}
+
 // Karaoke line-fill: how far through the active line's window playback is,
 // 0..1. HONEST LIMIT: our timings are line-level (no word timestamps exist at
 // the source), so the sweep is a proportional interpolation across the line's

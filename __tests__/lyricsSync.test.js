@@ -1,8 +1,10 @@
 import {
   activeIndexFor,
+  COUNTDOWN_SEC,
   gapWindows,
   lineSweep,
   MIN_GAP_SEC,
+  nextLineIn,
 } from '../src/lib/lyricsSync';
 
 const lines = ts => ts.map((t, i) => ({ t, line: `line ${i}` }));
@@ -61,6 +63,21 @@ test('lineSweep interpolates the active line across its window', () => {
   // Clamped at both ends.
   expect(lineSweep(l, 9, 200, 0)).toBe(0);
   expect(lineSweep(l, 99, 200, 1)).toBe(1);
+});
+
+test('nextLineIn opens only across the final countdown window', () => {
+  const l = lines([10, 40]);
+  // Deep in the gap — no countdown yet.
+  expect(nextLineIn(l, 30, 0)).toBeNull();
+  // Window opens COUNTDOWN_SEC out and counts down to the line.
+  expect(nextLineIn(l, 40 - COUNTDOWN_SEC, 0)).toBe(COUNTDOWN_SEC);
+  expect(nextLineIn(l, 38, 0)).toBe(2);
+  // Line landed — countdown over.
+  expect(nextLineIn(l, 40, 0)).toBeNull();
+  // Intro: before the first line, lines[0] is what's coming.
+  expect(nextLineIn(l, 7, -1)).toBe(3);
+  // Nothing follows the last line.
+  expect(nextLineIn(l, 45, 1)).toBeNull();
 });
 
 test('lineSweep runs the last line out to the track end', () => {

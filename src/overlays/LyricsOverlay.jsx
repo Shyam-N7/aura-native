@@ -33,7 +33,15 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { getLyrics } from '../api/lyrics';
-import { activeIndexFor, gapWindows, lineSweep } from '../lib/lyricsSync';
+import {
+  activeIndexFor,
+  COUNTDOWN_SEC,
+  gapWindows,
+  lineSweep,
+  nextLineIn,
+} from '../lib/lyricsSync';
+import { HINT_KARAOKE, markHintDone } from '../lib/hints';
+import { useHintActive } from '../hooks/useHintActive';
 import { cleanLyric, cleanTitle } from '../utils/title';
 import { HeartButton } from '../components/player/HeartButton';
 import { Icon } from '../components/Icon';
@@ -339,6 +347,67 @@ function PlainView({ lines, view, inkSoft, inkFaint, onWakeScroll }) {
   );
 }
 
+// The classic karaoke "get ready" cue: three dots that deplete as the next
+// line approaches, each standing for a third of the countdown window. Driven
+// by the position ticker — honest to the actual timestamps, no free-running
+// timer to drift or leak.
+function CountdownDots({ remain, accent }) {
+  const slot = COUNTDOWN_SEC / 3;
+  return (
+    <View style={styles.countdown}>
+      {[0, 1, 2].map(i => (
+        <CountdownDot key={i} on={remain > i * slot} accent={accent} />
+      ))}
+    </View>
+  );
+}
+
+function CountdownDot({ on, accent }) {
+  const v = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    v.value = withTiming(on ? 1 : 0, {
+      duration: 240,
+      easing: Easing.out(Easing.ease),
+    });
+  }, [on, v]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.2 + v.value * 0.8,
+    transform: [{ scale: 0.5 + v.value * 0.5 }],
+  }));
+  return (
+    <Animated.View
+      style={[styles.countdownDot, { backgroundColor: accent }, style]}
+    />
+  );
+}
+
+// A soft repeating swell that points the eye at a control until its hint is
+// learned. Decorative wrapper — layout and labels pass through untouched.
+function HintPulse({ active, children }) {
+  const v = useSharedValue(1);
+  useEffect(() => {
+    if (active) {
+      v.value = withRepeat(
+        withSequence(
+          withTiming(1.07, {
+            duration: 700,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+      );
+      return () => cancelAnimation(v);
+    }
+    v.value = withTiming(1, { duration: 200 });
+    return undefined;
+  }, [active, v]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: v.value }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
 // English ⇄ original segmented pill with a sliding accent thumb.
 // Karaoke — the synced lines as a stage: previous and next lines dimmed
 // around one big centered current line with a smooth accent fill sweeping it
@@ -361,6 +430,7 @@ function KaraokeView({
   inkSoft,
   inkFaint,
   onSeekLine,
+  onToggle,
 }) {
   const activeIdx = useMemo(
     () => activeIndexFor(lines, seconds),
@@ -377,8 +447,11 @@ function KaraokeView({
     l ? cleanLyric(view === 'en' && l.line_en ? l.line_en : l.line) : '';
 
   // Stage slots. During a break the sung line is done — it moves up to the
-  // previous slot and the gap mark takes the stage. Before the first line
-  // (short intro / paused) the opening line waits quietly, unswept.
+  // previous slot and the gap mark takes the stage, handing over to the
+  // countdown across the final seconds so the singer knows exactly when to
+  // come back in. Before the first line (short intro) the opening line waits
+  // quietly, unswept. Paused, the stage never sits empty: whatever comes
+  // next rests dimly above the paused cue.
   const current = !inGap && activeIdx >= 0 ? lines[activeIdx] : null;
   const prevLine =
     inBetweenGap || inOutroGap
@@ -387,8 +460,30 @@ function KaraokeView({
         ? lines[activeIdx - 1]
         : null;
   const waiting = !current && !inGap && activeIdx < 0 ? lines[0] : null;
-  const showMark = inGap && playing;
+  const countdown =
+    inGap && playing ? nextLineIn(lines, seconds, activeIdx) : null;
+  const showMark = inGap && playing && countdown == null;
+  const resting =
+    !playing && !current
+      ? (lines[activeIdx + 1] ?? lines[activeIdx] ?? lines[0] ?? null)
+      : null;
   const preview = waiting ? (lines[1] ?? null) : (lines[activeIdx + 1] ?? null);
+
+  // Entering karaoke should feel like stepping onto a stage — one settle-in
+  // on mount, not an instant view swap.
+  const enterK = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (!reduced) {
+      enterK.value = withTiming(1, { duration: 420, easing: SLIDE });
+    }
+  }, [reduced, enterK]);
+  const enterStyle = useAnimatedStyle(() => ({
+    opacity: enterK.value,
+    transform: [
+      { translateY: (1 - enterK.value) * 14 },
+      { scale: 0.97 + enterK.value * 0.03 },
+    ],
+  }));
 
   // Smooth fill: snap when the line changes, glide between position ticks.
   const sweep = lineSweep(lines, seconds, durationSec, activeIdx);
@@ -410,70 +505,98 @@ function KaraokeView({
   const mainColor = cinematic ? '#ffffff' : ink;
 
   return (
-    <View style={styles.karaokeStage}>
-      <View style={styles.karaokeSlot}>
-        {prevLine && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={lineFor(prevLine)}
-            onPress={() => onSeekLine(prevLine)}
-          >
-            <Text
-              numberOfLines={2}
-              style={[styles.karaokeSide, { color: sideColor }]}
-            >
-              {lineFor(prevLine)}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-      <View style={styles.karaokeMain}>
-        {current ? (
-          <View onLayout={e => setLineW(e.nativeEvent.layout.width)}>
-            {/* The same string twice: a quiet base with the accent copy over
-                it, clipped by an animated width — the fill sweep. */}
-            <Text style={[styles.karaokeLine, { color: baseColor }]}>
-              {lineFor(current)}
-            </Text>
-            <Animated.View
-              pointerEvents="none"
-              style={[styles.karaokeFill, fillStyle]}
+    <Animated.View style={[styles.fill, enterStyle]}>
+      {/* The whole stage answers a tap with play/pause — karaoke ergonomics:
+          hands on the phone, eyes on the words. Line taps still seek. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={playing ? 'pause' : 'play'}
+        onPress={onToggle}
+        style={styles.karaokeStage}
+      >
+        <View style={styles.karaokeSlot}>
+          {prevLine && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={lineFor(prevLine)}
+              onPress={() => onSeekLine(prevLine)}
             >
               <Text
-                style={[
-                  styles.karaokeLine,
-                  { color: accent, width: lineW || undefined },
-                ]}
+                numberOfLines={2}
+                style={[styles.karaokeSide, { color: sideColor }]}
               >
+                {lineFor(prevLine)}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+        <View style={styles.karaokeMain}>
+          {current ? (
+            <View onLayout={e => setLineW(e.nativeEvent.layout.width)}>
+              {/* The same string twice: a quiet base with the accent copy
+                  over it, clipped by an animated width — the fill sweep. */}
+              <Text style={[styles.karaokeLine, { color: baseColor }]}>
                 {lineFor(current)}
               </Text>
-            </Animated.View>
-          </View>
-        ) : showMark ? (
-          <GapMark accent={accent} reduced={reduced} />
-        ) : waiting ? (
-          <Text style={[styles.karaokeLine, { color: mainColor }]}>
-            {lineFor(waiting)}
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.karaokeSlot}>
-        {preview && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={lineFor(preview)}
-            onPress={() => onSeekLine(preview)}
-          >
-            <Text
-              numberOfLines={2}
-              style={[styles.karaokeSide, { color: sideColor }]}
-            >
-              {lineFor(preview)}
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.karaokeFill, fillStyle]}
+              >
+                <Text
+                  style={[
+                    styles.karaokeLine,
+                    styles.karaokeGlow,
+                    {
+                      color: accent,
+                      textShadowColor: `${accent}66`,
+                      width: lineW || undefined,
+                    },
+                  ]}
+                >
+                  {lineFor(current)}
+                </Text>
+              </Animated.View>
+            </View>
+          ) : countdown != null ? (
+            <CountdownDots remain={countdown} accent={accent} />
+          ) : showMark ? (
+            <GapMark accent={accent} reduced={reduced} />
+          ) : resting ? (
+            <Text style={[styles.karaokeLine, { color: baseColor }]}>
+              {lineFor(resting)}
             </Text>
-          </Pressable>
-        )}
-      </View>
-    </View>
+          ) : waiting ? (
+            <Text style={[styles.karaokeLine, { color: mainColor }]}>
+              {lineFor(waiting)}
+            </Text>
+          ) : null}
+        </View>
+        {/* Paused cue — a fixed slot so the stage never jumps. */}
+        <View style={styles.karaokeCue}>
+          {!playing && (
+            <Text style={[styles.karaokeCueText, { color: sideColor }]}>
+              paused — tap the words to continue
+            </Text>
+          )}
+        </View>
+        <View style={styles.karaokeSlot}>
+          {preview && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={lineFor(preview)}
+              onPress={() => onSeekLine(preview)}
+            >
+              <Text
+                numberOfLines={2}
+                style={[styles.karaokeSide, { color: sideColor }]}
+              >
+                {lineFor(preview)}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -559,6 +682,9 @@ export function LyricsOverlay() {
   const [cinematic, setCinematic] = useState(false);
   // Karaoke stage on/off — a presentation mode over the same synced lines.
   const [karaoke, setKaraoke] = useState(false);
+  // The pill pulses (and a one-line hint sits under the header) until the
+  // user actually enters karaoke once — in-place discovery, not a tour card.
+  const karaokeHintOn = useHintActive(HINT_KARAOKE);
 
   const enter = useSharedValue(0);
   const cin = useSharedValue(0);
@@ -776,6 +902,14 @@ export function LyricsOverlay() {
     },
     [seekTo],
   );
+  // The karaoke stage's tap-to-play/pause, behind the same wake guard.
+  const togglePlay = player.togglePlay;
+  const onStageToggle = useCallback(() => {
+    if (cinRef.current || Date.now() - wokeAt.current < 400) {
+      return;
+    }
+    togglePlay?.();
+  }, [togglePlay]);
 
   if ((!open && vis !== 'closing') || !track) {
     return null;
@@ -941,27 +1075,35 @@ export function LyricsOverlay() {
                   {track.artist || 'unknown artist'}
                 </Text>
                 {/* Karaoke needs timings — the pill only exists on synced
-                    lyrics. */}
+                    lyrics. It pulses until the user has entered once. */}
                 {!!data?.synced && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={karaoke ? 'exit karaoke' : 'karaoke'}
-                    onPress={() => setKaraoke(k => !k)}
-                    style={[
-                      styles.karaokeBtn,
-                      { borderColor: karaoke ? t.accent : t.line },
-                      karaoke && { backgroundColor: t.accentSoft },
-                    ]}
-                  >
-                    <Text
+                  <HintPulse active={karaokeHintOn && !karaoke && !reduced}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={karaoke ? 'exit karaoke' : 'karaoke'}
+                      onPress={() => {
+                        markHintDone(HINT_KARAOKE);
+                        setKaraoke(k => !k);
+                      }}
                       style={[
-                        styles.karaokeBtnText,
-                        { color: karaoke ? t.accent : t.inkSoft },
+                        styles.karaokeBtn,
+                        {
+                          borderColor:
+                            karaoke || karaokeHintOn ? t.accent : t.line,
+                        },
+                        karaoke && { backgroundColor: t.accentSoft },
                       ]}
                     >
-                      karaoke
-                    </Text>
-                  </Pressable>
+                      <Text
+                        style={[
+                          styles.karaokeBtnText,
+                          { color: karaoke ? t.accent : t.inkSoft },
+                        ]}
+                      >
+                        karaoke
+                      </Text>
+                    </Pressable>
+                  </HintPulse>
                 )}
                 {hasEnglish && (
                   <ViewToggle
@@ -972,6 +1114,12 @@ export function LyricsOverlay() {
                   />
                 )}
               </View>
+              {/* One-line in-place hint — gone forever after first entry. */}
+              {!!data?.synced && karaokeHintOn && !karaoke && (
+                <Text style={[styles.hintLine, { color: t.inkFaint }]}>
+                  new — tap karaoke to sing along, line by line.
+                </Text>
+              )}
             </View>
           </Animated.View>
 
@@ -1036,6 +1184,7 @@ export function LyricsOverlay() {
                 inkSoft={t.inkSoft}
                 inkFaint={t.inkFaint}
                 onSeekLine={onSeekLine}
+                onToggle={onStageToggle}
               />
             ) : (
               <SyncedView
@@ -1140,16 +1289,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   karaokeMain: {
-    minHeight: 124,
+    minHeight: 132,
     justifyContent: 'center',
     alignItems: 'center',
   },
   karaokeLine: {
     fontFamily: fonts.semibold,
-    fontSize: 30,
-    lineHeight: 40,
+    fontSize: 34,
+    lineHeight: 44,
     textAlign: 'center',
-    letterSpacing: -0.3,
+    letterSpacing: -0.34,
+  },
+  // Soft same-hue halo on the swept copy — the eye rides the fill.
+  karaokeGlow: {
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
   },
   karaokeFill: {
     position: 'absolute',
@@ -1163,6 +1317,30 @@ const styles = StyleSheet.create({
     fontSize: 16.5,
     lineHeight: 23,
     textAlign: 'center',
+  },
+  karaokeCue: {
+    minHeight: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  karaokeCueText: {
+    fontFamily: fonts.medium,
+    fontSize: 12.5,
+  },
+  countdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  countdownDot: {
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+  },
+  hintLine: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 16,
   },
   cluster: {
     flexDirection: 'row',
