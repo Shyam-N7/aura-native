@@ -21,6 +21,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
   withSpring,
   withTiming,
   useReducedMotion,
@@ -34,10 +35,13 @@ import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { openQualitySheet } from '../lib/qualitySheet';
+import { HINT_LIKE, HINT_NEXT, markHintDone } from '../lib/hints';
+import { useHintActive } from '../hooks/useHintActive';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { ProgressRibbon } from '../components/player/ProgressRibbon';
 import { LikeBurst } from '../components/player/HeartButton';
+import { TapHeart } from '../components/player/TapHeart';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
@@ -91,6 +95,28 @@ function ArtDevelop({ track, size }) {
   );
 }
 
+// A gentle bob on the swipe-hint arrow — the motion suggests the motion.
+function HintFloat({ reduced, children }) {
+  const v = useSharedValue(0);
+  useEffect(() => {
+    if (reduced) {
+      return undefined;
+    }
+    v.value = withRepeat(
+      withSequence(
+        withTiming(-3, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+    );
+    return () => cancelAnimation(v);
+  }, [reduced, v]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: v.value }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
 // Full-screen now-playing sheet. Slides up from the bottom edge like a native
 // bottom sheet (the backdrop art develops in once the slide lands), closes by
 // the reverse or by a drag-follow pull down. Mount inside NavigationContainer
@@ -110,6 +136,11 @@ export function PlayerSheet() {
   // 'closed' | 'open' | 'closing'
   const [vis, setVis] = useState('closed');
   const [heroH, setHeroH] = useState(0);
+  // Where the last double-tap landed — drives the heart pop at that spot.
+  const [burst, setBurst] = useState(null);
+  // In-place gesture hints: each stays until its gesture is performed once.
+  const likeHint = useHintActive(HINT_LIKE);
+  const nextHint = useHintActive(HINT_NEXT);
 
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);
@@ -282,16 +313,21 @@ export function PlayerSheet() {
   };
 
   // Art gestures. Double-tap always LIKES (the Instagram convention — a
-  // celebration, not a toggle; silently idempotent when already liked).
-  // An up-fling skips to the next track. They can't collide with the sheet's
-  // drag-dismiss, which is downward-only (activeOffsetY 24). Both are
-  // discrete gestures, so they run straight on the JS thread.
+  // celebration, not a toggle; silently idempotent when already liked), and
+  // the heart pops right where the fingers landed. An up-fling skips to the
+  // next track. They can't collide with the sheet's drag-dismiss, which is
+  // downward-only (activeOffsetY 24). Both are discrete gestures, so they
+  // run straight on the JS thread. Performing either retires its hint.
   const artDoubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .runOnJS(true)
-    .onEnd((_e, success) => {
-      if (success && !liked) {
-        likeNow();
+    .onEnd((e, success) => {
+      if (success) {
+        markHintDone(HINT_LIKE);
+        setBurst(b => ({ x: e.x, y: e.y, key: (b?.key ?? 0) + 1 }));
+        if (!liked) {
+          likeNow();
+        }
       }
     });
   const artFlingNext = Gesture.Fling()
@@ -299,6 +335,7 @@ export function PlayerSheet() {
     .runOnJS(true)
     .onEnd((_e, success) => {
       if (success) {
+        markHintDone(HINT_NEXT);
         player.next();
       }
     });
@@ -442,6 +479,47 @@ export function PlayerSheet() {
                 onLayout={e => setHeroH(e.nativeEvent.layout.height)}
               >
                 <ArtDevelop track={track} size={artSize} />
+                <TapHeart burst={burst} accent={t.accent} />
+                {/* Gesture hints, shown where the gestures live — each one
+                    stays until the user has actually performed it once. */}
+                {(likeHint || nextHint) && (
+                  <View pointerEvents="none" style={styles.hintStack}>
+                    {likeHint && (
+                      <View
+                        style={[
+                          styles.hintChip,
+                          { backgroundColor: t.accentCard },
+                        ]}
+                      >
+                        <Icon name="heart" size={13} color={t.accent} />
+                        <Text style={[styles.hintText, { color: t.ink }]}>
+                          double-tap to like
+                        </Text>
+                      </View>
+                    )}
+                    {nextHint && (
+                      <View
+                        style={[
+                          styles.hintChip,
+                          { backgroundColor: t.accentCard },
+                        ]}
+                      >
+                        <HintFloat reduced={reduced}>
+                          <View style={styles.arrowUp}>
+                            <Icon
+                              name="arrow-right"
+                              size={13}
+                              color={t.accent}
+                            />
+                          </View>
+                        </HintFloat>
+                        <Text style={[styles.hintText, { color: t.ink }]}>
+                          swipe up for next
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             </GestureDetector>
 
@@ -670,6 +748,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
   },
+  hintStack: {
+    position: 'absolute',
+    bottom: 6,
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  hintChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
+  hintText: { fontFamily: fonts.medium, fontSize: 11.5 },
+  arrowUp: { transform: [{ rotate: '-90deg' }] },
   twin: { position: 'absolute', left: 0, top: 0 },
   meta: { gap: 4, marginBottom: 10 },
   center: { textAlign: 'center' },

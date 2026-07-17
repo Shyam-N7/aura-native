@@ -3,6 +3,8 @@ import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { PlayerSheet } from '../src/overlays/PlayerSheet';
 import { openQualitySheet } from '../src/lib/qualitySheet';
+import { HINT_LIKE, HINT_NEXT, markHintDone } from '../src/lib/hints';
+import { storage } from '../src/storage/mmkv';
 
 jest.mock('../src/lib/qualitySheet', () => ({
   openQualitySheet: jest.fn(),
@@ -12,6 +14,16 @@ jest.mock('../src/lib/qualitySheet', () => ({
 
 jest.mock('react-native-track-player', () => ({
   useProgress: () => ({ position: 30, duration: 120, buffered: 0 }),
+}));
+
+// The real likes store boots with a network fetch on first use — a live TLS
+// socket that can outlast the test process. The sheet only reads the shape.
+jest.mock('../src/hooks/useLikes', () => ({
+  useLikes: () => ({
+    isLiked: () => false,
+    like: jest.fn(async () => {}),
+    unlike: jest.fn(async () => {}),
+  }),
 }));
 
 // Mutable holder so each test can shape the player state before rendering.
@@ -81,6 +93,28 @@ async function render() {
   });
   return tree;
 }
+
+beforeEach(() => {
+  storage.removeItem('aura.hintsDone');
+});
+
+test('gesture hints ride the art until each gesture has been performed', async () => {
+  mockState.player = basePlayer();
+  let tree = await render();
+  let body = texts(tree.toJSON());
+  expect(body).toContain('double-tap to like');
+  expect(body).toContain('swipe up for next');
+  await ReactTestRenderer.act(() => tree.unmount());
+
+  // Both gestures learned — the chips are gone for good.
+  markHintDone(HINT_LIKE);
+  markHintDone(HINT_NEXT);
+  tree = await render();
+  body = texts(tree.toJSON());
+  expect(body).not.toContain('double-tap to like');
+  expect(body).not.toContain('swipe up for next');
+  await ReactTestRenderer.act(() => tree.unmount());
+});
 
 test('renders nothing while the ui state is closed or missing', async () => {
   mockState.player = basePlayer({ ui: undefined });
