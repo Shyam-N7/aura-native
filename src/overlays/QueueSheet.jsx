@@ -13,7 +13,6 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
-  measure,
   runOnJS,
   scrollTo,
   useAnimatedRef,
@@ -108,8 +107,6 @@ function Row({
   dragShift,
   scrollY,
   scrollStart,
-  listRef,
-  listH,
   base,
   count,
   listGesture,
@@ -158,13 +155,19 @@ function Row({
       scrollStart.value = scrollY.value;
       fingerY.value = e.absoluteY;
       fingerTransY.value = 0;
-      // Anchor the edge zones to the list's real on-screen top (there's a
-      // header above it) — measured once at pickup, used by the auto-scroll
-      // frame loop in QueueSheet.
-      const m = measure(listRef);
-      if (m) {
-        listTop.value = m.pageY;
-      }
+      // Anchor the edge zones to the list's real on-screen top. Derive it from
+      // the finger itself: at pickup the finger is on THIS row, whose content-Y
+      // is known (rendered index × ROW_HEIGHT), so
+      //   listTop = fingerY − (rowContentY − scrollY) − ~half a row
+      // (the grip is grabbed mid-row). This lives in the SAME absolute space as
+      // fingerY, so the frame loop's zone test is consistent. `measure()` on an
+      // Animated.FlatList came back null / content-relative (negative once
+      // scrolled), which parked the finger permanently in the bottom zone and
+      // scrolled the wrong way — the "reverse" report.
+      listTop.value =
+        e.absoluteY -
+        ((index - base) * ROW_HEIGHT - scrollY.value) -
+        ROW_HEIGHT / 2;
       runOnJS(pickup)();
       // Widen the mount window for the duration of the drag (see DRAG_WINDOW)
       // so this cell survives being scrolled far from the viewport.
@@ -723,8 +726,6 @@ export function QueueSheet() {
         dragShift={dragShift}
         scrollY={scrollY}
         scrollStart={scrollStart}
-        listRef={listRef}
-        listH={listH}
         base={pastHidden}
         count={tracks.length}
         listGesture={listGesture}
