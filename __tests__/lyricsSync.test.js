@@ -1,6 +1,7 @@
 import {
   activeIndexFor,
   gapWindows,
+  lineSweep,
   MIN_GAP_SEC,
 } from '../src/lib/lyricsSync';
 
@@ -50,4 +51,23 @@ test('outro gap runs from the last line to the end of the track', () => {
   expect(gapWindows(l, 113, 0, 1).inOutroGap).toBe(false);
   // Not on the last line → not an outro.
   expect(gapWindows(l, 50, 130, 0).inOutroGap).toBe(false);
+});
+
+test('lineSweep interpolates the active line across its window', () => {
+  const l = lines([10, 20, 30]);
+  expect(lineSweep(l, 10, 200, 0)).toBe(0);
+  expect(lineSweep(l, 15, 200, 0)).toBe(0.5);
+  expect(lineSweep(l, 20, 200, 1)).toBe(0);
+  // Clamped at both ends.
+  expect(lineSweep(l, 9, 200, 0)).toBe(0);
+  expect(lineSweep(l, 99, 200, 1)).toBe(1);
+});
+
+test('lineSweep runs the last line out to the track end', () => {
+  const l = lines([10, 20]);
+  expect(lineSweep(l, 25, 30, 1)).toBe(0.5);
+  // No duration → degenerate window reads as done, never NaN.
+  expect(lineSweep(l, 25, 0, 1)).toBe(1);
+  // No active line yet → nothing to sweep.
+  expect(lineSweep(l, 5, 30, -1)).toBe(0);
 });

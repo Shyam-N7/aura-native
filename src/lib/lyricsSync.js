@@ -59,3 +59,23 @@ export function gapWindows(lines, seconds, durationSec, activeIdx) {
 
   return { inIntroGap, inBetweenGap, inOutroGap };
 }
+
+// Karaoke line-fill: how far through the active line's window playback is,
+// 0..1. HONEST LIMIT: our timings are line-level (no word timestamps exist at
+// the source), so the sweep is a proportional interpolation across the line's
+// window — its timestamp to the next line's (or the track end for the last
+// line). A smooth line fill honestly derived, not fake word sync. Lines
+// followed by a long instrumental read as done once the gap logic marks them
+// past; until then the sweep just runs its window.
+export function lineSweep(lines, seconds, durationSec, activeIdx) {
+  const line = lines[activeIdx];
+  if (!line) {
+    return 0;
+  }
+  const end = lines[activeIdx + 1]?.t ?? Math.max(durationSec || 0, line.t);
+  const span = end - line.t;
+  if (span <= 0) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, (seconds - line.t) / span));
+}

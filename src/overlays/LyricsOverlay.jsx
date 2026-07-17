@@ -33,7 +33,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { getLyrics } from '../api/lyrics';
-import { activeIndexFor, gapWindows } from '../lib/lyricsSync';
+import { activeIndexFor, gapWindows, lineSweep } from '../lib/lyricsSync';
 import { cleanLyric, cleanTitle } from '../utils/title';
 import { HeartButton } from '../components/player/HeartButton';
 import { Icon } from '../components/Icon';
@@ -340,6 +340,143 @@ function PlainView({ lines, view, inkSoft, inkFaint, onWakeScroll }) {
 }
 
 // English ⇄ original segmented pill with a sliding accent thumb.
+// Karaoke — the synced lines as a stage: previous and next lines dimmed
+// around one big centered current line with a smooth accent fill sweeping it
+// as it plays. The sweep is lib/lyricsSync.lineSweep — a per-line
+// interpolation, because the source only carries line-level timings (an
+// honest line fill, not fake word sync; on a wrapped line every row fills
+// together). Instrumental breaks put the gap mark on the stage. No vocal
+// removal — karaoke here is the lyric experience; "minus one" DSP over a
+// 320 AAC would wreck the sound.
+function KaraokeView({
+  lines,
+  view,
+  seconds,
+  durationSec,
+  playing,
+  cinematic,
+  reduced,
+  accent,
+  ink,
+  inkSoft,
+  inkFaint,
+  onSeekLine,
+}) {
+  const activeIdx = useMemo(
+    () => activeIndexFor(lines, seconds),
+    [lines, seconds],
+  );
+  const { inIntroGap, inBetweenGap, inOutroGap } = gapWindows(
+    lines,
+    seconds,
+    durationSec,
+    activeIdx,
+  );
+  const inGap = inIntroGap || inBetweenGap || inOutroGap;
+  const lineFor = l =>
+    l ? cleanLyric(view === 'en' && l.line_en ? l.line_en : l.line) : '';
+
+  // Stage slots. During a break the sung line is done — it moves up to the
+  // previous slot and the gap mark takes the stage. Before the first line
+  // (short intro / paused) the opening line waits quietly, unswept.
+  const current = !inGap && activeIdx >= 0 ? lines[activeIdx] : null;
+  const prevLine =
+    inBetweenGap || inOutroGap
+      ? lines[activeIdx]
+      : activeIdx > 0
+        ? lines[activeIdx - 1]
+        : null;
+  const waiting = !current && !inGap && activeIdx < 0 ? lines[0] : null;
+  const showMark = inGap && playing;
+  const preview = waiting ? (lines[1] ?? null) : (lines[activeIdx + 1] ?? null);
+
+  // Smooth fill: snap when the line changes, glide between position ticks.
+  const sweep = lineSweep(lines, seconds, durationSec, activeIdx);
+  const sw = useSharedValue(sweep);
+  const lastIdxRef = useRef(activeIdx);
+  const [lineW, setLineW] = useState(0);
+  useEffect(() => {
+    if (lastIdxRef.current !== activeIdx || reduced) {
+      lastIdxRef.current = activeIdx;
+      sw.value = sweep;
+      return;
+    }
+    sw.value = withTiming(sweep, { duration: 260, easing: Easing.linear });
+  }, [sweep, activeIdx, reduced, sw]);
+  const fillStyle = useAnimatedStyle(() => ({ width: lineW * sw.value }));
+
+  const sideColor = cinematic ? 'rgba(255,255,255,0.55)' : inkSoft;
+  const baseColor = cinematic ? 'rgba(255,255,255,0.35)' : inkFaint;
+  const mainColor = cinematic ? '#ffffff' : ink;
+
+  return (
+    <View style={styles.karaokeStage}>
+      <View style={styles.karaokeSlot}>
+        {prevLine && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={lineFor(prevLine)}
+            onPress={() => onSeekLine(prevLine)}
+          >
+            <Text
+              numberOfLines={2}
+              style={[styles.karaokeSide, { color: sideColor }]}
+            >
+              {lineFor(prevLine)}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+      <View style={styles.karaokeMain}>
+        {current ? (
+          <View onLayout={e => setLineW(e.nativeEvent.layout.width)}>
+            {/* The same string twice: a quiet base with the accent copy over
+                it, clipped by an animated width — the fill sweep. */}
+            <Text style={[styles.karaokeLine, { color: baseColor }]}>
+              {lineFor(current)}
+            </Text>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.karaokeFill, fillStyle]}
+            >
+              <Text
+                style={[
+                  styles.karaokeLine,
+                  { color: accent, width: lineW || undefined },
+                ]}
+              >
+                {lineFor(current)}
+              </Text>
+            </Animated.View>
+          </View>
+        ) : showMark ? (
+          <GapMark accent={accent} reduced={reduced} />
+        ) : waiting ? (
+          <Text style={[styles.karaokeLine, { color: mainColor }]}>
+            {lineFor(waiting)}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.karaokeSlot}>
+        {preview && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={lineFor(preview)}
+            onPress={() => onSeekLine(preview)}
+          >
+            <Text
+              numberOfLines={2}
+              style={[styles.karaokeSide, { color: sideColor }]}
+            >
+              {lineFor(preview)}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function ViewToggle({ view, language, onChange, t }) {
   const [w, setW] = useState(0);
   const x = useSharedValue(view === 'orig' ? 1 : 0);
@@ -420,6 +557,8 @@ export function LyricsOverlay() {
   const [hit, setHit] = useState({ trackId: null, data: null, error: null });
   const [view, setView] = useState('en'); // 'en' = romanized, 'orig' = original
   const [cinematic, setCinematic] = useState(false);
+  // Karaoke stage on/off — a presentation mode over the same synced lines.
+  const [karaoke, setKaraoke] = useState(false);
 
   const enter = useSharedValue(0);
   const cin = useSharedValue(0);
@@ -435,8 +574,10 @@ export function LyricsOverlay() {
         enter.value = 0;
         enter.value = withTiming(1, { duration: PANEL_IN_MS, easing: SLIDE });
       }
-      // Every open starts romanized, like the web's fresh mount.
+      // Every open starts romanized, like the web's fresh mount — and on the
+      // reading view, not karaoke.
       setView('en');
+      setKaraoke(false);
       setVis('open');
     }
     if (!open && vis === 'open') {
@@ -799,6 +940,29 @@ export function LyricsOverlay() {
                 >
                   {track.artist || 'unknown artist'}
                 </Text>
+                {/* Karaoke needs timings — the pill only exists on synced
+                    lyrics. */}
+                {!!data?.synced && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={karaoke ? 'exit karaoke' : 'karaoke'}
+                    onPress={() => setKaraoke(k => !k)}
+                    style={[
+                      styles.karaokeBtn,
+                      { borderColor: karaoke ? t.accent : t.line },
+                      karaoke && { backgroundColor: t.accentSoft },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.karaokeBtnText,
+                        { color: karaoke ? t.accent : t.inkSoft },
+                      ]}
+                    >
+                      karaoke
+                    </Text>
+                  </Pressable>
+                )}
                 {hasEnglish && (
                   <ViewToggle
                     view={effectiveView}
@@ -855,23 +1019,41 @@ export function LyricsOverlay() {
             </View>
           )}
 
-          {status === 'ok' && data.available && data.synced && (
-            <SyncedView
-              lines={data.lines}
-              view={effectiveView}
-              seconds={seconds}
-              durationSec={duration}
-              playing={player.isPlaying}
-              cinematic={cinematic}
-              reduced={reduced}
-              accent={t.accent}
-              ink={t.ink}
-              inkSoft={t.inkSoft}
-              inkFaint={t.inkFaint}
-              onSeekLine={onSeekLine}
-              onWakeScroll={wake}
-            />
-          )}
+          {status === 'ok' &&
+            data.available &&
+            data.synced &&
+            (karaoke ? (
+              <KaraokeView
+                lines={data.lines}
+                view={effectiveView}
+                seconds={seconds}
+                durationSec={duration}
+                playing={player.isPlaying}
+                cinematic={cinematic}
+                reduced={reduced}
+                accent={t.accent}
+                ink={t.ink}
+                inkSoft={t.inkSoft}
+                inkFaint={t.inkFaint}
+                onSeekLine={onSeekLine}
+              />
+            ) : (
+              <SyncedView
+                lines={data.lines}
+                view={effectiveView}
+                seconds={seconds}
+                durationSec={duration}
+                playing={player.isPlaying}
+                cinematic={cinematic}
+                reduced={reduced}
+                accent={t.accent}
+                ink={t.ink}
+                inkSoft={t.inkSoft}
+                inkFaint={t.inkFaint}
+                onSeekLine={onSeekLine}
+                onWakeScroll={wake}
+              />
+            ))}
 
           {status === 'ok' && data.available && !data.synced && !data.pending && (
             <PlainView
@@ -933,6 +1115,54 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 16,
+  },
+  karaokeBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  karaokeBtnText: {
+    fontFamily: fonts.medium,
+    fontSize: 11.5,
+  },
+  // The karaoke stage — three fixed slots so the layout never jumps as lines
+  // hand over: previous (dim), the big swept line, next (dim).
+  karaokeStage: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 26,
+    gap: 24,
+  },
+  karaokeSlot: {
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  karaokeMain: {
+    minHeight: 124,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  karaokeLine: {
+    fontFamily: fonts.semibold,
+    fontSize: 30,
+    lineHeight: 40,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  karaokeFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  karaokeSide: {
+    fontFamily: fonts.medium,
+    fontSize: 16.5,
+    lineHeight: 23,
+    textAlign: 'center',
   },
   cluster: {
     flexDirection: 'row',
