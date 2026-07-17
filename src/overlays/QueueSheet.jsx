@@ -13,11 +13,13 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
+  measure,
   runOnJS,
   scrollTo,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useFrameCallback,
   useSharedValue,
   withSpring,
   withTiming,
@@ -44,7 +46,12 @@ import { DUR, EASE, SPRING } from '../theme/motion';
 
 const ROW_HEIGHT = 62;
 const SHIFT_MS = 160;
-const EDGE = 90;
+// Auto-scroll while dragging: a continuous per-frame loop (not per-move-event),
+// so it keeps scrolling when the finger holds still at the edge and its speed
+// ramps with how deep into the edge zone the finger is (quadratic — gentle
+// near the zone's inner boundary, fast at the very edge).
+const AUTOSCROLL_EDGE = 110; // px from the list's top/bottom that arms scrolling
+const AUTOSCROLL_MAX = 26; // px per 60fps frame at the very edge
 // While a drag is in flight the list widens its mount window so the dragged
 // cell can't be virtualized away mid-drag. At windowSize 3 a long drag (e.g.
 // row 100 → 46) scrolled the origin cell out of the mounted window; it
@@ -107,6 +114,9 @@ function Row({
   count,
   listGesture,
   onDrag,
+  fingerY,
+  fingerTransY,
+  listTop,
 }) {
   const { t } = useTheme();
   const title = cleanTitle(item.title);
@@ -136,7 +146,7 @@ function Row({
     .activeOffsetY([-4, 4])
     .failOffsetX([-16, 16])
     .blocksExternalGesture(listGesture)
-    .onStart(() => {
+    .onStart(e => {
       'worklet';
       owns.value = dragFrom.value === -1;
       if (!owns.value) {
@@ -146,6 +156,15 @@ function Row({
       dragTo.value = index;
       dragShift.value = 0;
       scrollStart.value = scrollY.value;
+      fingerY.value = e.absoluteY;
+      fingerTransY.value = 0;
+      // Anchor the edge zones to the list's real on-screen top (there's a
+      // header above it) — measured once at pickup, used by the auto-scroll
+      // frame loop in QueueSheet.
+      const m = measure(listRef);
+      if (m) {
+        listTop.value = m.pageY;
+      }
       runOnJS(pickup)();
       // Widen the mount window for the duration of the drag (see DRAG_WINDOW)
       // so this cell survives being scrolled far from the viewport.
@@ -156,17 +175,16 @@ function Row({
       if (!owns.value) {
         return;
       }
+      // Only capture the finger here; the continuous frame loop owns the
+      // scroll AND the drag-follow math so it stays smooth when the finger
+      // holds still at the edge (see the useFrameCallback in QueueSheet).
+      fingerY.value = e.absoluteY;
+      fingerTransY.value = e.translationY;
       dragShift.value = e.translationY + scrollY.value - scrollStart.value;
       const to = index + Math.round(dragShift.value / ROW_HEIGHT);
       // `base` floors drops at the first RENDERED row — with hide-past on,
       // the hidden history above the current track is not a drop target.
       dragTo.value = Math.max(base, Math.min(count - 1, to));
-      // Edge auto-scroll (re-triggered per move event).
-      if (e.absoluteY < EDGE + 60) {
-        scrollTo(listRef, 0, Math.max(0, scrollY.value - 14), false);
-      } else if (e.absoluteY > listH.value - EDGE) {
-        scrollTo(listRef, 0, scrollY.value + 14, false);
-      }
     })
     .onEnd(() => {
       'worklet';
@@ -595,6 +613,53 @@ export function QueueSheet() {
   const [dragging, setDragging] = useState(false);
   const onDrag = useCallback(v => setDragging(v), []);
 
+  // Auto-scroll frame loop inputs: the finger's screen Y + translation (written
+  // by the grip pan) and the list's measured on-screen top.
+  const fingerY = useSharedValue(0);
+  const fingerTransY = useSharedValue(0);
+  const listTop = useSharedValue(0);
+  // The drop-clamp bounds, mirrored into shared values so the frame worklet can
+  // read them (base = first droppable row with hide-past on; count = queue len).
+  const baseSV = useSharedValue(0);
+  const countSV = useSharedValue(0);
+  useEffect(() => {
+    baseSV.value = hidePast ? Math.max(0, idx) : 0;
+    countSV.value = tracks.length;
+  }, [hidePast, idx, tracks.length, baseSV, countSV]);
+
+  // Continuous auto-scroll: runs every frame while a drag is active (not tied
+  // to finger-move events, so it keeps going when the finger holds at the edge)
+  // and ramps speed quadratically with edge depth. It also re-derives the
+  // drag-follow offset + drop target each frame so a still finger still advances
+  // the slot as the list scrolls beneath it.
+  const autoScroll = useFrameCallback(frame => {
+    'worklet';
+    if (dragFrom.value < 0) {
+      return;
+    }
+    const dt = (frame.timeSincePreviousFrame ?? 16) / 16.667;
+    const top = listTop.value;
+    const bottom = listTop.value + listH.value;
+    const y = fingerY.value;
+    let vel = 0;
+    if (y < top + AUTOSCROLL_EDGE) {
+      const d = Math.min(1, (top + AUTOSCROLL_EDGE - y) / AUTOSCROLL_EDGE);
+      vel = -AUTOSCROLL_MAX * d * d;
+    } else if (y > bottom - AUTOSCROLL_EDGE) {
+      const d = Math.min(1, (y - (bottom - AUTOSCROLL_EDGE)) / AUTOSCROLL_EDGE);
+      vel = AUTOSCROLL_MAX * d * d;
+    }
+    if (vel !== 0) {
+      scrollTo(listRef, 0, Math.max(0, scrollY.value + vel * dt), false);
+    }
+    dragShift.value = fingerTransY.value + scrollY.value - scrollStart.value;
+    const to = dragFrom.value + Math.round(dragShift.value / ROW_HEIGHT);
+    dragTo.value = Math.max(baseSV.value, Math.min(countSV.value - 1, to));
+  }, false);
+  useEffect(() => {
+    autoScroll.setActive(dragging);
+  }, [dragging, autoScroll]);
+
   // The list's own scroll as an explicit gesture, so row grips can make it
   // wait (see Row).
   const listGesture = useMemo(() => Gesture.Native(), []);
@@ -664,6 +729,9 @@ export function QueueSheet() {
         count={tracks.length}
         listGesture={listGesture}
         onDrag={onDrag}
+        fingerY={fingerY}
+        fingerTransY={fingerTransY}
+        listTop={listTop}
       />
     );
   };
