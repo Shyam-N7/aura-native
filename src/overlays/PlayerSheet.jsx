@@ -8,7 +8,11 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  Directions,
+  Gesture,
+  GestureDetector,
+} from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
@@ -264,12 +268,41 @@ export function PlayerSheet() {
   // work than 500². Radius scales with the bitmap, so 14/150 ≈ the old 48/500.
   const backdrop = artUrl(track, 150);
   const liked = isLiked(track.id);
-  const toggleLike = () => {
-    showToast(liked ? 'removed from likes.' : 'liked.');
-    (liked ? unlike(track.id) : like(track.id)).catch(() =>
-      showToast("couldn't like — try again."),
-    );
+  const likeNow = () => {
+    showToast('liked.');
+    like(track.id).catch(() => showToast("couldn't like — try again."));
   };
+  const toggleLike = () => {
+    if (liked) {
+      showToast('removed from likes.');
+      unlike(track.id).catch(() => showToast("couldn't like — try again."));
+    } else {
+      likeNow();
+    }
+  };
+
+  // Art gestures. Double-tap always LIKES (the Instagram convention — a
+  // celebration, not a toggle; silently idempotent when already liked).
+  // An up-fling skips to the next track. They can't collide with the sheet's
+  // drag-dismiss, which is downward-only (activeOffsetY 24). Both are
+  // discrete gestures, so they run straight on the JS thread.
+  const artDoubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .runOnJS(true)
+    .onEnd((_e, success) => {
+      if (success && !liked) {
+        likeNow();
+      }
+    });
+  const artFlingNext = Gesture.Fling()
+    .direction(Directions.UP)
+    .runOnJS(true)
+    .onEnd((_e, success) => {
+      if (success) {
+        player.next();
+      }
+    });
+  const artGestures = Gesture.Race(artFlingNext, artDoubleTap);
   const qualityLabel =
     QUALITIES.find(q => q.id === player.quality)?.label ?? 'quality';
 
@@ -403,12 +436,14 @@ export function PlayerSheet() {
               <View style={styles.chip} />
             </View>
 
-            <View
-              style={styles.hero}
-              onLayout={e => setHeroH(e.nativeEvent.layout.height)}
-            >
-              <ArtDevelop track={track} size={artSize} />
-            </View>
+            <GestureDetector gesture={artGestures}>
+              <View
+                style={styles.hero}
+                onLayout={e => setHeroH(e.nativeEvent.layout.height)}
+              >
+                <ArtDevelop track={track} size={artSize} />
+              </View>
+            </GestureDetector>
 
             <View style={styles.meta}>
               <Text
