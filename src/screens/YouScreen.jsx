@@ -26,6 +26,7 @@ import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
+import { openWhatsNew } from '../lib/whatsNew';
 import {
   isPrivateSession,
   privateSessionUntil,
@@ -951,6 +952,26 @@ export default function YouScreen({ navigation }) {
                     </Pressable>
                   );
                 })}
+
+                {/* Reopen the update guide anytime. */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="what's new"
+                  onPress={openWhatsNew}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text style={[styles.rowTitle, { color: t.ink }]}>
+                      what's new
+                    </Text>
+                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
+                      the latest features, explained
+                    </Text>
+                  </View>
+                </Pressable>
 
                 <Text
                   style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}

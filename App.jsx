@@ -19,6 +19,7 @@ import { SleepTimerSheet } from './src/overlays/SleepTimerSheet';
 import { WhySheet } from './src/overlays/WhySheet';
 import { ModeSheet } from './src/overlays/ModeSheet';
 import { QualitySheet } from './src/overlays/QualitySheet';
+import { WhatsNewSheet } from './src/overlays/WhatsNewSheet';
 import { PresenceBanners } from './src/overlays/PresenceBanners';
 import { Toast } from './src/components/Toast';
 import { Dock } from './src/components/nav/Dock';
@@ -154,6 +155,8 @@ function Shell() {
         <WhySheet />
         <ModeSheet />
         <QualitySheet />
+        {/* One-time feature guide per update batch; reopenable from You. */}
+        <WhatsNewSheet />
         {/* Heartbeats + "playing elsewhere" note + cross-device resume. */}
         <PresenceBanners />
       </NavigationContainer>
