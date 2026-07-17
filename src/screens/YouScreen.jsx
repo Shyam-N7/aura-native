@@ -25,6 +25,7 @@ import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
 import { QUALITIES } from '../lib/audioQuality';
+import { LEVELING_MODES } from '../lib/leveling';
 import {
   isPrivateSession,
   privateSessionUntil,
@@ -895,6 +896,49 @@ export default function YouScreen({ navigation }) {
                         </Text>
                         <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
                           {q.caption}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.dot,
+                          { borderColor: on ? t.accent : t.line },
+                          on && { backgroundColor: t.accent },
+                        ]}
+                      />
+                    </Pressable>
+                  );
+                })}
+
+                {/* Volume leveling — evens out loud masters toward the chosen
+                    target (attenuate-only; see lib/leveling). */}
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  volume leveling
+                </Text>
+                {LEVELING_MODES.map(m => {
+                  const on = player.leveling === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`leveling ${m.label}`}
+                      accessibilityState={on ? { selected: true } : {}}
+                      onPress={() => player.setLeveling(m.id)}
+                      style={({ pressed }) => [
+                        styles.qualityRow,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <View style={styles.rowMeta}>
+                        <Text
+                          style={[
+                            styles.rowTitle,
+                            { color: on ? t.accent : t.ink },
+                          ]}
+                        >
+                          {m.label}
+                        </Text>
+                        <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
+                          {m.caption}
                         </Text>
                       </View>
                       <View

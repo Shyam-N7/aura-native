@@ -177,6 +177,11 @@ export function seekTo(sec) {
   return TrackPlayer.seekTo(sec);
 }
 
+// Playback volume 0..1 — volume leveling's per-track gain lands here.
+export function setVolume(v) {
+  return TrackPlayer.setVolume(v);
+}
+
 export function skipToIndex(i, positionSec) {
   return TrackPlayer.skip(i, positionSec ?? -1);
 }
@@ -301,6 +306,10 @@ function ensureAutoSampler() {
   const want = getAudioQuality() === 'auto';
   if (want && !autoTimer) {
     autoTimer = setInterval(autoSampleTick, AUTO_SAMPLE_MS);
+    // The sampler must never be what keeps a process alive: under Node
+    // (jest) an un-unref'd interval holds the worker open forever. RN
+    // timers are plain numbers, where this is a no-op.
+    autoTimer.unref?.();
   } else if (!want && autoTimer) {
     clearInterval(autoTimer);
     autoTimer = null;

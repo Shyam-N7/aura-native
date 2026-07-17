@@ -17,7 +17,13 @@ import {
   tickSleepTimer,
 } from '../lib/sleepTimer';
 import { getAudioQuality, setAudioQuality } from '../lib/audioQuality';
+import {
+  getLeveling,
+  setLeveling as storeLeveling,
+  gainFor,
+} from '../lib/leveling';
 import { getTrack } from '../api/catalog';
+import { getLoudness, requestMeasure } from '../api/loudness';
 import { prefetchLyrics } from '../api/lyrics';
 import * as engine from './engine';
 import * as model from './queueModel';
@@ -84,6 +90,7 @@ export function PlayerProvider({ children }) {
   // or the queue was replaced — a new queue owns its own order.
   const preShuffleRef = useRef(null);
   const [quality, setQualityState] = useState(getAudioQuality);
+  const [leveling, setLevelingState] = useState(getLeveling);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -619,6 +626,13 @@ export function PlayerProvider({ children }) {
     [enqueueOp],
   );
 
+  // The volume-leveling mode (lib/leveling); the apply effect below reacts to
+  // it, so switching modes re-levels the playing track immediately.
+  const setLeveling = useCallback(id => {
+    storeLeveling(id);
+    setLevelingState(getLeveling());
+  }, []);
+
   const openPlayer = useCallback(() => setPlayerOpen(true), []);
   const closePlayer = useCallback(() => setPlayerOpen(false), []);
   // The queue rides ABOVE the player (its own overlay): opening it must not
@@ -647,6 +661,36 @@ export function PlayerProvider({ children }) {
     }, 1200);
     return () => clearTimeout(id);
   }, [currentId, nextId]);
+
+  // Volume leveling: set the player volume to the current track's measured
+  // gain (lib/leveling; api/loudness caches, so repeat runs are free — the
+  // next track's number rides the same batch fetch). An unmeasured track
+  // plays as mastered while the server measures it; when that ~3s result
+  // lands and the track is still playing, it levels mid-play. Mode changes
+  // re-run this and re-level immediately.
+  useEffect(() => {
+    if (!currentId) {
+      return undefined;
+    }
+    let stale = false;
+    (async () => {
+      const found = await getLoudness(
+        nextId ? [currentId, nextId] : [currentId],
+      );
+      let info = found[currentId] ?? null;
+      if (!info) {
+        enqueueOp(() => engine.setVolume(1));
+        info = await requestMeasure(currentId);
+      }
+      if (stale) {
+        return;
+      }
+      enqueueOp(() => engine.setVolume(gainFor(leveling, info)));
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [currentId, nextId, leveling, enqueueOp]);
 
   // ── boot: player setup, handler wiring, cold restore ─────────────────────
   useEffect(() => {
@@ -891,6 +935,8 @@ export function PlayerProvider({ children }) {
       cycleRepeat,
       toggleShuffle,
       setQuality,
+      leveling,
+      setLeveling,
     }),
     [
       current,
@@ -918,6 +964,8 @@ export function PlayerProvider({ children }) {
       cycleRepeat,
       toggleShuffle,
       setQuality,
+      leveling,
+      setLeveling,
     ],
   );
 

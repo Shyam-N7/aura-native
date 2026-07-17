@@ -59,6 +59,7 @@ let playWhenReady = false;
 let repeatMode = RepeatMode.Off;
 let progress = { position: 0, duration: 0, buffered: 0 };
 let playbackState = { state: State.None };
+let volume = 1;
 
 // Fires every registered listener for `event`; returns a promise so tests can
 // await async handlers before asserting.
@@ -76,7 +77,7 @@ export function __setPlaybackState(state) {
 }
 
 export function __getMockState() {
-  return { queue, activeIndex, playWhenReady, repeatMode };
+  return { queue, activeIndex, playWhenReady, repeatMode, volume };
 }
 
 export function __resetMock() {
@@ -87,6 +88,7 @@ export function __resetMock() {
   repeatMode = RepeatMode.Off;
   progress = { position: 0, duration: 0, buffered: 0 };
   playbackState = { state: State.None };
+  volume = 1;
 }
 
 // RNTP's useProgress hook (consumed by hooks/usePlaybackProgress) — static
@@ -165,6 +167,10 @@ const TrackPlayer = {
     playWhenReady = false;
   },
   seekTo: async () => {},
+  setVolume: async v => {
+    volume = v;
+  },
+  getVolume: async () => volume,
   setRepeatMode: async mode => {
     repeatMode = mode;
   },
