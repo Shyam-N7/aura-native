@@ -2,12 +2,15 @@ import TrackPlayer, {
   AppKilledPlaybackBehavior,
   Capability,
   RepeatMode,
+  State,
 } from 'react-native-track-player';
 import {
   bitrateFor,
   getAudioQuality,
   qualityLadder,
+  subscribeAudioQuality,
 } from '../lib/audioQuality';
+import { autoTier, noteAutoSample, resetAuto } from '../lib/autoQuality';
 import { getTrack as fetchTrack } from '../api/catalog';
 import { showToast } from '../lib/toast';
 
@@ -28,8 +31,14 @@ const artUrl = u => (u ? u.replace(/\d+x\d+/, '500x500') : undefined);
 // queue preserves model-index ↔ RNTP-index alignment.
 const PENDING_URL = 'https://www.aurafm.live/native/pending.mp3';
 
+// The bitrate a quality id means RIGHT NOW: fixed tiers map straight through,
+// 'auto' resolves to the adaptive decision (see lib/autoQuality).
+function effectiveBitrate(quality) {
+  return quality === 'auto' ? autoTier() : bitrateFor(quality);
+}
+
 function toRntpTrack(t, quality = getAudioQuality()) {
-  const ladder = qualityLadder(t.streamUrl, bitrateFor(quality));
+  const ladder = qualityLadder(t.streamUrl, effectiveBitrate(quality));
   return {
     id: t.id,
     url: ladder[0] ?? PENDING_URL,
@@ -78,6 +87,10 @@ export async function setupPlayer() {
     progressUpdateEventInterval: 1,
   });
   ready = true;
+  // Auto-quality sampler follows the pref from here on (guarded by `ready`,
+  // so this subscription happens exactly once).
+  ensureAutoSampler();
+  subscribeAudioQuality(ensureAutoSampler);
 }
 
 // Mirror the model queue into RNTP. When the active RNTP track is already the
@@ -200,11 +213,13 @@ export function setNativeRepeat(repeat) {
   );
 }
 
-// Re-resolve every queued stream URL for a new quality tier — history too,
-// so a prev-press replays at the new bitrate (web loads every track at the
-// currently selected bitrate). The queue is rebuilt around the active track;
-// the current track reloads in place, seeking back to where it was.
-export async function setQuality(quality) {
+// Re-resolve every queued stream URL for a new bitrate — history too, so a
+// prev-press replays at the new tier (web loads every track at the currently
+// selected bitrate). The queue is rebuilt around the active track; with
+// reloadCurrent, the current track also reloads in place, seeking back to
+// where it was — skipped for auto step-UPS, where interrupting a healthy
+// stream to re-fetch it fatter would be pure loss.
+async function remapQueue(bitrate, { reloadCurrent = true } = {}) {
   const [rQueue, active] = await Promise.all([
     TrackPlayer.getQueue(),
     TrackPlayer.getActiveTrackIndex(),
@@ -213,9 +228,7 @@ export async function setQuality(quality) {
     return;
   }
   const remap = t => {
-    const ladder = t.streamUrl
-      ? qualityLadder(t.streamUrl, bitrateFor(quality))
-      : [];
+    const ladder = t.streamUrl ? qualityLadder(t.streamUrl, bitrate) : [];
     return ladder.length ? { ...t, url: ladder[0] } : t;
   };
 
@@ -232,6 +245,9 @@ export async function setQuality(quality) {
     await TrackPlayer.add(upcoming);
   }
 
+  if (!reloadCurrent) {
+    return;
+  }
   const cur = rQueue[active];
   const swapped = remap(cur);
   if (swapped.url !== cur.url) {
@@ -247,6 +263,50 @@ export async function setQuality(quality) {
   }
 }
 
+// User-picked quality change. Leaving 'auto' resets its adaptive state so the
+// next auto session starts optimistic instead of inheriting a stale tier.
+export async function setQuality(quality) {
+  if (quality !== 'auto') {
+    resetAuto();
+  }
+  await remapQueue(effectiveBitrate(quality));
+}
+
+// ── auto-quality sampler ─────────────────────────────────────────────────
+// Runs only while the pref is 'auto': every 5s of active playback, feed the
+// buffered-ahead seconds to the adaptive policy (lib/autoQuality). On a tier
+// change the queued urls re-resolve; only a panic step-DOWN also reloads the
+// current track — swapping it to a lighter stream before the stall lands is
+// the whole point of the panic.
+const AUTO_SAMPLE_MS = 5000;
+let autoTimer = null;
+
+async function autoSampleTick() {
+  try {
+    const { state } = await TrackPlayer.getPlaybackState();
+    if (state !== State.Playing) {
+      return;
+    }
+    const { position, buffered } = await TrackPlayer.getProgress();
+    const moved = noteAutoSample(Math.max(0, buffered - position));
+    if (moved) {
+      await remapQueue(autoTier(), { reloadCurrent: moved === 'down' });
+    }
+  } catch {
+    // Player not set up / torn down — the next tick just retries.
+  }
+}
+
+function ensureAutoSampler() {
+  const want = getAudioQuality() === 'auto';
+  if (want && !autoTimer) {
+    autoTimer = setInterval(autoSampleTick, AUTO_SAMPLE_MS);
+  } else if (!want && autoTimer) {
+    clearInterval(autoTimer);
+    autoTimer = null;
+  }
+}
+
 // ── PlaybackError recovery ───────────────────────────────────────────────
 // Walk down the quality ladder for the failing track; ladder exhausted →
 // refetch the track ONCE for a fresh CDN URL; still failing → toast and skip
@@ -256,7 +316,7 @@ export async function setQuality(quality) {
 // session (the reason this app exists) would just fall silent forever.
 let recovery = { id: null, ladderPos: 0, refetched: false };
 
-async function reloadCurrent(track, position) {
+async function loadAndResume(track, position) {
   await TrackPlayer.load(track);
   if (position > 0) {
     await TrackPlayer.seekTo(position);
@@ -280,11 +340,11 @@ export async function handlePlaybackError() {
     position: 0,
   }));
 
-  const quality = bitrateFor(getAudioQuality());
+  const quality = effectiveBitrate(getAudioQuality());
   const ladder = cur.streamUrl ? qualityLadder(cur.streamUrl, quality) : [];
   recovery.ladderPos += 1;
   if (recovery.ladderPos < ladder.length) {
-    await reloadCurrent({ ...cur, url: ladder[recovery.ladderPos] }, position);
+    await loadAndResume({ ...cur, url: ladder[recovery.ladderPos] }, position);
     return;
   }
 
@@ -294,7 +354,7 @@ export async function handlePlaybackError() {
     if (fresh?.streamUrl && fresh.streamUrl !== cur.streamUrl) {
       recovery.ladderPos = 0;
       const freshLadder = qualityLadder(fresh.streamUrl, quality);
-      await reloadCurrent(
+      await loadAndResume(
         { ...cur, streamUrl: fresh.streamUrl, url: freshLadder[0] },
         position,
       );

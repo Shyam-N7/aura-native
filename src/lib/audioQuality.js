@@ -8,8 +8,16 @@ import { storage } from '../storage/mmkv';
 const KEY = 'aura.audioQuality';
 const subs = new Set();
 
-// Lowest → highest is the order the picker renders; `high` is the default.
+// Picker order. `auto` (the default) adapts within the fixed tiers below it —
+// its bitrate here is the 320 CEILING it can reach, the live decision lives in
+// lib/autoQuality. The fixed tiers pin the bitrate outright.
 export const QUALITIES = [
+  {
+    id: 'auto',
+    bitrate: 320,
+    label: 'auto',
+    caption: 'adapts to your signal',
+  },
   { id: 'high', bitrate: 320, label: 'high', caption: 'best sound · 320 kbps' },
   {
     id: 'normal',
@@ -19,7 +27,7 @@ export const QUALITIES = [
   },
   { id: 'low', bitrate: 96, label: 'low', caption: 'saves data · 96 kbps' },
 ];
-export const DEFAULT_QUALITY = 'high';
+export const DEFAULT_QUALITY = 'auto';
 
 const isValid = id => QUALITIES.some(q => q.id === id);
 

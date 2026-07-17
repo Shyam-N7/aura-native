@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { QUALITIES } from '../lib/audioQuality';
+import { autoTier } from '../lib/autoQuality';
 import { closeQualitySheet, subscribeQualitySheet } from '../lib/qualitySheet';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
@@ -53,7 +54,11 @@ export function QualitySheet() {
                 {q.label}
               </Text>
               <Text style={[styles.rowHint, { color: t.inkSoft }]}>
-                {q.caption}
+                {/* Active auto shows the tier it is streaming right now —
+                    read at open, honest, no polling. */}
+                {on && q.id === 'auto'
+                  ? `${q.caption} · now ${autoTier()} kbps`
+                  : q.caption}
               </Text>
             </View>
             {on ? <Icon name="check" size={20} color={t.accent} /> : null}
