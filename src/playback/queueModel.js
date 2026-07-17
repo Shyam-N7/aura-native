@@ -155,6 +155,50 @@ export function shuffleUpcoming(queue, rng = Math.random) {
   return { ...queue, tracks, idx: tracks.indexOf(playing) };
 }
 
+// Un-shuffle: return the queue to its pre-shuffle order (originalTracks, the
+// snapshot toggleShuffle took when it shuffled). Reconciles what happened
+// while shuffled — tracks removed since stay gone, tracks added since follow
+// at the end in their play order — and the playing track keeps playing.
+// Compares by object identity with occurrence counts (queue ops move track
+// objects, never clone them), so a song queued twice survives the round-trip.
+export function restoreOrder(queue, originalTracks) {
+  if (!originalTracks?.length || queue.tracks.length < 2) {
+    return queue;
+  }
+  const remaining = new Map();
+  for (const trk of queue.tracks) {
+    remaining.set(trk, (remaining.get(trk) ?? 0) + 1);
+  }
+  // Snapshot-order pass: keep each original track still present, consuming
+  // one occurrence per appearance.
+  const restored = [];
+  for (const trk of originalTracks) {
+    const n = remaining.get(trk) ?? 0;
+    if (n > 0) {
+      restored.push(trk);
+      remaining.set(trk, n - 1);
+    }
+  }
+  // Occurrences left over arrived while shuffled — they have no original
+  // position, so they follow the restored set in their current order.
+  const added = queue.tracks.filter(trk => {
+    const n = remaining.get(trk) ?? 0;
+    if (n > 0) {
+      remaining.set(trk, n - 1);
+      return true;
+    }
+    return false;
+  });
+  const tracks = [...restored, ...added];
+  const idx = tracks.indexOf(queue.tracks[queue.idx]);
+  if (idx < 0) {
+    // No playing track to anchor on (idx out of range) — restoring would
+    // derail playback, so leave the queue as it is.
+    return queue;
+  }
+  return { ...queue, tracks, idx };
+}
+
 // Append a batch (auto-radio continuation) deduped against the live queue by
 // id AND normalized title — a cover / alt-credit of an already-queued song
 // (same title, different artist) never gets appended — and deduped within the

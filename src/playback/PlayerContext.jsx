@@ -79,6 +79,10 @@ export function PlayerProvider({ children }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [repeat, setRepeat] = useState(readStoredRepeat);
   const [shuffleActive, setShuffleActive] = useState(false);
+  // Pre-shuffle order snapshot, held while shuffle is on so turning it off
+  // can restore the queue (model.restoreOrder). Null whenever shuffle is off
+  // or the queue was replaced — a new queue owns its own order.
+  const preShuffleRef = useRef(null);
   const [quality, setQualityState] = useState(getAudioQuality);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -373,6 +377,7 @@ export function PlayerProvider({ children }) {
       }
       applyQueue(q);
       setShuffleActive(false);
+      preShuffleRef.current = null;
       setIsPlaying(true);
       enqueueOp(async () => {
         await engine.syncQueue(q, { startIndex: q.idx });
@@ -511,6 +516,7 @@ export function PlayerProvider({ children }) {
     }
     applyQueue(nq);
     setShuffleActive(false);
+    preShuffleRef.current = null;
     enqueueOp(async () => {
       // Gapless-boundary guard: while the clear confirm sat open, the native
       // player may have advanced past the track the JS model believed was
@@ -580,13 +586,23 @@ export function PlayerProvider({ children }) {
 
   const toggleShuffle = useCallback(() => {
     if (shuffleActive) {
-      // Off just clears the indicator — the order stays (web parity).
+      // Off restores the pre-shuffle order — minus tracks removed since,
+      // plus tracks added since — with the playing track kept playing.
+      const q = queueRef.current;
+      const nq = model.restoreOrder(q, preShuffleRef.current);
+      preShuffleRef.current = null;
       setShuffleActive(false);
+      if (nq !== q) {
+        applyQueue(nq);
+        enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+        showToast('back in order.');
+      }
       return;
     }
     const q = queueRef.current;
     const nq = model.shuffleUpcoming(q);
     if (nq !== q) {
+      preShuffleRef.current = q.tracks;
       applyQueue(nq);
       enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
     }
@@ -788,6 +804,7 @@ export function PlayerProvider({ children }) {
         setLyricsOpen(false);
         setIsPlaying(false);
         setShuffleActive(false);
+        preShuffleRef.current = null;
         autoRadio.reset();
         clearPosition();
         applyQueue(model.createQueue([], 0, "tonight's set"));

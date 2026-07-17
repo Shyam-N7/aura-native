@@ -8,6 +8,7 @@ import {
   jumpTo,
   removeAt,
   reorder,
+  restoreOrder,
   serializeQueue,
   shuffleUpcoming,
 } from '../src/playback/queueModel';
@@ -160,6 +161,49 @@ describe('shuffleUpcoming', () => {
   test('a single-track queue is a no-op (same reference)', () => {
     const q = createQueue([t('a')], 0, 'your set');
     expect(shuffleUpcoming(q)).toBe(q);
+  });
+});
+
+describe('restoreOrder', () => {
+  test('round-trips a shuffle back to the original order', () => {
+    const tracks = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => t(id));
+    const q = createQueue(tracks, 2, 'your set');
+    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const back = restoreOrder(shuffled, q.tracks);
+    expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    expect(back.tracks[back.idx].id).toBe('c');
+  });
+
+  test('tracks removed while shuffled stay gone', () => {
+    const q = createQueue(['a', 'b', 'c', 'd'].map(id => t(id)), 0, 'your set');
+    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const trimmed = removeAt(shuffled, shuffled.tracks.findIndex(x => x.id === 'd'));
+    const back = restoreOrder(trimmed, q.tracks);
+    expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c']);
+    expect(back.tracks[back.idx].id).toBe('a');
+  });
+
+  test('tracks added while shuffled follow at the end', () => {
+    const q = createQueue(['a', 'b', 'c'].map(id => t(id)), 0, 'your set');
+    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const grown = addToEnd(shuffled, t('x'));
+    const back = restoreOrder(grown, q.tracks);
+    expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'x']);
+  });
+
+  test('a song queued twice survives the round-trip (occurrence counts)', () => {
+    const dup = t('b');
+    const tracks = [t('a'), dup, t('c'), dup];
+    const q = createQueue(tracks, 0, 'your set');
+    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const back = restoreOrder(shuffled, q.tracks);
+    expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'b']);
+  });
+
+  test('no snapshot is a no-op (same reference)', () => {
+    const q = q3();
+    expect(restoreOrder(q, null)).toBe(q);
+    expect(restoreOrder(q, [])).toBe(q);
   });
 });
 
