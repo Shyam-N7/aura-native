@@ -45,6 +45,13 @@ import { DUR, EASE, SPRING } from '../theme/motion';
 const ROW_HEIGHT = 62;
 const SHIFT_MS = 160;
 const EDGE = 90;
+// While a drag is in flight the list widens its mount window so the dragged
+// cell can't be virtualized away mid-drag. At windowSize 3 a long drag (e.g.
+// row 100 → 46) scrolled the origin cell out of the mounted window; it
+// unmounted, taking the visible card AND its gesture with it, leaving the
+// shifted-open gap the user saw. 11 keeps ~±60 rows mounted (covers realistic
+// drags) only for the seconds a drag lasts, then it snaps back to 3.
+const DRAG_WINDOW = 11;
 // Hide-past pref — the web key/values verbatim ('aura.queueHidePast', '1'/'0');
 // read once per open, written on toggle.
 const HIDE_PAST_KEY = 'aura.queueHidePast';
@@ -99,6 +106,7 @@ function Row({
   base,
   count,
   listGesture,
+  onDrag,
 }) {
   const { t } = useTheme();
   const title = cleanTitle(item.title);
@@ -139,6 +147,9 @@ function Row({
       dragShift.value = 0;
       scrollStart.value = scrollY.value;
       runOnJS(pickup)();
+      // Widen the mount window for the duration of the drag (see DRAG_WINDOW)
+      // so this cell survives being scrolled far from the viewport.
+      runOnJS(onDrag)(true);
     })
     .onUpdate(e => {
       'worklet';
@@ -174,6 +185,8 @@ function Row({
         dragShift.value = 0;
       }
       owns.value = false;
+      // Drag over (committed or cancelled) — let the list shed the window.
+      runOnJS(onDrag)(false);
     });
 
   const rowStyle = useAnimatedStyle(() => {
@@ -538,6 +551,9 @@ export function QueueSheet() {
     }
     setVis('closing');
     setMenuOpen(false);
+    // Belt-and-suspenders: never leave the wide drag window pinned if the
+    // sheet closes mid-drag (onFinalize normally clears this on gesture end).
+    setDragging(false);
     player.ui?.closeQueue?.();
     if (reduced) {
       endClose();
@@ -572,6 +588,12 @@ export function QueueSheet() {
   const scrollStart = useSharedValue(0);
   const listH = useSharedValue(0);
   const listRef = useAnimatedRef();
+
+  // True only while a row is actively being dragged — widens the FlatList
+  // mount window so the dragged cell isn't virtualized away (see DRAG_WINDOW).
+  // Set from the grip pan's start/finalize (UI thread → JS via runOnJS).
+  const [dragging, setDragging] = useState(false);
+  const onDrag = useCallback(v => setDragging(v), []);
 
   // The list's own scroll as an explicit gesture, so row grips can make it
   // wait (see Row).
@@ -641,6 +663,7 @@ export function QueueSheet() {
         base={pastHidden}
         count={tracks.length}
         listGesture={listGesture}
+        onDrag={onDrag}
       />
     );
   };
@@ -808,6 +831,9 @@ export function QueueSheet() {
               // A queue can be a whole shared playlist (245 tracks in the
               // field) — unbounded mounting OOM-killed the app on open.
               {...LONG_LIST}
+              // Override only while dragging so the dragged cell stays mounted
+              // (long-drag fix); back to LONG_LIST's 3 at rest.
+              windowSize={dragging ? DRAG_WINDOW : LONG_LIST.windowSize}
               contentContainerStyle={[
                 styles.list,
                 { paddingBottom: insets.bottom + 24 },
