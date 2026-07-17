@@ -51,6 +51,13 @@ const SHIFT_MS = 160;
 // near the zone's inner boundary, fast at the very edge).
 const AUTOSCROLL_EDGE = 110; // px from the list's top/bottom that arms scrolling
 const AUTOSCROLL_MAX = 26; // px per 60fps frame at the very edge
+// An edge zone only fires when the drag is HEADING toward that edge. Position
+// alone isn't enough: picking a row up near the list's bottom starts the finger
+// already inside the bottom zone, which auto-scrolled toward the end while the
+// user was dragging up (field report: "taking me towards 100"). Direction comes
+// from a hysteresis detector — the drag must reverse by this many px before its
+// direction flips, so finger jitter never flickers the scroll on and off.
+const DRAG_DIR_HYST = 12;
 // While a drag is in flight the list widens its mount window so the dragged
 // cell can't be virtualized away mid-drag. At windowSize 3 a long drag (e.g.
 // row 100 → 46) scrolled the origin cell out of the mounted window; it
@@ -107,6 +114,9 @@ function Row({
   dragShift,
   scrollY,
   scrollStart,
+  scrollCmd,
+  dragDir,
+  dirPivot,
   base,
   count,
   listGesture,
@@ -153,6 +163,17 @@ function Row({
       dragTo.value = index;
       dragShift.value = 0;
       scrollStart.value = scrollY.value;
+      // The auto-scroll drives the list from scrollCmd, an offset it OWNS and
+      // accumulates. scrollY (event-fed) can't be the loop's feedback: on
+      // Android a programmatic scrollTo doesn't reliably echo a scroll event,
+      // so reading it back froze the offset near its start — each frame
+      // re-commanded almost the same spot and the "auto-scroll" only crept
+      // (field report: "very very laggy"). Seed it with the real offset here;
+      // during a drag the native scroll gesture is blocked, so no one else
+      // moves the list underneath it.
+      scrollCmd.value = scrollY.value;
+      dragDir.value = 0;
+      dirPivot.value = 0;
       fingerY.value = e.absoluteY;
       fingerTransY.value = 0;
       // Anchor the edge zones to the list's real on-screen top. Derive it from
@@ -178,12 +199,29 @@ function Row({
       if (!owns.value) {
         return;
       }
-      // Only capture the finger here; the continuous frame loop owns the
-      // scroll AND the drag-follow math so it stays smooth when the finger
+      // Capture the finger; the continuous frame loop owns the scroll and
+      // re-derives the drag-follow math so it stays smooth when the finger
       // holds still at the edge (see the useFrameCallback in QueueSheet).
       fingerY.value = e.absoluteY;
       fingerTransY.value = e.translationY;
-      dragShift.value = e.translationY + scrollY.value - scrollStart.value;
+      // Which way is the drag heading? dirPivot rides the translation's
+      // running extreme; the direction only flips once the finger has come
+      // back past it by DRAG_DIR_HYST. The frame loop uses this to arm only
+      // the edge zone the drag is moving TOWARD.
+      const ty = e.translationY;
+      if (ty - dirPivot.value > DRAG_DIR_HYST) {
+        dragDir.value = 1;
+        dirPivot.value = ty;
+      } else if (ty - dirPivot.value < -DRAG_DIR_HYST) {
+        dragDir.value = -1;
+        dirPivot.value = ty;
+      } else if (
+        (dragDir.value === 1 && ty > dirPivot.value) ||
+        (dragDir.value === -1 && ty < dirPivot.value)
+      ) {
+        dirPivot.value = ty;
+      }
+      dragShift.value = ty + scrollCmd.value - scrollStart.value;
       const to = index + Math.round(dragShift.value / ROW_HEIGHT);
       // `base` floors drops at the first RENDERED row — with hide-past on,
       // the hidden history above the current track is not a drop target.
@@ -617,10 +655,17 @@ export function QueueSheet() {
   const onDrag = useCallback(v => setDragging(v), []);
 
   // Auto-scroll frame loop inputs: the finger's screen Y + translation (written
-  // by the grip pan) and the list's measured on-screen top.
+  // by the grip pan) and the list's derived on-screen top.
   const fingerY = useSharedValue(0);
   const fingerTransY = useSharedValue(0);
   const listTop = useSharedValue(0);
+  // The offset the auto-scroll commands — owned by the loop, never read back
+  // from scroll events (see the seeding comment in Row's pan.onStart).
+  const scrollCmd = useSharedValue(0);
+  // Drag heading (-1 up · 0 none yet · 1 down) + its hysteresis pivot — written
+  // by the grip pan, read by the frame loop to arm only the matching edge zone.
+  const dragDir = useSharedValue(0);
+  const dirPivot = useSharedValue(0);
   // The drop-clamp bounds, mirrored into shared values so the frame worklet can
   // read them (base = first droppable row with hide-past on; count = queue len).
   const baseSV = useSharedValue(0);
@@ -642,20 +687,35 @@ export function QueueSheet() {
     }
     const dt = (frame.timeSincePreviousFrame ?? 16) / 16.667;
     const top = listTop.value;
-    const bottom = listTop.value + listH.value;
+    const bottom = top + listH.value;
     const y = fingerY.value;
+    // A zone fires only when the drag is heading toward it (dragDir) AND the
+    // finger is inside it — speed ramps quadratically with edge depth.
     let vel = 0;
-    if (y < top + AUTOSCROLL_EDGE) {
+    if (dragDir.value === -1 && y < top + AUTOSCROLL_EDGE) {
       const d = Math.min(1, (top + AUTOSCROLL_EDGE - y) / AUTOSCROLL_EDGE);
       vel = -AUTOSCROLL_MAX * d * d;
-    } else if (y > bottom - AUTOSCROLL_EDGE) {
+    } else if (dragDir.value === 1 && y > bottom - AUTOSCROLL_EDGE) {
       const d = Math.min(1, (y - (bottom - AUTOSCROLL_EDGE)) / AUTOSCROLL_EDGE);
       vel = AUTOSCROLL_MAX * d * d;
     }
     if (vel !== 0) {
-      scrollTo(listRef, 0, Math.max(0, scrollY.value + vel * dt), false);
+      // Integrate on scrollCmd (the loop's own offset), clamped to the rows'
+      // real extent so the last row stops flush at the viewport bottom.
+      const maxY = Math.max(
+        0,
+        (countSV.value - baseSV.value) * ROW_HEIGHT - listH.value,
+      );
+      const next = Math.max(0, Math.min(maxY, scrollCmd.value + vel * dt));
+      if (next !== scrollCmd.value) {
+        scrollCmd.value = next;
+        scrollTo(listRef, 0, next, false);
+        // Mirror into the event-fed value: programmatic scrolls don't always
+        // echo an event, and everything downstream reads scrollY.
+        scrollY.value = next;
+      }
     }
-    dragShift.value = fingerTransY.value + scrollY.value - scrollStart.value;
+    dragShift.value = fingerTransY.value + scrollCmd.value - scrollStart.value;
     const to = dragFrom.value + Math.round(dragShift.value / ROW_HEIGHT);
     dragTo.value = Math.max(baseSV.value, Math.min(countSV.value - 1, to));
   }, false);
@@ -726,6 +786,9 @@ export function QueueSheet() {
         dragShift={dragShift}
         scrollY={scrollY}
         scrollStart={scrollStart}
+        scrollCmd={scrollCmd}
+        dragDir={dragDir}
+        dirPivot={dirPivot}
         base={pastHidden}
         count={tracks.length}
         listGesture={listGesture}
