@@ -2,7 +2,7 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { LyricsOverlay } from '../src/overlays/LyricsOverlay';
-import { HINT_KARAOKE, hintDone } from '../src/lib/hints';
+import { HINT_KARAOKE, HINT_STAGE_TAP, hintDone } from '../src/lib/hints';
 import { storage } from '../src/storage/mmkv';
 
 jest.mock('react-native-track-player', () => ({
@@ -193,12 +193,17 @@ test('karaoke: hint shows until first entry, stage sings and taps play/pause', a
   // 30s in: line 2 (t=28) is on stage, line 3 (t=60) previews below.
   expect(body).toContain('second words');
   expect(body).toContain('third words');
+  // The glass stage-tap chip rides the stage until the tap is performed.
+  expect(body).toContain('tap the words to pause');
 
-  // A tap on the stage itself is play/pause (karaoke ergonomics).
+  // A tap on the stage itself is play/pause (karaoke ergonomics) — and
+  // performing it retires the chip's hint for good.
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'pause').props.onPress();
   });
   expect(mockState.player.togglePlay).toHaveBeenCalled();
+  expect(hintDone(HINT_STAGE_TAP)).toBe(true);
+  expect(texts(tree.toJSON())).not.toContain('tap the words to pause');
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

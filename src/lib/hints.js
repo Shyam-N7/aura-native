@@ -11,6 +11,7 @@ const KEY = 'aura.hintsDone';
 export const HINT_LIKE = 'double-tap-like';
 export const HINT_NEXT = 'swipe-next';
 export const HINT_KARAOKE = 'karaoke';
+export const HINT_STAGE_TAP = 'karaoke-tap-pause';
 
 const subs = new Set();
 

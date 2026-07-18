@@ -40,7 +40,7 @@ import {
   lineSweep,
   nextLineIn,
 } from '../lib/lyricsSync';
-import { HINT_KARAOKE, markHintDone } from '../lib/hints';
+import { HINT_KARAOKE, HINT_STAGE_TAP, markHintDone } from '../lib/hints';
 import { useHintActive } from '../hooks/useHintActive';
 import { cleanLyric, cleanTitle } from '../utils/title';
 import { HeartButton } from '../components/player/HeartButton';
@@ -347,10 +347,11 @@ function PlainView({ lines, view, inkSoft, inkFaint, onWakeScroll }) {
   );
 }
 
-// The classic karaoke "get ready" cue: three dots that deplete as the next
-// line approaches, each standing for a third of the countdown window. Driven
-// by the position ticker — honest to the actual timestamps, no free-running
-// timer to drift or leak.
+// The classic karaoke "get ready" cue: three uniform dots that vanish one by
+// one as the next line approaches (each stands for a third of the countdown
+// window), sitting right above that line shown dimmed in place — "this starts
+// in 3, 2, 1". Driven by the position ticker — honest to the actual
+// timestamps, no free-running timer to drift or leak.
 function CountdownDots({ remain, accent }) {
   const slot = COUNTDOWN_SEC / 3;
   return (
@@ -366,13 +367,14 @@ function CountdownDot({ on, accent }) {
   const v = useSharedValue(on ? 1 : 0);
   useEffect(() => {
     v.value = withTiming(on ? 1 : 0, {
-      duration: 240,
+      duration: 280,
       easing: Easing.out(Easing.ease),
     });
   }, [on, v]);
+  // A spent dot is GONE — lingering half-faded specks read as a glitch.
   const style = useAnimatedStyle(() => ({
-    opacity: 0.2 + v.value * 0.8,
-    transform: [{ scale: 0.5 + v.value * 0.5 }],
+    opacity: v.value,
+    transform: [{ scale: 0.3 + v.value * 0.7 }],
   }));
   return (
     <Animated.View
@@ -431,6 +433,7 @@ function KaraokeView({
   inkFaint,
   onSeekLine,
   onToggle,
+  stageHint,
 }) {
   const activeIdx = useMemo(
     () => activeIndexFor(lines, seconds),
@@ -467,7 +470,14 @@ function KaraokeView({
     !playing && !current
       ? (lines[activeIdx + 1] ?? lines[activeIdx] ?? lines[0] ?? null)
       : null;
-  const preview = waiting ? (lines[1] ?? null) : (lines[activeIdx + 1] ?? null);
+  // During the countdown the incoming line already stands on the main stage,
+  // so the preview slot looks one further ahead instead of duplicating it.
+  const nextUp = countdown != null ? (lines[activeIdx + 1] ?? null) : null;
+  const preview = waiting
+    ? (lines[1] ?? null)
+    : countdown != null
+      ? (lines[activeIdx + 2] ?? null)
+      : (lines[activeIdx + 1] ?? null);
 
   // Entering karaoke should feel like stepping onto a stage — one settle-in
   // on mount, not an instant view swap.
@@ -558,7 +568,14 @@ function KaraokeView({
               </Animated.View>
             </View>
           ) : countdown != null ? (
-            <CountdownDots remain={countdown} accent={accent} />
+            <View style={styles.countdownWrap}>
+              <CountdownDots remain={countdown} accent={accent} />
+              {nextUp && (
+                <Text style={[styles.karaokeLine, { color: baseColor }]}>
+                  {lineFor(nextUp)}
+                </Text>
+              )}
+            </View>
           ) : showMark ? (
             <GapMark accent={accent} reduced={reduced} />
           ) : resting ? (
@@ -595,6 +612,20 @@ function KaraokeView({
             </Pressable>
           )}
         </View>
+        {/* Glass gesture hint, player-chip style — shown until the stage tap
+            has been performed once. Paused hides it: the cue teaches then. */}
+        {stageHint && playing && (
+          <View pointerEvents="none" style={styles.stageHint}>
+            <Glass radius={999} style={styles.stageHintChip}>
+              <View style={styles.stageHintRow}>
+                <Icon name="pause" size={12} color={accent} />
+                <Text style={[styles.stageHintText, { color: mainColor }]}>
+                  tap the words to pause
+                </Text>
+              </View>
+            </Glass>
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -903,11 +934,14 @@ export function LyricsOverlay() {
     [seekTo],
   );
   // The karaoke stage's tap-to-play/pause, behind the same wake guard.
+  // Actually toggling is the moment the gesture counts as learned.
   const togglePlay = player.togglePlay;
+  const stageHintOn = useHintActive(HINT_STAGE_TAP);
   const onStageToggle = useCallback(() => {
     if (cinRef.current || Date.now() - wokeAt.current < 400) {
       return;
     }
+    markHintDone(HINT_STAGE_TAP);
     togglePlay?.();
   }, [togglePlay]);
 
@@ -1185,6 +1219,7 @@ export function LyricsOverlay() {
                 inkFaint={t.inkFaint}
                 onSeekLine={onSeekLine}
                 onToggle={onStageToggle}
+                stageHint={stageHintOn}
               />
             ) : (
               <SyncedView
@@ -1327,15 +1362,40 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 12.5,
   },
+  countdownWrap: {
+    alignItems: 'center',
+    gap: 16,
+    alignSelf: 'stretch',
+  },
   countdown: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 11,
   },
   countdownDot: {
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+  },
+  stageHint: {
+    position: 'absolute',
+    bottom: 18,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  stageHintChip: {
+    overflow: 'hidden',
+  },
+  stageHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  stageHintText: {
+    fontFamily: fonts.medium,
+    fontSize: 11.5,
   },
   hintLine: {
     fontFamily: fonts.regular,
