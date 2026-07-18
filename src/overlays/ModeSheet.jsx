@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { getUser, setActiveMode, subscribeAuth } from '../lib/auth';
 import {
@@ -20,7 +20,6 @@ export function ModeSheet() {
   const { t } = useTheme();
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState(getUser);
-  const [busy, setBusy] = useState(null);
 
   useEffect(() => subscribeModeSheet(setOpen), []);
   useEffect(() => subscribeAuth(() => setUser(getUser())), []);
@@ -32,19 +31,15 @@ export function ModeSheet() {
   const active = user?.activeMode ?? 'everyday';
   const modes = (user?.modes ?? []).filter(m => m.key !== 'car');
 
-  const pick = async key => {
-    if (busy || key === active) {
-      closeModeSheet();
+  // Optimistic: close immediately and let setActiveMode flip the mode locally
+  // (Home re-seeds at once) while the network confirms behind it. A failure
+  // reverts the flip and toasts — no spinner, no blocking wait.
+  const pick = key => {
+    closeModeSheet();
+    if (key === active) {
       return;
     }
-    setBusy(key);
-    try {
-      await setActiveMode(key);
-      closeModeSheet();
-    } catch (err) {
-      showToast(`couldn't switch — ${err.message}`);
-      setBusy(null);
-    }
+    setActiveMode(key).catch(err => showToast(`couldn't switch — ${err.message}`));
   };
 
   return (
@@ -79,11 +74,7 @@ export function ModeSheet() {
                 {MODE_HINT[m.key] ?? (m.explicitOff ? 'clean' : '')}
               </Text>
             </View>
-            {busy === m.key ? (
-              <ActivityIndicator size="small" color={t.accent} />
-            ) : on ? (
-              <Icon name="check" size={20} color={t.accent} />
-            ) : null}
+            {on ? <Icon name="check" size={20} color={t.accent} /> : null}
           </Pressable>
         );
       })}

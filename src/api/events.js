@@ -1,17 +1,23 @@
 import { fetchAuthed } from '../lib/auth';
 import { isPrivateSession } from '../lib/privateSession';
+import { invalidateHomeCache } from '../lib/homeCache';
 // Fire-and-forget listening event recorder, ported from web src/api/events.js
 // (postEvent(track_id, kind, opts) reshaped to recordEvent(evt) per the native
 // contract). Failures are logged to console but never surface to the user —
 // recording is a background concern.
 
-// Every ~5 listens the web drops Home's listening-derived caches so quick
-// picks refresh within the session. The counter is kept so behaviour matches
-// when Phase 2 ports src/lib/homeCache.js and fills in this hook.
+// Every ~5 listens, drop Home's listening-derived caches so the picks refresh
+// within the session (they trail the actual plays otherwise). Only the
+// signal-driven sections — NOT the editorial featured pool, which is keyed by
+// mode elsewhere.
 const INVALIDATE_EVERY = 5;
+const LISTEN_KEYS = [
+  'recentlyPlayed',
+  'quickPicks',
+  'mostPlayed',
+  'topArtists',
+];
 let listensSinceInvalidate = 0;
-
-function invalidateHomeCache() {}
 
 export function recordEvent(evt = {}) {
   const { track_id, kind } = evt;
@@ -26,7 +32,7 @@ export function recordEvent(evt = {}) {
     listensSinceInvalidate += 1;
     if (listensSinceInvalidate >= INVALIDATE_EVERY) {
       listensSinceInvalidate = 0;
-      invalidateHomeCache();
+      invalidateHomeCache(...LISTEN_KEYS);
     }
   }
   fetchAuthed('/api/events', {

@@ -116,11 +116,26 @@ export default function HomeScreen({ navigation }) {
     };
   }, []);
 
-  // "More like {your newest listen}" — the same related-tracks engine that
-  // picks the radio, surfaced as a browsable shelf (field ask: more real
-  // recommendations on home). Seeded by the latest history entry; cached with
-  // the seed so returning to Home is instant and a NEW listen re-seeds it.
-  const moreLikeSeed = recent?.[0] ?? null;
+  // "More like {what you're playing}" — the same related-tracks engine that
+  // picks the radio, surfaced as a browsable shelf. Seeded by the CURRENTLY
+  // PLAYING track so it tracks the music live (falls back to the newest
+  // history entry when nothing's playing). Debounced so rapid skips don't
+  // thrash the shelf, and cached by seed so returning to Home is instant.
+  const nowPlaying = player.current;
+  const [moreLikeSeed, setMoreLikeSeed] = useState(
+    () => player.current ?? recent?.[0] ?? null,
+  );
+  useEffect(() => {
+    const seed = nowPlaying ?? recent?.[0] ?? null;
+    if (!seed?.id) {
+      return undefined;
+    }
+    // Settle for a moment so a burst of skips doesn't re-seed on each one —
+    // the shelf follows what you actually stay on.
+    const id = setTimeout(() => setMoreLikeSeed(seed), 2500);
+    return () => clearTimeout(id);
+  }, [nowPlaying, recent]);
+
   const [moreLike, setMoreLike] = useState(() => homeCache.moreLike ?? null);
   useEffect(() => {
     if (!moreLikeSeed?.id || homeCache.moreLike?.seedId === moreLikeSeed.id) {

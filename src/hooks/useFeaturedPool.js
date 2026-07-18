@@ -15,7 +15,15 @@ export function useFeaturedPool({ limit = 24 } = {}) {
 
   useEffect(() => {
     let stale = false;
-    setState({ status: 'loading', tracks: [] });
+    // Stale-while-revalidate: keep the current pool visible while the new
+    // mode's loads, so hero / new-for-you / stations don't all blank to
+    // skeletons on every switch. EXCEPTION: a mode that filters explicit
+    // (family / kids) blanks instead — the previous mode's tracks must never
+    // flash under a stricter one.
+    setState(s => ({
+      status: 'loading',
+      tracks: getActiveExplicitOff() ? [] : s.tracks,
+    }));
     getFeatured({ limit })
       .then(results => {
         if (!stale) {

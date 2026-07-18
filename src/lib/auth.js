@@ -359,20 +359,35 @@ export function showSensing() {
 // modes view) and updates the session so the UI reacts at once (home refetches
 // the mode-seeded pool). No cross-tab broadcast — that's a web-only concern.
 export async function setActiveMode(key) {
-  const res = await fetchAuthed('/api/modes/active', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw Object.assign(new Error(data.error ?? 'could not switch mode'), {
-      status: res.status,
-      code: data.code,
-    });
+  // Optimistic: flip the mode locally FIRST so the sheet can close instantly
+  // and Home re-seeds right away — the network confirms (or reverts) behind
+  // it. Without this the picker sat on a spinner through the round-trip AND
+  // the home refetch, which read as "modes keep loading".
+  const prev = getUser();
+  if (prev) {
+    persistUser({ ...prev, activeMode: key });
   }
-  persistUser(data.user);
-  return data.user;
+  try {
+    const res = await fetchAuthed('/api/modes/active', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw Object.assign(new Error(data.error ?? 'could not switch mode'), {
+        status: res.status,
+        code: data.code,
+      });
+    }
+    persistUser(data.user); // reconcile with the server's canonical user
+    return data.user;
+  } catch (err) {
+    if (prev) {
+      persistUser(prev); // revert the optimistic flip
+    }
+    throw err;
+  }
 }
 
 // ── Family PIN ───────────────────────────────────────────────────────
