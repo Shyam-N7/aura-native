@@ -378,11 +378,13 @@ export function PlayerSheet() {
         player.prev();
       }
     });
-  // Swipe UP on the art opens the queue. Kept in the SAME Race as the left/
-  // right flings (not on the parent sheet): a Fling on the parent competed
-  // with these child flings and swallowed the horizontal swipes, so all four
-  // art gestures live in one detector where their directions stay distinct.
-  const artFlingQueue = Gesture.Fling()
+  const artGestures = Gesture.Race(artFlingNext, artFlingPrev, artDoubleTap);
+
+  // Swipe UP to open the queue — bound to the UP-NEXT area (its own detector),
+  // not the art. On the art it fought the left/right flings; over the up-next
+  // slot it's a separate region, so it coexists cleanly and lands exactly
+  // where the user reaches ("pull the queue up from the bottom").
+  const queueFling = Gesture.Fling()
     .direction(Directions.UP)
     .runOnJS(true)
     .onEnd((_e, success) => {
@@ -391,12 +393,6 @@ export function PlayerSheet() {
         player.ui?.openQueue?.();
       }
     });
-  const artGestures = Gesture.Race(
-    artFlingNext,
-    artFlingPrev,
-    artFlingQueue,
-    artDoubleTap,
-  );
   const qualityLabel =
     QUALITIES.find(q => q.id === player.quality)?.label ?? 'quality';
 
@@ -761,19 +757,26 @@ export function PlayerSheet() {
               </PressScale>
             </View>
 
-            {/* Until the user has flicked up to open the queue once, a quiet
-                nudge sits over the up-next slot. */}
-            {queueHint && (
-              <View pointerEvents="none" style={styles.queueHintRow}>
-                <HintFloatUp reduced={reduced}>
-                  <Icon name="chevron-down" size={13} color={t.accent} />
-                </HintFloatUp>
-                <Text style={[styles.queueHintText, { color: t.inkSoft }]}>
-                  swipe up to open the queue
-                </Text>
+            {/* Swipe up anywhere on this bottom band (hint + up-next) opens the
+                queue — where the user reaches for it. */}
+            <GestureDetector gesture={queueFling}>
+              <View>
+                {/* Until the user has flicked up once, a quiet nudge sits here. */}
+                {queueHint && (
+                  <View pointerEvents="none" style={styles.queueHintRow}>
+                    <HintFloatUp reduced={reduced}>
+                      <Icon name="chevron-down" size={13} color={t.accent} />
+                    </HintFloatUp>
+                    <Text
+                      style={[styles.queueHintText, { color: t.inkSoft }]}
+                    >
+                      swipe up to open the queue
+                    </Text>
+                  </View>
+                )}
+                {upNextSlot()}
               </View>
-            )}
-            {upNextSlot()}
+            </GestureDetector>
           </View>
         </View>
       </GestureDetector>
