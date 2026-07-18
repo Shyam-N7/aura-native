@@ -33,6 +33,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { getLyrics } from '../api/lyrics';
+import { requestStems } from '../api/stems';
+import { showToast } from '../lib/toast';
 import {
   activeIndexFor,
   COUNTDOWN_SEC,
@@ -59,6 +61,7 @@ const CINEMA_MS = 800;
 const LINE_MS = 380;
 const IDLE_MS = 5000; // no interaction → cinematic
 const POLL_MS = 25000; // 'pending' (server still generating) re-poll
+const STEMS_POLL_MS = 20000; // "music only" preparation re-poll
 const PANEL_RADIUS = 24;
 const SLIDE = Easing.bezier(0.22, 1, 0.36, 1);
 
@@ -434,6 +437,9 @@ function KaraokeView({
   onSeekLine,
   onToggle,
   stageHint,
+  musicOnly,
+  preparingStems,
+  onMusicOnly,
 }) {
   const activeIdx = useMemo(
     () => activeIndexFor(lines, seconds),
@@ -524,6 +530,34 @@ function KaraokeView({
         onPress={onToggle}
         style={styles.karaokeStage}
       >
+        {/* True instrumental toggle — accent-filled while the voice is out,
+            "preparing" while the server separates it (first time only). */}
+        <View pointerEvents="box-none" style={styles.stageTop}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="music only"
+            accessibilityState={{ selected: musicOnly, busy: preparingStems }}
+            onPress={onMusicOnly}
+            style={[
+              styles.musicOnlyBtn,
+              { borderColor: musicOnly || preparingStems ? accent : sideColor },
+              musicOnly && { backgroundColor: `${accent}26` },
+            ]}
+          >
+            <Text
+              style={[
+                styles.musicOnlyText,
+                {
+                  color: musicOnly || preparingStems ? accent : sideColor,
+                },
+              ]}
+            >
+              {preparingStems
+                ? 'preparing music… tap to cancel'
+                : 'music only'}
+            </Text>
+          </Pressable>
+        </View>
         <View style={styles.karaokeSlot}>
           {prevLine && (
             <Pressable
@@ -945,6 +979,106 @@ export function LyricsOverlay() {
     togglePlay?.();
   }, [togglePlay]);
 
+  // Karaoke "music only" — the true instrumental, separated once server-side
+  // and cached for everyone. Tapping the stage pill starts the preparation;
+  // the poll below rides it (first request can take minutes on the free
+  // queue) and swaps the source the moment it's ready. Leaving karaoke,
+  // closing the lyrics, or a track change always lands back on the full mix.
+  const musicOnly = !!player.musicOnly;
+  const setMusicOnlySrc = player.setMusicOnly;
+  // Preparation is pinned to the track it's FOR — so a track change (which
+  // swaps trackId) can never let this effect fire a stems request for the new
+  // song, and the pill only reads "preparing" on the track being prepared.
+  const [preparingId, setPreparingId] = useState(null);
+  const preparingStems = !!trackId && preparingId === trackId;
+  const toggleMusicOnly = useCallback(() => {
+    if (cinRef.current || Date.now() - wokeAt.current < 400) {
+      return;
+    }
+    if (preparingStems) {
+      setPreparingId(null); // tapping again cancels the wait
+      showToast('stopped preparing.');
+      return;
+    }
+    if (musicOnly) {
+      setMusicOnlySrc?.(null);
+      return;
+    }
+    setPreparingId(trackId);
+  }, [preparingStems, musicOnly, setMusicOnlySrc, trackId]);
+
+  useEffect(() => {
+    if (preparingId !== trackId || !trackId || !karaoke) {
+      return undefined;
+    }
+    let live = true;
+    let errs = 0; // consecutive transient failures — give up only after a few
+    const ctl = new AbortController();
+    const tick = async () => {
+      const res = await requestStems(trackId, { signal: ctl.signal }).catch(
+        () => null,
+      );
+      if (!live || !res) {
+        return;
+      }
+      if (res.status === 'done' && res.url) {
+        setPreparingId(null);
+        setMusicOnlySrc?.(res.url);
+        showToast('music only — voice removed.');
+      } else if (res.status === 'failed') {
+        setPreparingId(null);
+        showToast("couldn't make a music-only version — try again later.");
+      } else if (res.status === 'unavailable') {
+        setPreparingId(null);
+        showToast("music only isn't set up yet.");
+      } else if (res.status === 'error') {
+        // One dropped poll doesn't mean the server-side job failed — the
+        // separation is still running. Keep riding it; only give up if the
+        // network stays down for several polls in a row.
+        errs += 1;
+        if (errs >= 4) {
+          setPreparingId(null);
+          showToast("couldn't reach the server — try again later.");
+        }
+      } else if (res.status === 'waiting' || res.status === 'preparing') {
+        errs = 0; // genuine in-progress — reset the error streak, keep polling
+      } else {
+        // A malformed 'done' (no url) or any unrecognized status — don't spin
+        // forever; count it against the same cap as a transient error.
+        errs += 1;
+        if (errs >= 4) {
+          setPreparingId(null);
+          showToast("couldn't make a music-only version — try again later.");
+        }
+      }
+    };
+    tick();
+    const id = setInterval(tick, STEMS_POLL_MS);
+    return () => {
+      live = false;
+      ctl.abort();
+      clearInterval(id);
+    };
+  }, [preparingId, trackId, karaoke, setMusicOnlySrc]);
+
+  // Preparation is pinned to one track — a plain track change abandons it
+  // (the poll gate already blocks a cross-track request) so returning to the
+  // old track later never silently re-arms and auto-enables music-only.
+  useEffect(() => {
+    setPreparingId(cur => (cur == null || cur === trackId ? cur : null));
+  }, [trackId]);
+
+  // Music-only is a stage thing: leaving karaoke or the lyrics reverts it.
+  useEffect(() => {
+    if (karaoke && open) {
+      return;
+    }
+    setPreparingId(null);
+    if (musicOnly) {
+      setMusicOnlySrc?.(null);
+    }
+  }, [karaoke, open, musicOnly, setMusicOnlySrc]);
+
   if ((!open && vis !== 'closing') || !track) {
     return null;
   }
@@ -1220,6 +1354,9 @@ export function LyricsOverlay() {
                 onSeekLine={onSeekLine}
                 onToggle={onStageToggle}
                 stageHint={stageHintOn}
+                musicOnly={musicOnly}
+                preparingStems={preparingStems}
+                onMusicOnly={toggleMusicOnly}
               />
             ) : (
               <SyncedView
@@ -1375,6 +1512,23 @@ const styles = StyleSheet.create({
     width: 11,
     height: 11,
     borderRadius: 5.5,
+  },
+  stageTop: {
+    position: 'absolute',
+    top: 14,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  musicOnlyBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 5,
+  },
+  musicOnlyText: {
+    fontFamily: fonts.medium,
+    fontSize: 11.5,
   },
   stageHint: {
     position: 'absolute',

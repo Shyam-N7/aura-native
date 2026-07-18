@@ -25,6 +25,11 @@ jest.mock('../src/api/lyrics', () => ({
   prefetchLyrics: jest.fn(),
 }));
 
+const mockRequestStems = jest.fn();
+jest.mock('../src/api/stems', () => ({
+  requestStems: (...args) => mockRequestStems(...args),
+}));
+
 const TRACK = {
   id: 't1',
   title: 'Current Song (From "Some Movie")',
@@ -47,6 +52,8 @@ function basePlayer(overrides = {}) {
     isPlaying: true,
     seekTo: jest.fn(),
     togglePlay: jest.fn(),
+    musicOnly: false,
+    setMusicOnly: jest.fn(),
     ui: {
       lyricsOpen: true,
       openLyrics: jest.fn(),
@@ -205,6 +212,28 @@ test('karaoke: hint shows until first entry, stage sings and taps play/pause', a
   expect(hintDone(HINT_STAGE_TAP)).toBe(true);
   expect(texts(tree.toJSON())).not.toContain('tap the words to pause');
 
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('karaoke: music only prepares the instrumental and swaps the source', async () => {
+  mockRequestStems.mockResolvedValue({
+    status: 'done',
+    url: 'https://blob/instrumental.mp3',
+  });
+  const tree = await render();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'karaoke').props.onPress();
+  });
+
+  // The stage pill starts the preparation; the poll's first tick resolves
+  // 'done' and hands the player the cached instrumental url.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'music only').props.onPress();
+  });
+  expect(mockRequestStems).toHaveBeenCalledWith('t1', expect.anything());
+  expect(mockState.player.setMusicOnly).toHaveBeenCalledWith(
+    'https://blob/instrumental.mp3',
+  );
   await ReactTestRenderer.act(() => tree.unmount());
 });
 

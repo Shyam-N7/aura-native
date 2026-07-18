@@ -91,6 +91,8 @@ export function PlayerProvider({ children }) {
   const preShuffleRef = useRef(null);
   const [quality, setQualityState] = useState(getAudioQuality);
   const [leveling, setLevelingState] = useState(getLeveling);
+  // Karaoke "music only" — true while the active track plays its instrumental.
+  const [musicOnly, setMusicOnlyState] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -633,6 +635,20 @@ export function PlayerProvider({ children }) {
     setLevelingState(getLeveling());
   }, []);
 
+  // Karaoke "music only": swap the active track to its cached instrumental
+  // (url) or back to the full mix (null). Session-only by design — the flag
+  // drops on every track change (effect below), so the next song always
+  // starts with its voice.
+  const musicOnlyRef = useRef(false);
+  const setMusicOnly = useCallback(
+    url => {
+      musicOnlyRef.current = !!url;
+      setMusicOnlyState(!!url);
+      return enqueueOp(() => engine.setMusicOnly(url ?? null));
+    },
+    [enqueueOp],
+  );
+
   const openPlayer = useCallback(() => setPlayerOpen(true), []);
   const closePlayer = useCallback(() => setPlayerOpen(false), []);
   // The queue rides ABOVE the player (its own overlay): opening it must not
@@ -691,6 +707,33 @@ export function PlayerProvider({ children }) {
       stale = true;
     };
   }, [currentId, nextId, leveling, enqueueOp]);
+
+  // Music-only never follows across songs — when the playing track changes,
+  // drop the flag and clear the engine override (which repairs the exact slot
+  // the instrumental rode and leaves the new track untouched). Keyed on the
+  // track id, NOT queue.idx: a benign queue edit that only shifts the current
+  // song's index (removing an earlier track, reorder, un-shuffle) must not
+  // yank the voice back mid-song. The rare move between two entries of the
+  // SAME song leaves the flag briefly stale, but the engine's id+url guards
+  // keep the audio and recovery correct until the next tap or karaoke exit.
+  useEffect(() => {
+    if (musicOnlyRef.current) {
+      musicOnlyRef.current = false;
+      setMusicOnlyState(false);
+      enqueueOp(() => engine.setMusicOnly(null));
+    }
+  }, [currentId, enqueueOp]);
+
+  // The engine clears music-only on its own when a broken instrumental forces
+  // a fall back to the full mix — follow it so the pill matches the audio.
+  useEffect(() => {
+    engine.setAltClearedListener(() => {
+      musicOnlyRef.current = false;
+      setMusicOnlyState(false);
+      showToast('back to the full song.');
+    });
+    return () => engine.setAltClearedListener(null);
+  }, []);
 
   // ── boot: player setup, handler wiring, cold restore ─────────────────────
   useEffect(() => {
@@ -937,6 +980,8 @@ export function PlayerProvider({ children }) {
       setQuality,
       leveling,
       setLeveling,
+      musicOnly,
+      setMusicOnly,
     }),
     [
       current,
@@ -966,6 +1011,8 @@ export function PlayerProvider({ children }) {
       setQuality,
       leveling,
       setLeveling,
+      musicOnly,
+      setMusicOnly,
     ],
   );
 

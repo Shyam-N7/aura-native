@@ -254,6 +254,13 @@ async function remapQueue(bitrate, { reloadCurrent = true } = {}) {
     return;
   }
   const cur = rQueue[active];
+  if (altSource.id === cur.id && altSource.url === cur.url) {
+    // Music-only is riding THIS slot — a quality remap must not yank the
+    // instrumental out from under the karaoke stage. Matching the url too
+    // means a stale alt id (a duplicate entry we moved off) can't wrongly
+    // freeze a legit full-mix reload.
+    return;
+  }
   const swapped = remap(cur);
   if (swapped.url !== cur.url) {
     const { position } = await TrackPlayer.getProgress();
@@ -275,6 +282,137 @@ export async function setQuality(quality) {
     resetAuto();
   }
   await remapQueue(effectiveBitrate(quality));
+}
+
+// ── karaoke "music only" ─────────────────────────────────────────────────
+// The active track can carry a session-only alternate source — the cached
+// instrumental. It rides the RNTP track's `url` ONLY (streamUrl stays the
+// full mix), so persistence and every rebuild that derives urls from streamUrl
+// keep operating on the real stream. altSource pins BOTH the id and the exact
+// instrumental url, so the mutated slot is repairable even among duplicate
+// queue entries. remapQueue leaves an alt-sourced current track alone; a
+// playback error on the instrumental clears it, falls back to the full mix,
+// and notifies the UI so the pill can't lie.
+let altSource = { id: null, url: null };
+let altClearedListener = null;
+
+// The UI observes engine-side clears (instrumental death) so its music-only
+// flag and pill follow the audio that's actually playing.
+export function setAltClearedListener(fn) {
+  altClearedListener = fn;
+}
+
+// A deliberate reload of `id` invalidates any in-flight PlaybackError recovery
+// walk for it, so the fresh stream starts its ladder from the top rather than
+// inheriting a stale rung index.
+function resetRecoveryFor(id) {
+  if (recovery.id === id) {
+    recovery = { id: null, ladderPos: 0, refetched: false };
+  }
+}
+
+// Full-mix url for a track from its (untouched) streamUrl.
+function fullMixUrl(track) {
+  const ladder = track.streamUrl
+    ? qualityLadder(track.streamUrl, effectiveBitrate(getAudioQuality()))
+    : [];
+  return ladder[0] ?? track.streamUrl ?? track.url;
+}
+
+// Load a url onto the ACTIVE slot with position + play-state carry, but only
+// if the active track is still the one we targeted — RNTP's load() replaces
+// whatever is current at call time, so a track that advanced during the awaits
+// would otherwise get the wrong media stamped onto it.
+async function loadOntoActive(expectIdx, expectId, url) {
+  const { position } = await TrackPlayer.getProgress();
+  const wasPlaying = await TrackPlayer.getPlayWhenReady();
+  const [activeNow, queueNow] = await Promise.all([
+    TrackPlayer.getActiveTrackIndex(),
+    TrackPlayer.getQueue(),
+  ]);
+  if (activeNow !== expectIdx || queueNow[activeNow]?.id !== expectId) {
+    return false; // track advanced under us — abandon, don't corrupt the new slot
+  }
+  const cur = queueNow[activeNow];
+  resetRecoveryFor(expectId);
+  await TrackPlayer.load({ ...cur, url });
+  if (position > 0) {
+    await TrackPlayer.seekTo(position);
+  }
+  if (wasPlaying) {
+    await TrackPlayer.play();
+  }
+  return true;
+}
+
+export async function setMusicOnly(url) {
+  if (!url) {
+    return revertMusicOnly();
+  }
+  const [rQueue, active] = await Promise.all([
+    TrackPlayer.getQueue(),
+    TrackPlayer.getActiveTrackIndex(),
+  ]);
+  if (active == null || !rQueue[active]) {
+    return false;
+  }
+  const cur = rQueue[active];
+  if (url === cur.url) {
+    altSource = { id: cur.id, url };
+    return true;
+  }
+  altSource = { id: cur.id, url };
+  const ok = await loadOntoActive(active, cur.id, url);
+  if (!ok) {
+    altSource = { id: null, url: null };
+  }
+  return ok;
+}
+
+// Return to the full mix. Repairs the EXACT slot the instrumental rides (by id
+// AND url, so duplicates don't confuse it): the active slot reloads in place
+// with position carry; a departed slot (the track already advanced) is patched
+// without touching playback. A slot that's gone (removed) needs no repair.
+async function revertMusicOnly() {
+  const target = altSource;
+  altSource = { id: null, url: null };
+  if (!target.id) {
+    return true;
+  }
+  const [rQueue, active] = await Promise.all([
+    TrackPlayer.getQueue(),
+    TrackPlayer.getActiveTrackIndex(),
+  ]);
+  const idx = rQueue.findIndex(
+    t => t?.id === target.id && t?.url === target.url,
+  );
+  if (idx < 0) {
+    return true; // instrumental slot no longer present
+  }
+  const slot = rQueue[idx];
+  const url = fullMixUrl(slot);
+  if (!url || url === slot.url) {
+    return true;
+  }
+  // Reload the active slot in place; if the track advanced during the awaits,
+  // loadOntoActive bails and we patch the now-departed slot instead — so the
+  // instrumental is never left stranded in history for a prev-press to replay.
+  const patchedActive =
+    idx === active && (await loadOntoActive(active, slot.id, url));
+  if (!patchedActive) {
+    const at = rQueue.findIndex(
+      t => t?.id === target.id && t?.url === target.url,
+    );
+    const gone = await TrackPlayer.getActiveTrackIndex();
+    if (at >= 0 && at !== gone) {
+      // A non-active slot: repair without touching playback. No recovery reset
+      // here — the departed slot isn't playing, and a same-id ACTIVE duplicate
+      // may have a live recovery walk we must not wipe.
+      await TrackPlayer.remove([at]);
+      await TrackPlayer.add([{ ...slot, url }], at);
+    }
+  }
+  return true;
 }
 
 // ── auto-quality sampler ─────────────────────────────────────────────────
@@ -342,6 +480,24 @@ export async function handlePlaybackError() {
     return;
   }
   const cur = rQueue[active];
+  // A dying instrumental falls straight back to the full mix — a broken
+  // music-only stream must never take the whole session down with it. Reset
+  // the recovery walk (this is a deliberate reload) and tell the UI, so the
+  // pill can't keep claiming music-only over audible vocals.
+  if (altSource.id === cur.id && altSource.url === cur.url) {
+    altSource = { id: null, url: null };
+    resetRecoveryFor(cur.id);
+    const fallback = fullMixUrl(cur);
+    if (fallback && fallback !== cur.url) {
+      const { position: at } = await TrackPlayer.getProgress().catch(() => ({
+        position: 0,
+      }));
+      await loadAndResume({ ...cur, url: fallback }, at);
+      altClearedListener?.();
+      return;
+    }
+    altClearedListener?.();
+  }
   if (recovery.id !== cur.id) {
     recovery = { id: cur.id, ladderPos: 0, refetched: false };
   }
