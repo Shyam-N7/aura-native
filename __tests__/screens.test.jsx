@@ -41,6 +41,9 @@ jest.mock('../src/api/catalog', () => ({
   searchCatalog: jest.fn(),
   getTrack: jest.fn(),
   getFeatured: jest.fn(),
+  getHomeHero: jest.fn(async () => null),
+  getHomeNewForYou: jest.fn(async () => null),
+  getHomeStations: jest.fn(async () => null),
 }));
 // Home section fetches — empty by default so sections self-hide and the
 // featured pool (mocked above) feeds the quick-picks fallback chain.

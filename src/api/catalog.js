@@ -82,3 +82,32 @@ export async function getFeatured({ lang, limit = 20, signal } = {}) {
   const { results } = await res.json();
   return results;
 }
+
+// Personalized home surfaces (server/homeReco.js). Each RESOLVES NULL when the
+// server has no personalization (cold-start, not deployed, or a transient
+// error) — the caller then keeps its honest featured fallback. Never throws.
+async function homeReco(path, signal) {
+  try {
+    const res = await fetchAuthed(path, { signal });
+    if (!res.ok) {
+      return null;
+    }
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// { track, reason } | null
+export function getHomeHero({ signal } = {}) {
+  const tz = new Date().getTimezoneOffset();
+  return homeReco(`/api/home/hero?tzOffset=${tz}`, signal);
+}
+// { tracks } | null
+export function getHomeNewForYou({ signal } = {}) {
+  return homeReco('/api/home/new-for-you', signal);
+}
+// { stations: [{ seedId, title, artist, imageUrl, language, reason }] } | null
+export function getHomeStations({ signal } = {}) {
+  return homeReco('/api/home/stations', signal);
+}

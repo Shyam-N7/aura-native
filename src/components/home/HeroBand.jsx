@@ -13,7 +13,7 @@ import { cleanTitle } from '../../utils/title';
 // "The set · tonight" opener card built from pool[0], ported from web
 // HeroBand.jsx (mobile variant: headline + artist line + begin pill over the
 // blurred track art). Tapping anywhere queues the ENTIRE pool from the top.
-export function HeroBand({ track, loading, onBegin }) {
+export function HeroBand({ track, reason, loading, onBegin }) {
   const { t } = useTheme();
 
   if (loading) {
@@ -22,6 +22,9 @@ export function HeroBand({ track, loading, onBegin }) {
   if (!track) {
     return null;
   }
+  // A personalized hero wears its receipt ("you keep coming back to this");
+  // the featured fallback keeps the editorial "the set · tonight" label.
+  const eyebrow = reason ?? 'the set · tonight';
 
   // Blurred to a wash — 150px decodes/blurs ~11× cheaper than 500px, and
   // radius 8/150 ≈ the old 28/500. The sharp 92px art below stays at 500.
@@ -56,7 +59,9 @@ export function HeroBand({ track, loading, onBegin }) {
             res={500}
           />
           <View style={styles.copy}>
-            <Text style={[label(9), styles.light70]}>the set · tonight</Text>
+            <Text numberOfLines={1} style={[label(9), styles.light70]}>
+              {eyebrow}
+            </Text>
             <Text numberOfLines={2} style={styles.headline}>
               {cleanTitle(track.title)}
             </Text>

@@ -13,6 +13,7 @@ import { listPlaylists } from '../api/playlists';
 import { listAutoPlaylists } from '../api/autoPlaylists';
 import { getDiscoverHome } from '../api/discover';
 import { getRelated } from '../api/related';
+import { getHomeHero } from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
 import { TopBar } from '../components/nav/TopBar';
@@ -178,6 +179,25 @@ export default function HomeScreen({ navigation }) {
       : pool.tracks
   ).slice(0, DISC_COUNT);
 
+  // Personalized hero from the server (server/homeReco). Cached so returning to
+  // Home is instant; resolves null (kept as null) when there's no
+  // personalization, and the featured pool fills in below.
+  const [heroReco, setHeroReco] = useState(() => homeCache.homeHero ?? null);
+  useEffect(() => {
+    let stale = false;
+    getHomeHero().then(h => {
+      if (stale) {
+        return;
+      }
+      const next = h?.track ? h : null;
+      homeCache.homeHero = next;
+      setHeroReco(next);
+    });
+    return () => {
+      stale = true;
+    };
+  }, []);
+
   // Log SHOWN picks so the ranker can demote never-played ones — only when
   // the server ring is what rendered; the local fallback is never logged.
   useEffect(() => {
@@ -190,7 +210,17 @@ export default function HomeScreen({ navigation }) {
   }, [serverRing, picks]);
 
   const poolLoading = pool.status === 'loading';
-  const hero = pool.tracks[0] ?? null;
+  // Personalized hero, drawn from your own listening and rotated daily
+  // (server/homeReco). When there isn't one — too little history, a content-
+  // filtered mode (family/kids), or the server not deployed yet — a featured
+  // pick fills in, and even THAT rotates daily so it's never the same album for
+  // weeks (the static-hero complaint).
+  const personalHero = !explicitOff ? heroReco : null;
+  const heroFallbackIdx = pool.tracks.length
+    ? Math.floor(Date.now() / 86400000) % Math.min(pool.tracks.length, 6)
+    : 0;
+  const hero = personalHero?.track ?? pool.tracks[heroFallbackIdx] ?? null;
+  const heroReason = personalHero?.reason ?? null;
   const newPicks = pool.tracks.slice(1, 5);
   const stations = pool.tracks.slice(5, 9);
 
@@ -284,8 +314,20 @@ export default function HomeScreen({ navigation }) {
 
           <HeroBand
             track={hero}
-            loading={poolLoading}
-            onBegin={() => hero && pickFromPool(hero)}
+            reason={heroReason}
+            loading={poolLoading && !hero}
+            onBegin={() => {
+              if (!hero) {
+                return;
+              }
+              // A personal hero starts a radio from itself; a featured-pool
+              // hero opens the set from its spot in the pool.
+              if (personalHero?.track) {
+                pickLive(hero);
+              } else {
+                pickFromPool(hero);
+              }
+            }}
           />
 
           {(recent?.length ?? 0) > 0 && (
