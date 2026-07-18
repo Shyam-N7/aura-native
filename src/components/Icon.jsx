@@ -70,6 +70,10 @@ const ICONS = {
   bloom: {
     d: 'M12 3 c1.2 4.2 2.8 5.8 7 7 c-4.2 1.2 -5.8 2.8 -7 7 c-1.2 -4.2 -2.8 -5.8 -7 -7 c4.2 -1.2 5.8 -2.8 7 -7 Z',
   },
+  // The bloom theme's face — a bunny (round head, two long ears, dot eyes).
+  bunny: {
+    d: 'M12 9.8 a4.8 4.8 0 1 0 0 9.6 a4.8 4.8 0 1 0 0 -9.6 M9.6 10.4 C7.7 7.9 7.1 5.1 8.5 3.3 C10 4.3 10.9 6.9 11 9.7 M14.4 10.4 C16.3 7.9 16.9 5.1 15.5 3.3 C14 4.3 13.1 6.9 13 9.7 M10.3 14.3 v0.01 M13.7 14.3 v0.01',
+  },
   // Lines of verse — the lyrics entry on the player (a lyric sheet, not a mic).
   lyrics: { d: 'M5 6 h14 M5 10 h9 M5 14 h12 M5 18 h7' },
   // Send arrow — the talk composer's submit.

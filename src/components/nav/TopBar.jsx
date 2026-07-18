@@ -29,7 +29,7 @@ const AURA_REST = 0.34;
 const THEME_ORDER = [...Object.keys(themes), 'auto'];
 // The cycle button wears the active theme's own glyph; on 'auto' it wears
 // the resolved theme's glyph inside an accent ring — the ring is the tell.
-const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bloom' };
+const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'bunny' };
 
 // The web's glass top bar: wordmark left, controls right.
 // `navigation` comes from the hosting screen's props (screens render standalone

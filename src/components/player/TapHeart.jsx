@@ -93,15 +93,12 @@ export function TapHeart({ burst, accent }) {
         <TapSpark key={s.deg} spark={s} fx={fx} accent={accent} />
       ))}
       <Animated.View style={[styles.heart, heartStyle]}>
-        {/* Soft dark drop under a white rim under an accent core — depth on
-            bright art, presence on dark art. */}
+        {/* Solid accent heart over a soft dark drop — the drop, not an
+            outline, is what keeps it present on bright art. */}
         <View style={styles.drop}>
-          <Icon name="heart-filled" size={SIZE} color="rgba(0,0,0,0.30)" />
+          <Icon name="heart-filled" size={SIZE} color="rgba(0,0,0,0.28)" />
         </View>
-        <Icon name="heart-filled" size={SIZE} color="rgba(255,255,255,0.94)" />
-        <View style={styles.core}>
-          <Icon name="heart-filled" size={52} color={accent} />
-        </View>
+        <Icon name="heart-filled" size={SIZE} color={accent} />
       </Animated.View>
     </View>
   );
@@ -141,7 +138,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     transform: [{ translateY: 3 }],
   },
-  core: { position: 'absolute' },
   ring: {
     position: 'absolute',
     width: SIZE * 1.3,
