@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Circle } from '@shopify/react-native-skia';
 import Animated, {
   cancelAnimation,
@@ -122,6 +122,20 @@ export function SearchField({ inputRef, value, onChangeText, ...inputProps }) {
           style={[styles.input, { color: t.ink }]}
           {...inputProps}
         />
+        {value?.length > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="clear search"
+            onPress={() => {
+              onChangeText('');
+              inputRef?.current?.focus();
+            }}
+            hitSlop={10}
+            style={styles.clear}
+          >
+            <Icon name="close" size={16} color={t.inkFaint} />
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -145,5 +159,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.09,
     paddingVertical: 0,
+  },
+  clear: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

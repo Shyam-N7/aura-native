@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { SearchField } from '../components/search/SearchField';
+import { Icon } from '../components/Icon';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -191,15 +192,32 @@ export default function SearchScreen({ navigation }) {
     <View
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <SearchField
-          inputRef={inputRef}
-          value={q}
-          onChangeText={setQ}
-          placeholder="search songs, artists…"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
+        <View style={styles.searchRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="back"
+            onPress={() =>
+              navigation?.canGoBack?.()
+                ? navigation.goBack()
+                : navigation?.navigate?.('Home')
+            }
+            hitSlop={10}
+            style={styles.backBtn}
+          >
+            <Icon name="chevron-left" size={24} color={t.ink} />
+          </Pressable>
+          <View style={styles.searchFieldWrap}>
+            <SearchField
+              inputRef={inputRef}
+              value={q}
+              onChangeText={setQ}
+              placeholder="search songs, artists…"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+          </View>
+        </View>
         <ScrollView overScrollMode="always"
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -458,6 +476,18 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     gap: 10,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchFieldWrap: { flex: 1 },
   pillRow: {
     gap: 8,
     paddingBottom: 2,
