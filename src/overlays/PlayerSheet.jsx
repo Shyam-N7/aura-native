@@ -378,12 +378,11 @@ export function PlayerSheet() {
         player.prev();
       }
     });
-  const artGestures = Gesture.Race(artFlingNext, artFlingPrev, artDoubleTap);
-
-  // Swipe up anywhere on the sheet (esp. the transport area below the ribbon)
-  // opens the queue — the "pull the queue up from the bottom" ask. It's a
-  // discrete up-fling, so it coexists with the downward drag-dismiss.
-  const openQueueFling = Gesture.Fling()
+  // Swipe UP on the art opens the queue. Kept in the SAME Race as the left/
+  // right flings (not on the parent sheet): a Fling on the parent competed
+  // with these child flings and swallowed the horizontal swipes, so all four
+  // art gestures live in one detector where their directions stay distinct.
+  const artFlingQueue = Gesture.Fling()
     .direction(Directions.UP)
     .runOnJS(true)
     .onEnd((_e, success) => {
@@ -392,6 +391,12 @@ export function PlayerSheet() {
         player.ui?.openQueue?.();
       }
     });
+  const artGestures = Gesture.Race(
+    artFlingNext,
+    artFlingPrev,
+    artFlingQueue,
+    artDoubleTap,
+  );
   const qualityLabel =
     QUALITIES.find(q => q.id === player.quality)?.label ?? 'quality';
 
@@ -464,7 +469,7 @@ export function PlayerSheet() {
     <Animated.View
       style={[styles.root, { backgroundColor: t.pageBg }, sheetStyle]}
     >
-      <GestureDetector gesture={Gesture.Race(dismissPan, openQueueFling)}>
+      <GestureDetector gesture={dismissPan}>
         <View style={styles.fill}>
           <GradientBg
             stops={[
