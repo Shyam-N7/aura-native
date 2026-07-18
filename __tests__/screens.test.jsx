@@ -145,7 +145,10 @@ test("home greets and begins tonight's set from the hero band", async () => {
   const tree = await render(<HomeScreen />);
 
   const body = texts(tree.toJSON());
-  expect(body).toMatch(/good (morning|afternoon|evening), shyam/);
+  // A warm part-of-day greeting (rotates daily) followed by the first name.
+  expect(body).toMatch(
+    /(good morning|morning|rise and shine|good afternoon|afternoon|hey there|good evening|evening|good to see you|still up|up late|late night), shyam/,
+  );
   expect(body).toContain('music that gets your mood');
   expect(getFeatured).toHaveBeenCalledWith({ limit: 24 });
 

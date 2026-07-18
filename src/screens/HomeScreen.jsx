@@ -13,7 +13,12 @@ import { listPlaylists } from '../api/playlists';
 import { listAutoPlaylists } from '../api/autoPlaylists';
 import { getDiscoverHome } from '../api/discover';
 import { getRelated } from '../api/related';
-import { getHomeHero } from '../api/catalog';
+import {
+  getHomeHero,
+  getHomeNewForYou,
+  getHomeStations,
+  getTrack,
+} from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
 import { TopBar } from '../components/nav/TopBar';
@@ -35,15 +40,34 @@ import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
 import { partOfDay } from '../utils/daypart';
 
-function greeting() {
-  const hour = new Date().getHours();
+// Warm, plain greetings per part of day — a few per phase so the line varies
+// day to day instead of the same "good morning" forever. Late night comes
+// first so the small hours never read as "good morning".
+const GREETINGS = {
+  night: ['still up', 'up late', 'late night'], // 23:00–04:59
+  morning: ['good morning', 'morning', 'rise and shine'], // 05:00–11:59
+  afternoon: ['good afternoon', 'afternoon', 'hey there'], // 12:00–16:59
+  evening: ['good evening', 'evening', 'good to see you'], // 17:00–22:59
+};
+
+function greetingBucket(hour) {
+  if (hour >= 23 || hour < 5) {
+    return 'night';
+  }
   if (hour < 12) {
-    return 'good morning';
+    return 'morning';
   }
   if (hour < 17) {
-    return 'good afternoon';
+    return 'afternoon';
   }
-  return 'good evening';
+  return 'evening';
+}
+
+function greeting() {
+  const opts = GREETINGS[greetingBucket(new Date().getHours())];
+  // Rotate deterministically by the day, so it's fresh but stable within a day.
+  const day = Math.floor(Date.now() / 86400000);
+  return opts[day % opts.length];
 }
 
 // Cache-first section fetch (web homeCache contract): state seeds
@@ -179,20 +203,27 @@ export default function HomeScreen({ navigation }) {
       : pool.tracks
   ).slice(0, DISC_COUNT);
 
-  // Personalized hero from the server (server/homeReco). Cached so returning to
-  // Home is instant; resolves null (kept as null) when there's no
-  // personalization, and the featured pool fills in below.
-  const [heroReco, setHeroReco] = useState(() => homeCache.homeHero ?? null);
+  // Personalized home surfaces from the server (server/homeReco): hero,
+  // new-for-you, stations. Cached so returning to Home is instant; each field
+  // stays null when there's no personalization (cold-start / not deployed), and
+  // the featured pool fills that surface in below — never a fabricated "for you".
+  const [reco, setReco] = useState(() => homeCache.reco ?? null);
   useEffect(() => {
     let stale = false;
-    getHomeHero().then(h => {
-      if (stale) {
-        return;
-      }
-      const next = h?.track ? h : null;
-      homeCache.homeHero = next;
-      setHeroReco(next);
-    });
+    Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
+      ([h, n, s]) => {
+        if (stale) {
+          return;
+        }
+        const next = {
+          hero: h?.track ? h : null,
+          newForYou: n?.tracks?.length ? n.tracks : null,
+          stations: s?.stations?.length ? s.stations : null,
+        };
+        homeCache.reco = next;
+        setReco(next);
+      },
+    );
     return () => {
       stale = true;
     };
@@ -215,14 +246,33 @@ export default function HomeScreen({ navigation }) {
   // filtered mode (family/kids), or the server not deployed yet — a featured
   // pick fills in, and even THAT rotates daily so it's never the same album for
   // weeks (the static-hero complaint).
-  const personalHero = !explicitOff ? heroReco : null;
+  // Personalization is skipped in content-filtered modes (family/kids), where
+  // the mode-seeded featured pool leads instead.
+  const personalHero = !explicitOff ? reco?.hero : null;
   const heroFallbackIdx = pool.tracks.length
     ? Math.floor(Date.now() / 86400000) % Math.min(pool.tracks.length, 6)
     : 0;
   const hero = personalHero?.track ?? pool.tracks[heroFallbackIdx] ?? null;
   const heroReason = personalHero?.reason ?? null;
-  const newPicks = pool.tracks.slice(1, 5);
-  const stations = pool.tracks.slice(5, 9);
+
+  // "New for you": real discovery from the server, else the featured slice.
+  const newPicks =
+    (!explicitOff && reco?.newForYou) || pool.tracks.slice(1, 5);
+  const newPicksPersonal = !explicitOff && !!reco?.newForYou;
+
+  // Stations: real per-artist radio seeds (mapped to the grid's track shape),
+  // else featured tiles. `station:true` routes the tap to a radio, not the set.
+  const stations =
+    !explicitOff && reco?.stations
+      ? reco.stations.map(s => ({
+          id: s.seedId,
+          title: s.title,
+          artist: s.artist,
+          imageUrl: s.imageUrl,
+          language: s.language,
+          station: true,
+        }))
+      : pool.tracks.slice(5, 9);
 
   // Web daypart gating: the morning mix shows 5:00–11:59, night 20:00–3:59.
   const hour = new Date().getHours();
@@ -248,6 +298,31 @@ export default function HomeScreen({ navigation }) {
   const pickLive = track => {
     player.playTrack(track, { source: 'your pick' });
     openPlayer();
+  };
+  // A station tile starts a real radio from its seed: hydrate the seed + pull
+  // its related tracks and play them as a queue (auto-radio extends from there).
+  const pickStation = async station => {
+    try {
+      const [seed, related] = await Promise.all([
+        getTrack(station.id).catch(() => null),
+        getRelated(station.id, {
+          lang: station.language,
+          limit: 20,
+        }).catch(() => []),
+      ]);
+      const list = [seed, ...related].filter(Boolean);
+      const queue = list.filter(
+        (tk, i) => tk.id && list.findIndex(x => x.id === tk.id) === i,
+      );
+      if (!queue.length) {
+        showToast("couldn't start that station.");
+        return;
+      }
+      player.playQueue(queue, 0, `radio · ${station.artist}`);
+      openPlayer();
+    } catch {
+      showToast("couldn't start that station.");
+    }
   };
   // A mix card opens the set (web onOpenAuto) — the full track list travels
   // as initialData since auto mixes have no per-id endpoint. Gate cards say
@@ -378,11 +453,20 @@ export default function HomeScreen({ navigation }) {
 
           {(poolLoading || stations.length > 0) && (
             <View>
-              <SectionHeader title="stations" sub="start from any song" />
+              <SectionHeader
+                title="stations"
+                sub={
+                  reco?.stations && !explicitOff
+                    ? 'radios from your artists'
+                    : 'start from any song'
+                }
+              />
               <StationsGrid
                 stations={stations}
                 loading={poolLoading}
-                onPick={pickFromPool}
+                onPick={track =>
+                  track.station ? pickStation(track) : pickFromPool(track)
+                }
               />
             </View>
           )}
@@ -443,7 +527,10 @@ export default function HomeScreen({ navigation }) {
 
           {(poolLoading || newPicks.length > 0) && (
             <View>
-              <SectionHeader title="new for you" sub="fresh this week" />
+              <SectionHeader
+                title="new for you"
+                sub={newPicksPersonal ? 'from your listening' : 'fresh this week'}
+              />
               {poolLoading ? (
                 <View style={styles.skeletonGrid}>
                   {[0, 1, 2, 3].map(i => (
@@ -459,7 +546,11 @@ export default function HomeScreen({ navigation }) {
                     meta: track.artist,
                     track,
                   }))}
-                  onPressItem={item => pickFromPool(item.track)}
+                  onPressItem={item =>
+                    newPicksPersonal
+                      ? pickLive(item.track)
+                      : pickFromPool(item.track)
+                  }
                 />
               )}
             </View>
