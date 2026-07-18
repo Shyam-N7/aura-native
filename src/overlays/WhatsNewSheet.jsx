@@ -22,8 +22,8 @@ const FEATURES = [
   },
   {
     icon: 'next',
-    title: 'swipe up for next',
-    line: 'flick up on the cover to skip ahead.',
+    title: 'swipe to change song',
+    line: 'flick the cover left for next, right to go back.',
   },
   {
     icon: 'lyrics',

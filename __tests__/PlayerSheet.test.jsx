@@ -103,7 +103,7 @@ test('gesture hints ride the art until each gesture has been performed', async (
   let tree = await render();
   let body = texts(tree.toJSON());
   expect(body).toContain('double-tap to like');
-  expect(body).toContain('swipe up for next');
+  expect(body).toContain('swipe to change song');
   await ReactTestRenderer.act(() => tree.unmount());
 
   // Both gestures learned — the chips are gone for good.
@@ -112,7 +112,7 @@ test('gesture hints ride the art until each gesture has been performed', async (
   tree = await render();
   body = texts(tree.toJSON());
   expect(body).not.toContain('double-tap to like');
-  expect(body).not.toContain('swipe up for next');
+  expect(body).not.toContain('swipe to change song');
   await ReactTestRenderer.act(() => tree.unmount());
 });
 

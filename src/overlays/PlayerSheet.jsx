@@ -95,7 +95,8 @@ function ArtDevelop({ track, size }) {
   );
 }
 
-// A gentle bob on the swipe-hint arrow — the motion suggests the motion.
+// A gentle side-to-side bob on the swipe-hint arrow — the motion suggests the
+// horizontal swipe it's teaching.
 function HintFloat({ reduced, children }) {
   const v = useSharedValue(0);
   useEffect(() => {
@@ -104,15 +105,16 @@ function HintFloat({ reduced, children }) {
     }
     v.value = withRepeat(
       withSequence(
-        withTiming(-3, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-3, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(3, { duration: 600, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
+      true,
     );
     return () => cancelAnimation(v);
   }, [reduced, v]);
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: v.value }],
+    transform: [{ translateX: v.value }],
   }));
   return <Animated.View style={style}>{children}</Animated.View>;
 }
@@ -314,10 +316,10 @@ export function PlayerSheet() {
 
   // Art gestures. Double-tap always LIKES (the Instagram convention — a
   // celebration, not a toggle; silently idempotent when already liked), and
-  // the heart pops right where the fingers landed. An up-fling skips to the
-  // next track. They can't collide with the sheet's drag-dismiss, which is
-  // downward-only (activeOffsetY 24). Both are discrete gestures, so they
-  // run straight on the JS thread. Performing either retires its hint.
+  // the heart pops right where the fingers landed. Swipe LEFT = next, RIGHT =
+  // prev (the record-flip metaphor). Horizontal flings can't collide with the
+  // sheet's drag-dismiss (downward) or the queue swipe (upward). All discrete,
+  // so they run straight on the JS thread. Performing a swipe retires its hint.
   const artDoubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .runOnJS(true)
@@ -331,7 +333,7 @@ export function PlayerSheet() {
       }
     });
   const artFlingNext = Gesture.Fling()
-    .direction(Directions.UP)
+    .direction(Directions.LEFT)
     .runOnJS(true)
     .onEnd((_e, success) => {
       if (success) {
@@ -339,7 +341,28 @@ export function PlayerSheet() {
         player.next();
       }
     });
-  const artGestures = Gesture.Race(artFlingNext, artDoubleTap);
+  const artFlingPrev = Gesture.Fling()
+    .direction(Directions.RIGHT)
+    .runOnJS(true)
+    .onEnd((_e, success) => {
+      if (success) {
+        markHintDone(HINT_NEXT);
+        player.prev();
+      }
+    });
+  const artGestures = Gesture.Race(artFlingNext, artFlingPrev, artDoubleTap);
+
+  // Swipe up anywhere on the sheet (esp. the transport area below the ribbon)
+  // opens the queue — the "pull the queue up from the bottom" ask. It's a
+  // discrete up-fling, so it coexists with the downward drag-dismiss.
+  const openQueueFling = Gesture.Fling()
+    .direction(Directions.UP)
+    .runOnJS(true)
+    .onEnd((_e, success) => {
+      if (success) {
+        player.ui?.openQueue?.();
+      }
+    });
   const qualityLabel =
     QUALITIES.find(q => q.id === player.quality)?.label ?? 'quality';
 
@@ -412,7 +435,7 @@ export function PlayerSheet() {
     <Animated.View
       style={[styles.root, { backgroundColor: t.pageBg }, sheetStyle]}
     >
-      <GestureDetector gesture={dismissPan}>
+      <GestureDetector gesture={Gesture.Race(dismissPan, openQueueFling)}>
         <View style={styles.fill}>
           <GradientBg
             stops={[
@@ -505,16 +528,14 @@ export function PlayerSheet() {
                         ]}
                       >
                         <HintFloat reduced={reduced}>
-                          <View style={styles.arrowUp}>
-                            <Icon
-                              name="arrow-right"
-                              size={13}
-                              color={t.accent}
-                            />
-                          </View>
+                          <Icon
+                            name="arrow-right"
+                            size={13}
+                            color={t.accent}
+                          />
                         </HintFloat>
                         <Text style={[styles.hintText, { color: t.ink }]}>
-                          swipe up for next
+                          swipe to change song
                         </Text>
                       </View>
                     )}
@@ -764,7 +785,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   hintText: { fontFamily: fonts.medium, fontSize: 11.5 },
-  arrowUp: { transform: [{ rotate: '-90deg' }] },
   twin: { position: 'absolute', left: 0, top: 0 },
   meta: { gap: 4, marginBottom: 10 },
   center: { textAlign: 'center' },
