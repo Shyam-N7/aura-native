@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getFeatured } from '../api/catalog';
-import { getUser, getActiveExplicitOff } from '../lib/auth';
+import { getUser, getActiveExplicitOff, subscribeAuth } from '../lib/auth';
 import { dropExplicit } from '../lib/explicit';
 
 // The featured pool drives four home sections from ONE fetch (hero = idx 0,
@@ -10,7 +10,15 @@ import { dropExplicit } from '../lib/explicit';
 // and a future mode switch refetches. Deliberately NOT in homeCache (web
 // matches): `status` drives the skeletons and the mode card's curating state.
 export function useFeaturedPool({ limit = 24 } = {}) {
-  const mode = getUser()?.activeMode ?? 'everyday';
+  // Track the active mode REACTIVELY. Home doesn't re-render on a mode switch
+  // (it's a memoized tab screen under the auth-subscribed Shell), so reading
+  // getUser() once left the pool stuck on the old mode until an app restart —
+  // the checkmark moved but Home didn't. Subscribing re-seeds it immediately.
+  const [mode, setMode] = useState(() => getUser()?.activeMode ?? 'everyday');
+  useEffect(
+    () => subscribeAuth(() => setMode(getUser()?.activeMode ?? 'everyday')),
+    [],
+  );
   const [state, setState] = useState({ status: 'loading', tracks: [] });
 
   useEffect(() => {
