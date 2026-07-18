@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   BackHandler,
@@ -13,6 +19,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
+  LinearTransition,
   runOnJS,
   scrollTo,
   useAnimatedRef,
@@ -572,6 +579,23 @@ export function QueueSheet() {
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);
 
+  // Shuffle animation: a short window during which the list's layout animation
+  // is armed, so shuffling flies the visible tiles to their new positions (and
+  // un-shuffle flies them back). Set synchronously with the toggle so the very
+  // render that reorders the data is the one that animates. Off otherwise, so
+  // it never touches the hand-tuned drag-reorder.
+  const [shuffleAnim, setShuffleAnim] = useState(false);
+  const shuffleTimer = useRef(null);
+  const doShuffle = useCallback(() => {
+    if (!reduced) {
+      setShuffleAnim(true);
+      clearTimeout(shuffleTimer.current);
+      shuffleTimer.current = setTimeout(() => setShuffleAnim(false), 480);
+    }
+    player.toggleShuffle();
+  }, [reduced, player]);
+  useEffect(() => () => clearTimeout(shuffleTimer.current), []);
+
   // Overflow menu + the hide-past pref it toggles.
   const [menuOpen, setMenuOpen] = useState(false);
   const [hidePast, setHidePast] = useState(
@@ -582,6 +606,21 @@ export function QueueSheet() {
     storage.setItem(HIDE_PAST_KEY, nextHidden ? '1' : '0');
     setHidePast(nextHidden);
   };
+
+  // Per-track keys (id + occurrence), stable across a reorder — so on shuffle a
+  // tile KEEPS its React instance and the layout animation flies it to its new
+  // position instead of remounting it in place. (Index-based keys would make
+  // every moved tile a "new" one, killing the animation.) Kept above the
+  // sheet's early return so the hook order never changes.
+  const rowKeys = useMemo(() => {
+    const ph = hidePast ? Math.max(0, idx) : 0;
+    const rows = ph ? tracks.slice(ph) : tracks;
+    const seen = Object.create(null);
+    return rows.map(item => {
+      const n = (seen[item.id] = (seen[item.id] ?? 0) + 1);
+      return `${item.id}#${n}`;
+    });
+  }, [tracks, idx, hidePast]);
 
   const endClose = useCallback(() => setVis('closed'), []);
 
@@ -880,7 +919,7 @@ export function QueueSheet() {
                 accessibilityLabel={
                   player.shuffleActive ? 'shuffle off' : 'shuffle'
                 }
-                onPress={player.toggleShuffle}
+                onPress={doShuffle}
                 hitSlop={8}
                 style={styles.toggle}
               >
@@ -930,9 +969,14 @@ export function QueueSheet() {
               ref={listRef}
               data={visible}
               renderItem={renderItem}
-              // Keyed by ABSOLUTE queue position, so advancing while hide-past
-              // is on only sheds the top row instead of re-keying the rest.
-              keyExtractor={(item, index) => `${item.id}-${index + pastHidden}`}
+              keyExtractor={(_item, index) => rowKeys[index]}
+              // Armed only during a shuffle (see doShuffle): flies each visible
+              // tile from its old slot to its new one. Left undefined otherwise
+              // so it never animates the drag-reorder, whose own transforms
+              // already own that motion.
+              itemLayoutAnimation={
+                shuffleAnim ? LinearTransition.duration(420) : undefined
+              }
               getItemLayout={(_, index) => ({
                 length: ROW_HEIGHT,
                 offset: ROW_HEIGHT * index,
