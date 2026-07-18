@@ -31,7 +31,9 @@ export function TrackActionsSheet() {
 
   useEffect(() => subscribeTrackActions(setEvent), []);
 
-  if (!event) {
+  // A malformed event (a caller that forgot to wrap the track) must never take
+  // the whole app down — just don't open.
+  if (!event?.track) {
     return null;
   }
   const { track, omit, extras } = event;

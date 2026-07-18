@@ -820,7 +820,7 @@ export function QueueSheet() {
             accessibilityRole="button"
             accessibilityLabel={`play next: ${cleanTitle(rt.title)}`}
             onPress={() => player.playAutoNext(i)}
-            onLongPress={() => openTrackActions(rt)}
+            onLongPress={() => openTrackActions({ track: rt })}
             style={({ pressed }) => [
               styles.radioRow,
               pressed && styles.pressed,
