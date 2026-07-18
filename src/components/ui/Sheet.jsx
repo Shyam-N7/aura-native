@@ -160,6 +160,16 @@ export function Sheet({
               dragStyle,
             ]}
           >
+            {/* Surface-colored bleed below the card. On this device the Modal
+                window doesn't honor navigationBarTranslucent, so the card's
+                bottom sits at the gesture-bar top and the dimmed page showed
+                through the strip beneath it. This paints that strip the card's
+                own colour; harmless (off-screen) where the Modal IS edge-to-
+                edge. */}
+            <View
+              pointerEvents="none"
+              style={[styles.bottomBleed, { backgroundColor: t.surface }]}
+            />
             {header ? (
               <>
                 <GestureDetector gesture={pan}>
@@ -208,6 +218,15 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   cardCapped: { maxHeight: '72%' },
+  // Bleeds below the card to paint the gesture-bar strip the card's colour
+  // (see the note at the usage site). Tall enough to cover any nav bar.
+  bottomBleed: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    height: 180,
+  },
   body: { paddingHorizontal: 18 },
   scrollBody: { paddingHorizontal: 18, flexGrow: 0 },
   grip: {
