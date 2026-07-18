@@ -12,6 +12,7 @@ export const HINT_LIKE = 'double-tap-like';
 export const HINT_NEXT = 'swipe-next';
 export const HINT_KARAOKE = 'karaoke';
 export const HINT_STAGE_TAP = 'karaoke-tap-pause';
+export const HINT_QUEUE_SWIPE = 'swipe-up-queue';
 
 const subs = new Set();
 

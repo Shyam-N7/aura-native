@@ -35,7 +35,12 @@ import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { openQualitySheet } from '../lib/qualitySheet';
-import { HINT_LIKE, HINT_NEXT, markHintDone } from '../lib/hints';
+import {
+  HINT_LIKE,
+  HINT_NEXT,
+  HINT_QUEUE_SWIPE,
+  markHintDone,
+} from '../lib/hints';
 import { useHintActive } from '../hooks/useHintActive';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
@@ -119,6 +124,28 @@ function HintFloat({ reduced, children }) {
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
+// A gentle upward bob for the "swipe up" queue hint.
+function HintFloatUp({ reduced, children }) {
+  const v = useSharedValue(0);
+  useEffect(() => {
+    if (reduced) {
+      return undefined;
+    }
+    v.value = withRepeat(
+      withSequence(
+        withTiming(-4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+    );
+    return () => cancelAnimation(v);
+  }, [reduced, v]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: v.value }, { rotate: '180deg' }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
 // Full-screen now-playing sheet. Slides up from the bottom edge like a native
 // bottom sheet (the backdrop art develops in once the slide lands), closes by
 // the reverse or by a drag-follow pull down. Mount inside NavigationContainer
@@ -143,6 +170,7 @@ export function PlayerSheet() {
   // In-place gesture hints: each stays until its gesture is performed once.
   const likeHint = useHintActive(HINT_LIKE);
   const nextHint = useHintActive(HINT_NEXT);
+  const queueHint = useHintActive(HINT_QUEUE_SWIPE);
 
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);
@@ -360,6 +388,7 @@ export function PlayerSheet() {
     .runOnJS(true)
     .onEnd((_e, success) => {
       if (success) {
+        markHintDone(HINT_QUEUE_SWIPE);
         player.ui?.openQueue?.();
       }
     });
@@ -535,7 +564,7 @@ export function PlayerSheet() {
                           />
                         </HintFloat>
                         <Text style={[styles.hintText, { color: t.ink }]}>
-                          swipe to change song
+                          swipe left for next, right for back
                         </Text>
                       </View>
                     )}
@@ -727,6 +756,18 @@ export function PlayerSheet() {
               </PressScale>
             </View>
 
+            {/* Until the user has flicked up to open the queue once, a quiet
+                nudge sits over the up-next slot. */}
+            {queueHint && (
+              <View pointerEvents="none" style={styles.queueHintRow}>
+                <HintFloatUp reduced={reduced}>
+                  <Icon name="chevron-down" size={13} color={t.accent} />
+                </HintFloatUp>
+                <Text style={[styles.queueHintText, { color: t.inkSoft }]}>
+                  swipe up to open the queue
+                </Text>
+              </View>
+            )}
             {upNextSlot()}
           </View>
         </View>
@@ -858,4 +899,13 @@ const styles = StyleSheet.create({
   skelArt: { width: 28 },
   chevRight: { transform: [{ rotate: '-90deg' }] },
   upNextSpacer: { height: 44, marginTop: 16 },
+  queueHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    marginBottom: -6,
+  },
+  queueHintText: { fontFamily: fonts.medium, fontSize: 11.5 },
 });
