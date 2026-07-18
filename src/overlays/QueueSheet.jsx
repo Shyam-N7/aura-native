@@ -970,13 +970,16 @@ export function QueueSheet() {
               data={visible}
               renderItem={renderItem}
               keyExtractor={(_item, index) => rowKeys[index]}
-              // Armed only during a shuffle (see doShuffle): flies each visible
-              // tile from its old slot to its new one. Left undefined otherwise
-              // so it never animates the drag-reorder, whose own transforms
-              // already own that motion.
-              itemLayoutAnimation={
-                shuffleAnim ? LinearTransition.duration(420) : undefined
-              }
+              // Always MOUNTED so reanimated is already tracking each cell's
+              // position when a reorder lands (arming it only on the reorder
+              // render is too late — the "before" layout was never captured).
+              // The DURATION is what's gated: ~420ms during a shuffle so the
+              // tiles fly to their new slots, ~0 otherwise so every other
+              // reorder (the drag-commit) still snaps instantly and its own
+              // transforms keep owning that motion.
+              itemLayoutAnimation={LinearTransition.duration(
+                shuffleAnim && !reduced ? 420 : 0,
+              )}
               getItemLayout={(_, index) => ({
                 length: ROW_HEIGHT,
                 offset: ROW_HEIGHT * index,
