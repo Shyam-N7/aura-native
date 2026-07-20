@@ -98,6 +98,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    // Topmost of everything. The player (elevation 14) and action sheets
+    // (elevation 24) would otherwise bury a toast fired from over them — on
+    // this device elevation outranks sibling paint order, so a toast added
+    // from the open player never showed. The wrap is transparent + no-touch,
+    // so this lifts draw order without a shadow, slab, or blocked taps.
+    zIndex: 100,
+    elevation: 40,
   },
   pill: {
     maxWidth: '82%',

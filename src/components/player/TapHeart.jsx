@@ -13,11 +13,12 @@ import { Icon } from '../Icon';
 
 // The Instagram moment: a heart pops exactly where the double-tap landed —
 // tilted a little differently every time, springing upright as it lands —
-// while six sparks fan out. It holds a beat, floats up and fades. Pure
-// feedback — the like itself is the caller's business. Re-fires on every
-// burst.key; no timers, so nothing leaks — the final frame is transparent.
-// (No swelling ring: at low opacity over bright art it just read as a gray
-// outline.)
+// while an accent ring pulses outward and six sparks fan out. It holds a
+// beat, floats up and fades. Pure feedback — the like itself is the caller's
+// business. Re-fires on every burst.key; no timers, so nothing leaks — the
+// final frame is transparent. (The ring shoots out and is fully gone by mid-
+// flight so it never lingers as a faint rim — that low-opacity tail was what
+// read as a gray outline over bright art.)
 const POP_SPRING = { mass: 1, stiffness: 320, damping: 14 };
 const TILT_SPRING = { mass: 1, stiffness: 180, damping: 12 };
 const SIZE = 68;
@@ -36,7 +37,7 @@ export function TapHeart({ burst, accent }) {
   const tilt = useSharedValue(0); // degrees, springs back to upright
   const rise = useSharedValue(0);
   const fade = useSharedValue(0);
-  const fx = useSharedValue(1); // spark progress (1 = spent/hidden)
+  const fx = useSharedValue(1); // ring + spark progress (1 = spent/hidden)
 
   useEffect(() => {
     if (!burst || reduced) {
@@ -71,6 +72,13 @@ export function TapHeart({ burst, accent }) {
       { scale: pop.value },
     ],
   }));
+  const ringStyle = useAnimatedStyle(() => ({
+    // Punchy at birth, gone by mid-flight: a colored pulse that shoots out
+    // from the heart's edge, never a lingering rim (that low-opacity tail is
+    // what read as a gray outline). Opacity dies by fx 0.62 (~350ms).
+    opacity: fx.value >= 0.62 ? 0 : (1 - fx.value / 0.62) * 0.85,
+    transform: [{ scale: 0.78 + fx.value * 1.05 }],
+  }));
 
   if (!burst || reduced) {
     return null;
@@ -83,6 +91,9 @@ export function TapHeart({ burst, accent }) {
         { left: burst.x - SIZE / 2, top: burst.y - SIZE / 2 },
       ]}
     >
+      <Animated.View
+        style={[styles.ring, { borderColor: accent }, ringStyle]}
+      />
       {SPARKS.map(s => (
         <TapSpark key={s.deg} spark={s} fx={fx} accent={accent} />
       ))}
@@ -131,6 +142,13 @@ const styles = StyleSheet.create({
   drop: {
     position: 'absolute',
     transform: [{ translateY: 3 }],
+  },
+  ring: {
+    position: 'absolute',
+    width: SIZE * 1.3,
+    height: SIZE * 1.3,
+    borderRadius: (SIZE * 1.3) / 2,
+    borderWidth: 2.5,
   },
   spark: {
     position: 'absolute',

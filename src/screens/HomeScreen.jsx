@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { showToast } from '../lib/toast';
+import { openTrackActions } from '../lib/trackActionsSheet';
 import { homeCache } from '../lib/homeCache';
 import { dropExplicit } from '../lib/explicit';
 import { getQuickPicks } from '../api/quickPicks';
@@ -44,7 +45,7 @@ import { partOfDay } from '../utils/daypart';
 // day to day instead of the same "good morning" forever. Late night comes
 // first so the small hours never read as "good morning".
 const GREETINGS = {
-  night: ['still up', 'up late', 'late night'], // 23:00–04:59
+  night: ['still up?', 'up late?', 'late night?'], // 23:00–04:59
   morning: ['good morning', 'morning', 'rise and shine'], // 05:00–11:59
   afternoon: ['good afternoon', 'afternoon', 'hey there'], // 12:00–16:59
   evening: ['good evening', 'evening', 'good to see you'], // 17:00–22:59
@@ -106,6 +107,10 @@ export default function HomeScreen({ navigation }) {
   const player = usePlayer();
   const user = getUser();
   const firstName = user?.name?.split(' ')[0]?.toLowerCase();
+  // A question greeting ("still up?") reads wrong with a comma after it, so the
+  // name follows on a plain space; statement greetings ("good morning") keep
+  // their comma.
+  const greet = greeting();
   const explicitOff = getActiveExplicitOff();
 
   const pool = useFeaturedPool({ limit: 24 });
@@ -345,8 +350,8 @@ export default function HomeScreen({ navigation }) {
         >
           <View style={styles.pad}>
             <Text style={[styles.greeting, { color: t.ink }]}>
-              {greeting()}
-              {firstName ? `, ${firstName}` : ''}
+              {greet}
+              {firstName ? `${greet.endsWith('?') ? ' ' : ', '}${firstName}` : ''}
             </Text>
             <Text style={[styles.tagline, { color: t.inkSoft }]}>
               music that gets your mood
@@ -429,6 +434,9 @@ export default function HomeScreen({ navigation }) {
                   player.playQueue(moreLike.tracks, i, 'more like this');
                   player.ui?.openPlayer?.();
                 }}
+                // Long-press a tile for its options (add to playlist/queue,
+                // like, go to artist…) — the same track menu used everywhere.
+                onLongPress={track => openTrackActions({ track })}
               />
             </View>
           )}

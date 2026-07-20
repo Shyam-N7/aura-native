@@ -970,16 +970,24 @@ export function QueueSheet() {
               data={visible}
               renderItem={renderItem}
               keyExtractor={(_item, index) => rowKeys[index]}
-              // Always MOUNTED so reanimated is already tracking each cell's
-              // position when a reorder lands (arming it only on the reorder
-              // render is too late — the "before" layout was never captured).
-              // The DURATION is what's gated: ~420ms during a shuffle so the
-              // tiles fly to their new slots, ~0 otherwise so every other
-              // reorder (the drag-commit) still snaps instantly and its own
-              // transforms keep owning that motion.
-              itemLayoutAnimation={LinearTransition.duration(
-                shuffleAnim && !reduced ? 420 : 0,
-              )}
+              // Mounted at REST so reanimated is already tracking each cell's
+              // position when a shuffle lands (arming it only on the reorder
+              // render is too late — the "before" layout was never captured);
+              // the duration is 0 except during the shuffle window (~420ms), so
+              // the tiles fly to their new slots then and snap instantly other-
+              // wise.
+              // But it is fully DETACHED during an active drag: the manual
+              // drag-reorder owns every pixel of its motion through explicit
+              // transforms, and a live layout animation — even at duration 0 the
+              // machinery still runs a per-cell layout pass every frame — fights
+              // the auto-scroll near the edges and jitters the rows (the "shake"
+              // when dragging a song to the bottom). undefined ⇒ plain cells
+              // while dragging; it re-attaches on drop, in time for the shuffle.
+              itemLayoutAnimation={
+                dragging
+                  ? undefined
+                  : LinearTransition.duration(shuffleAnim && !reduced ? 420 : 0)
+              }
               getItemLayout={(_, index) => ({
                 length: ROW_HEIGHT,
                 offset: ROW_HEIGHT * index,

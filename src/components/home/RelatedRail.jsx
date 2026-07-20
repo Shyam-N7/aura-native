@@ -10,7 +10,8 @@ import { cleanTitle } from '../../utils/title';
 // denser than MemoryRail's wide cards: a dozen picks scan in two swipes.
 // Tapping a tile hands back the track AND its index so the screen can queue
 // the whole rail from that point (the rail IS the set being recommended).
-export function RelatedRail({ tracks, onPick }) {
+// Long-pressing a tile hands back just the track for its options sheet.
+export function RelatedRail({ tracks, onPick, onLongPress }) {
   const { t } = useTheme();
   return (
     <ScrollView
@@ -25,6 +26,7 @@ export function RelatedRail({ tracks, onPick }) {
           accessibilityRole="button"
           accessibilityLabel={`play ${cleanTitle(track.title)}`}
           onPress={() => onPick(track, i)}
+          onLongPress={onLongPress ? () => onLongPress(track, i) : undefined}
           style={styles.tile}
         >
           <TrackArt track={track} size={104} radius={8} />

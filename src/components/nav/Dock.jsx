@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -101,6 +103,7 @@ export function Dock({ navRef }) {
   };
 
   const [width, setWidth] = useState(0);
+  const [rowW, setRowW] = useState(0);
   const [gooActive, setGooActive] = useState(false);
   const firstRender = useRef(true);
   const budR = useSharedValue(BEAD_SIZE / 2);
@@ -129,6 +132,77 @@ export function Dock({ navRef }) {
     padLeft.value = withTiming(hasTrack ? 60 : 4, { duration: DUR.bud, easing: EASE.settle });
   }, [hasTrack, padLeft]);
   const rowStyle = useAnimatedStyle(() => ({ paddingLeft: padLeft.value }));
+
+  // Hold-and-slide across the dock to switch tabs — iPhone-camera-mode style.
+  // During the slide the highlight follows the finger (a haptic tick at each
+  // boundary) via dragTab, but we DON'T navigate yet: focusing each crossed tab
+  // mid-slide would pop Search's keyboard and mount the pass-through screens'
+  // side effects. The switch commits ONCE, on release, to the tab the finger
+  // last landed on. Taps fall straight through — the pan only arms past 12px of
+  // horizontal travel, so a tap never trips it. swipeIdx (UI-thread) gates the
+  // JS hop so we cross to react land once per tab, not once per frame.
+  const [dragTab, setDragTab] = useState(null);
+  const swipeIdx = useSharedValue(-1);
+  const activeIndex = dragTab != null ? dragTab : tabIndex;
+  const onSwipeTick = useCallback(i => {
+    setDragTab(i);
+    Vibration.vibrate(6);
+  }, []);
+  const commitSwipe = useCallback(
+    i => {
+      setDragTab(null);
+      // One navigation, only if it's a real change — so no pass-through tab is
+      // ever focused, and landing back on the current tab is a no-op.
+      if (i !== tabIndex) {
+        const tab = TABS[i];
+        if (tab && navRef?.isReady?.()) {
+          navRef.navigate('Tabs', { screen: tab.name });
+        }
+      }
+    },
+    [navRef, tabIndex],
+  );
+  const cancelSwipe = useCallback(() => setDragTab(null), []);
+  const tabSwipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-12, 12])
+        .onBegin(() => {
+          'worklet';
+          swipeIdx.value = -1;
+        })
+        .onUpdate(e => {
+          'worklet';
+          const padL = hasTrack ? 60 : 4;
+          const usable = rowW - padL - 4;
+          if (usable <= 0) {
+            return;
+          }
+          let i = Math.floor((e.x - padL) / (usable / TABS.length));
+          i = Math.max(0, Math.min(TABS.length - 1, i));
+          if (i !== swipeIdx.value) {
+            swipeIdx.value = i;
+            runOnJS(onSwipeTick)(i);
+          }
+        })
+        .onEnd(() => {
+          'worklet';
+          if (swipeIdx.value >= 0) {
+            runOnJS(commitSwipe)(swipeIdx.value);
+          } else {
+            runOnJS(cancelSwipe)();
+          }
+        })
+        .onFinalize((_e, success) => {
+          'worklet';
+          swipeIdx.value = -1;
+          // Cancelled gesture (never reached onEnd) — drop the ghost highlight.
+          if (!success) {
+            runOnJS(cancelSwipe)();
+          }
+        }),
+    [rowW, hasTrack, onSwipeTick, commitSwipe, cancelSwipe, swipeIdx],
+  );
 
   return (
     <View
@@ -165,22 +239,27 @@ export function Dock({ navRef }) {
           </Goo>
         )}
         <Glass radius={radii.dock} solid={gooActive} soft style={styles.capsule}>
-          <Animated.View style={[styles.row, rowStyle]}>
-            {TABS.map((tab, i) => {
-              const focused = tabIndex === i;
-              return (
-                <DockTab
-                  key={tab.name}
-                  route={tab}
-                  focused={focused}
-                  label={tab.label}
-                  tint={focused ? t.accent : t.inkFaint}
-                  accent={t.accent}
-                  onPress={() => goTab(tab.name, focused)}
-                />
-              );
-            })}
-          </Animated.View>
+          <GestureDetector gesture={tabSwipe}>
+            <Animated.View
+              style={[styles.row, rowStyle]}
+              onLayout={(e) => setRowW(e.nativeEvent.layout.width)}
+            >
+              {TABS.map((tab, i) => {
+                const focused = activeIndex === i;
+                return (
+                  <DockTab
+                    key={tab.name}
+                    route={tab}
+                    focused={focused}
+                    label={tab.label}
+                    tint={focused ? t.accent : t.inkFaint}
+                    accent={t.accent}
+                    onPress={() => goTab(tab.name, focused)}
+                  />
+                );
+              })}
+            </Animated.View>
+          </GestureDetector>
         </Glass>
         {hasTrack && (
           <View style={[styles.beadSlot, gooActive && styles.hidden]}>
