@@ -95,8 +95,11 @@ export default function SearchScreen({ navigation }) {
     lastLang = L;
   };
 
+  // 600ms: long enough that slow typists (field report: "mar… and… hu")
+  // don't fire a query at every breath, short enough that search still feels
+  // live once you stop typing.
   useEffect(() => {
-    const id = setTimeout(() => setDebouncedQ(q), 350);
+    const id = setTimeout(() => setDebouncedQ(q), 600);
     return () => clearTimeout(id);
   }, [q]);
 
@@ -148,16 +151,6 @@ export default function SearchScreen({ navigation }) {
           return;
         }
         setHit({ key: wantKey, ...d, error: null });
-        // Remember the query once something actually matched (web: an
-        // artists-only match does NOT record).
-        if (
-          d.songs.length ||
-          d.albums.length ||
-          d.playlists.length ||
-          d.userPlaylists.length
-        ) {
-          pushRecentSearch(trimmed);
-        }
       })
       .catch(err => {
         if (!stale) {
@@ -188,7 +181,18 @@ export default function SearchScreen({ navigation }) {
     !view.userPlaylists.length &&
     !view.top;
 
+  // Recents record on COMMIT only — tapping a result or pressing the
+  // keyboard's search key — never on the auto-fired as-you-type queries.
+  // (Field report: slow typing left "mar", "marand", "marandhu" as three
+  // recents on the way to "marandhu poche".)
+  const remember = () => {
+    if (trimmed) {
+      pushRecentSearch(trimmed);
+    }
+  };
+
   const playSong = track => {
+    remember();
     // Fully release the search field before the player opens. On this ROM the
     // keyboard's layout inset lingers while the input keeps focus (dismissing
     // the keyboard alone isn't enough), so the full-screen player would open
@@ -206,6 +210,7 @@ export default function SearchScreen({ navigation }) {
   // Tile taps route by entity type; a song top-result is suppressed (the
   // songs list leads instead, web parity).
   const openTop = top => {
+    remember();
     if (top.type === 'artist') {
       navigation.navigate('Artist', { id: top.id, name: top.name });
     } else if (top.type === 'album') {
@@ -245,6 +250,7 @@ export default function SearchScreen({ navigation }) {
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
+              onSubmitEditing={remember}
             />
           </View>
         </View>
@@ -381,9 +387,10 @@ export default function SearchScreen({ navigation }) {
                     sub="artist"
                     round
                     t={t}
-                    onPress={() =>
-                      navigation.navigate('Artist', { id: a.id, name: a.name })
-                    }
+                    onPress={() => {
+                      remember();
+                      navigation.navigate('Artist', { id: a.id, name: a.name });
+                    }}
                   />
                 ))}
               </View>
@@ -402,7 +409,10 @@ export default function SearchScreen({ navigation }) {
                       .filter(Boolean)
                       .join(' · ')}
                     t={t}
-                    onPress={() => navigation.navigate('Album', { id: a.id })}
+                    onPress={() => {
+                      remember();
+                      navigation.navigate('Album', { id: a.id });
+                    }}
                   />
                 ))}
               </View>
@@ -461,9 +471,10 @@ export default function SearchScreen({ navigation }) {
                         name={p.name}
                         sub={(p.subtitle ?? 'playlist').toLowerCase()}
                         t={t}
-                        onPress={() =>
-                          navigation.navigate('CatalogPlaylist', { id: p.id })
-                        }
+                        onPress={() => {
+                          remember();
+                          navigation.navigate('CatalogPlaylist', { id: p.id });
+                        }}
                       />
                     ))}
                   </View>
@@ -482,9 +493,10 @@ export default function SearchScreen({ navigation }) {
                           p.trackCount === 1 ? 'track' : 'tracks'
                         }`}
                         t={t}
-                        onPress={() =>
-                          navigation.navigate('Playlist', { id: p.id })
-                        }
+                        onPress={() => {
+                          remember();
+                          navigation.navigate('Playlist', { id: p.id });
+                        }}
                       />
                     ))}
                   </View>

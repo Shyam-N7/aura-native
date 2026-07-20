@@ -5,6 +5,7 @@ import { ThemeProvider } from '../src/theme/ThemeContext';
 import SearchScreen from '../src/screens/SearchScreen';
 import { searchCatalog } from '../src/api/catalog';
 import { LANGUAGES } from '../src/data/languages';
+import { clearRecentSearches } from '../src/hooks/useRecentSearches';
 
 const mockPlayTrack = jest.fn();
 const mockOpenPlayer = jest.fn();
@@ -80,6 +81,9 @@ function render() {
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  // The recents store is module-scoped — earlier tests' commits (playing a
+  // result records the query) must not leak into the recents assertions.
+  clearRecentSearches();
   searchCatalog.mockResolvedValue(RESULT);
 });
 afterEach(() => {
@@ -96,7 +100,7 @@ test('debounces, fetches categorized results and plays a song pick', async () =>
   expect(searchCatalog).not.toHaveBeenCalled();
 
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
   });
   expect(searchCatalog).toHaveBeenCalledWith('song', {
     lang: undefined,
@@ -125,7 +129,7 @@ test('language pill refetches with the lang filter', async () => {
     input.props.onChangeText('song');
   });
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
   });
 
   const pill = byLabel(tree, 'language tamil');
@@ -163,7 +167,7 @@ test('offers every catalog language as a pill, not just onboarded ones', async (
     input.props.onChangeText('song');
   });
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
   });
 
   // A language outside the user's onboarded pair still filters the query.
@@ -180,22 +184,41 @@ test('offers every catalog language as a pill, not just onboarded ones', async (
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
-test('remembers matched queries and re-runs them from recents', async () => {
+test('remembers only committed queries and re-runs them from recents', async () => {
   const tree = render();
   const input = tree.root.findByType(TextInput);
 
+  // An auto-fired as-you-type query alone leaves NO trace in recents —
+  // that's what kept "mar"/"marand"/"marandhu" out of the list.
   await ReactTestRenderer.act(async () => {
     input.props.onChangeText('song');
   });
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
   });
-  // Clearing the input surfaces the recents list.
   await ReactTestRenderer.act(async () => {
     input.props.onChangeText('');
   });
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
+  });
+  expect(texts(tree.toJSON())).not.toContain('recent searches');
+
+  // Committing — tapping a result — is what records the query.
+  await ReactTestRenderer.act(async () => {
+    input.props.onChangeText('song');
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(600);
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'play Song One').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    input.props.onChangeText('');
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(600);
   });
   expect(texts(tree.toJSON())).toContain('recent searches');
 
@@ -204,15 +227,15 @@ test('remembers matched queries and re-runs them from recents', async () => {
     recent.props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
   });
-  expect(searchCatalog).toHaveBeenCalledTimes(2);
+  expect(searchCatalog).toHaveBeenCalledTimes(3);
 
   await ReactTestRenderer.act(async () => {
     input.props.onChangeText('');
   });
   await ReactTestRenderer.act(async () => {
-    jest.advanceTimersByTime(350);
+    jest.advanceTimersByTime(600);
   });
   const clear = byLabel(tree, 'clear recent searches');
   await ReactTestRenderer.act(async () => {

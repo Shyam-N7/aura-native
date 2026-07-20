@@ -37,11 +37,14 @@ export function pushRecentSearch(q) {
     return;
   }
   const lower = trimmed.toLowerCase();
-  // Newest-first; drop case-insensitive duplicate.
-  items = [trimmed, ...items.filter(x => x.toLowerCase() !== lower)].slice(
-    0,
-    MAX,
-  );
+  // Newest-first; drop case-insensitive duplicates AND entries this query
+  // extends ("mar" goes when "marandhu poche" arrives) — a committed longer
+  // query supersedes the partial typings that led to it, and sweeps out any
+  // prefix junk recorded by older builds.
+  items = [
+    trimmed,
+    ...items.filter(x => !lower.startsWith(x.toLowerCase())),
+  ].slice(0, MAX);
   write(items);
   notify();
 }
