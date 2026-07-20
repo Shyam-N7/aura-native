@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Keyboard,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { SearchField } from '../components/search/SearchField';
@@ -93,6 +100,21 @@ export default function SearchScreen({ navigation }) {
     return () => clearTimeout(id);
   }, [q]);
 
+  // Whenever the player opens over an open search — a tapped result OR the
+  // now-playing disc in the dock (which keeps the source, e.g. a radio) — drop
+  // the search field's focus. On this ROM the keyboard's layout inset lingers
+  // while the input stays focused even after the keyboard hides, so the full-
+  // screen player opens into a keyboard-short window and leaves a pale strip
+  // where the keyboard had been. Blurring releases the inset so the window
+  // restores to full height. This catches every open path, not just playSong.
+  const playerOpen = player.ui?.playerOpen;
+  useEffect(() => {
+    if (playerOpen) {
+      inputRef.current?.blur();
+      Keyboard.dismiss();
+    }
+  }, [playerOpen]);
+
   // Pop the keyboard whenever the tab gains focus.
   useEffect(() => {
     if (!navigation?.addListener) {
@@ -167,6 +189,14 @@ export default function SearchScreen({ navigation }) {
     !view.top;
 
   const playSong = track => {
+    // Fully release the search field before the player opens. On this ROM the
+    // keyboard's layout inset lingers while the input keeps focus (dismissing
+    // the keyboard alone isn't enough), so the full-screen player would open
+    // into a keyboard-short window and leave a pale strip where the keyboard
+    // had been. Blurring the input drops the inset so the window restores to
+    // full height first.
+    inputRef.current?.blur();
+    Keyboard.dismiss();
     // Web labels a direct search pick 'your pick' (auto-radio still continues
     // it at queue end and flips the source when the batch applies).
     player.playTrack(track, { source: 'your pick' });

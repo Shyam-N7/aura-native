@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
+  Dimensions,
   Image,
   Keyboard,
   StyleSheet,
@@ -59,6 +60,20 @@ import { DUR, EASE, SPRING } from '../theme/motion';
 
 const artUrl = (track, res = 500) =>
   track?.imageUrl ? track.imageUrl.replace(/\d+x\d+/, `${res}x${res}`) : null;
+
+// The physical screen height (constant — unlike useWindowDimensions, it does
+// NOT shrink when a keyboard is up). EVERY full-bleed layer of the player
+// (backdrop image, stage gradient, scrim gradient) is pre-painted at this
+// height, because of a ROM quirk proven on-device: when the player opens over
+// a keyboard-short window, the window-resize event never fires after the
+// keyboard's inset releases — React never re-renders, so a layer painted at
+// the short height stays short forever (native flex re-layout grows the
+// CONTENT, but rn-svg 100%-rects and pixel-sized images keep their mount-time
+// paint). Pre-painting at screen height means the covered strip is simply
+// revealed as the root grows — no repaint needed. Field history: the winH-tall
+// backdrop left a pale strip where the keyboard was; sizing only the backdrop
+// to SCREEN_H then inverted it into a dark strip of unscrimmed art.
+const SCREEN_H = Dimensions.get('screen').height;
 
 // Track-change crossfade, the web's "develop into focus": the new art arrives
 // blurred and sharpens while the old one fades underneath (900ms total).
@@ -468,6 +483,7 @@ export function PlayerSheet() {
       <GestureDetector gesture={dismissPan}>
         <View style={styles.fill}>
           <GradientBg
+            style={styles.bleed}
             stops={[
               { offset: 0, color: t.stageBgStart },
               { offset: 1, color: t.stageBgEnd },
@@ -481,11 +497,15 @@ export function PlayerSheet() {
               <Image
                 source={{ uri: backdrop }}
                 blurRadius={14}
-                style={[styles.backdrop, { width: winW, height: winH }]}
+                style={[
+                  styles.backdrop,
+                  { width: winW, height: Math.max(winH, SCREEN_H) },
+                ]}
               />
             </Animated.View>
           )}
           <GradientBg
+            style={styles.bleed}
             angle={180}
             stops={[
               { offset: 0, color: t.bg, opacity: 0.72 },
@@ -794,6 +814,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fill: { flex: 1 },
+  // Full-bleed layer pinned to PHYSICAL screen height (see SCREEN_H): painted
+  // in full at mount even inside a keyboard-short window, then revealed as the
+  // root grows — the explicit height overrides absoluteFill's bottom edge.
+  bleed: { height: SCREEN_H },
   backdrop: {
     position: 'absolute',
     opacity: 0.9,
