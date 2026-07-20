@@ -115,6 +115,34 @@ export function PlayerProvider({ children }) {
     return opChain.current;
   }, []);
 
+  // Play-INTENT ops must not die as a console.warn (field report: after a
+  // system kill, tapping play did nothing). One quiet retry after rebuilding
+  // the native queue from the model — the post-kill dead state is exactly
+  // "model full, native empty". If it still fails, own up instead of showing
+  // a playing state over silence: honest pause + a toast that names the fix.
+  const enqueuePlayOp = useCallback(
+    op =>
+      enqueueOp(async () => {
+        try {
+          await op();
+        } catch (err) {
+          console.warn('[player] play op failed, retrying', err?.message ?? err);
+          try {
+            const q = queueRef.current;
+            if (q.tracks.length) {
+              await engine.syncQueue(q, { startIndex: q.idx });
+            }
+            await op();
+          } catch (err2) {
+            console.warn('[player] play op failed twice', err2?.message ?? err2);
+            setIsPlaying(false);
+            showToast("couldn't play — tap play to try again.");
+          }
+        }
+      }),
+    [enqueueOp],
+  );
+
   const applyQueue = useCallback(nextQueue => {
     queueRef.current = nextQueue;
     setQueueState(nextQueue);
@@ -265,14 +293,14 @@ export function PlayerProvider({ children }) {
       autoRadio.reset();
       applyQueue(target);
       setIsPlaying(true);
-      enqueueOp(async () => {
+      enqueuePlayOp(async () => {
         // Append around the still-current seed, then hop onto the batch.
         await engine.syncQueue(seeded, { startIndex: q.idx });
         await engine.skipToIndex(target.idx);
         await engine.play();
       });
     },
-    [applyQueue, enqueueOp],
+    [applyQueue, enqueuePlayOp],
   );
 
   // Shared by the 'ended' path and a next-press on the last track. Appends
@@ -330,7 +358,7 @@ export function PlayerProvider({ children }) {
     if (d.action === 'advance' || d.action === 'wrap') {
       applyQueue({ ...q, idx: d.nextIdx });
       setIsPlaying(true);
-      enqueueOp(async () => {
+      enqueuePlayOp(async () => {
         await engine.skipToIndex(d.nextIdx);
         await engine.play();
       });
@@ -343,7 +371,7 @@ export function PlayerProvider({ children }) {
       // replace can't read it as "was playing" and auto-start the audio.
       enqueueOp(() => engine.pause());
     }
-  }, [applyQueue, clearPosition, enqueueOp, runAutoRadio]);
+  }, [applyQueue, clearPosition, enqueueOp, enqueuePlayOp, runAutoRadio]);
 
   const onActiveTrackChanged = useCallback(
     e => {
@@ -388,12 +416,12 @@ export function PlayerProvider({ children }) {
       setShuffleActive(false);
       preShuffleRef.current = null;
       setIsPlaying(true);
-      enqueueOp(async () => {
+      enqueuePlayOp(async () => {
         await engine.syncQueue(q, { startIndex: q.idx });
         await engine.play();
       });
     },
-    [applyQueue, enqueueOp],
+    [applyQueue, enqueuePlayOp],
   );
 
   const playTrack = useCallback(
@@ -416,9 +444,19 @@ export function PlayerProvider({ children }) {
       enqueueOp(() => engine.pause());
     } else {
       setIsPlaying(true);
-      enqueueOp(() => engine.play());
+      enqueuePlayOp(async () => {
+        // After a system kill the model can remember a queue the NATIVE
+        // player lost (the cold restore died before syncing) — play() on an
+        // empty native queue no-ops with no error, which read as a dead play
+        // button. Verify and rebuild first; then play always means play.
+        const q = queueRef.current;
+        if (q.tracks.length && (await engine.getQueueLength()) === 0) {
+          await engine.syncQueue(q, { startIndex: q.idx });
+        }
+        await engine.play();
+      });
     }
-  }, [enqueueOp, flushPosition]);
+  }, [enqueueOp, enqueuePlayOp, flushPosition]);
 
   const next = useCallback(() => {
     userActedRef.current = true;
@@ -429,7 +467,7 @@ export function PlayerProvider({ children }) {
     if (d.action === 'advance' || d.action === 'wrap') {
       applyQueue({ ...q, idx: d.nextIdx });
       setIsPlaying(true);
-      enqueueOp(async () => {
+      enqueuePlayOp(async () => {
         await engine.skipToIndex(d.nextIdx);
         await engine.play();
       });
@@ -438,7 +476,7 @@ export function PlayerProvider({ children }) {
       runAutoRadio(q, { pauseOnFail: false });
     }
     // stop: a next-press with nowhere to go stays silent (web parity).
-  }, [applyQueue, enqueueOp, runAutoRadio]);
+  }, [applyQueue, enqueuePlayOp, runAutoRadio]);
 
   const prev = useCallback(() => {
     userActedRef.current = true;
@@ -457,11 +495,11 @@ export function PlayerProvider({ children }) {
     }
     applyQueue({ ...q, idx });
     setIsPlaying(true);
-    enqueueOp(async () => {
+    enqueuePlayOp(async () => {
       await engine.skipToIndex(idx);
       await engine.play();
     });
-  }, [applyQueue, enqueueOp]);
+  }, [applyQueue, enqueuePlayOp]);
 
   const seekTo = useCallback(
     sec => {
@@ -479,9 +517,9 @@ export function PlayerProvider({ children }) {
         return;
       }
       applyQueue(nq);
-      enqueueOp(() => engine.skipToIndex(nq.idx));
+      enqueuePlayOp(() => engine.skipToIndex(nq.idx));
     },
-    [applyQueue, enqueueOp],
+    [applyQueue, enqueuePlayOp],
   );
 
   const removeAt = useCallback(

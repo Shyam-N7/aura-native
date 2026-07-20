@@ -6,7 +6,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  Alert,
   BackHandler,
   Pressable,
   StyleSheet,
@@ -40,6 +39,7 @@ import { storage } from '../storage/mmkv';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { showToast } from '../lib/toast';
+import { confirm } from '../lib/confirm';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
@@ -381,17 +381,19 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
     fn();
   };
 
-  // Native's confirm precedent is Alert.alert (sign out, playlist delete /
-  // leave). Clearing keeps the playing track, so the body says so (web copy).
-  const confirmClear = () =>
-    Alert.alert('clear queue?', "we'll keep the currently playing track.", [
-      { text: 'cancel', style: 'cancel' },
-      {
-        text: 'clear',
-        style: 'destructive',
-        onPress: () => player.clearQueue(),
-      },
-    ]);
+  // The house confirm (lib/confirm). Clearing keeps the playing track, so
+  // the body says so (web copy).
+  const confirmClear = async () => {
+    if (
+      await confirm({
+        title: 'clear queue?',
+        body: "we'll keep the currently playing track.",
+        action: 'clear',
+      })
+    ) {
+      player.clearQueue();
+    }
+  };
 
   const saveQueue = async () => {
     const trimmed = name.trim();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { confirm } from '../src/lib/confirm';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import HomeScreen from '../src/screens/HomeScreen';
@@ -100,6 +100,10 @@ jest.mock('../src/api/discover', () => ({
 jest.mock('../src/api/impressions', () => ({
   logImpressions: jest.fn(),
 }));
+// House confirm: resolve false so destructive paths never run in tests.
+jest.mock('../src/lib/confirm', () => ({
+  confirm: jest.fn(() => Promise.resolve(false)),
+}));
 
 // Rendered text only, joined in order (a Text's children can be split).
 function texts(node) {
@@ -165,7 +169,6 @@ test("home greets and begins tonight's set from the hero band", async () => {
 });
 
 test('you is the library: your year, accordion shelves, settings', async () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const navigation = {
     navigate: jest.fn(),
     addListener: jest.fn(() => jest.fn()),
@@ -230,10 +233,14 @@ test('you is the library: your year, accordion shelves, settings', async () => {
 
   byLabel(tree, 'quality low').props.onPress();
   expect(mockSetQuality).toHaveBeenCalledWith('low');
-  byLabel(tree, 'sign out').props.onPress();
-  expect(alertSpy).toHaveBeenCalled();
+  // Sign out asks through the house confirm sheet, not the OS Alert.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'sign out').props.onPress();
+  });
+  expect(confirm).toHaveBeenCalledWith(
+    expect.objectContaining({ action: 'sign out' }),
+  );
 
-  alertSpy.mockRestore();
   await ReactTestRenderer.act(() => tree.unmount());
 });
 

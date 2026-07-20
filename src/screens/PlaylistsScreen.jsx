@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -25,6 +24,7 @@ import { listAutoPlaylists } from '../api/autoPlaylists';
 import { getUser } from '../lib/auth';
 import { relTime } from '../lib/time';
 import { showToast } from '../lib/toast';
+import { confirm } from '../lib/confirm';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { Icon } from '../components/Icon';
@@ -141,61 +141,51 @@ export default function PlaylistsScreen({ navigation }) {
     }
   };
 
-  const remove = playlist => {
-    Alert.alert(
-      `Delete "${playlist.name}"?`,
-      "The playlist will be removed. Songs you've liked stay in your library.",
-      [
-        { text: 'cancel', style: 'cancel' },
-        {
-          text: 'delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePlaylist(playlist.id);
-              setHit(h => ({
-                ...h,
-                data: (h.data ?? []).filter(p => p.id !== playlist.id),
-              }));
-              showToast('playlist deleted.');
-            } catch (err) {
-              showToast(`Couldn't delete — ${err.message}`);
-            }
-          },
-        },
-      ],
-    );
+  const remove = async playlist => {
+    const ok = await confirm({
+      title: `delete "${playlist.name}"?`,
+      body: "the playlist will be removed. songs you've liked stay in your library.",
+      action: 'delete',
+    });
+    if (!ok) {
+      return;
+    }
+    try {
+      await deletePlaylist(playlist.id);
+      setHit(h => ({
+        ...h,
+        data: (h.data ?? []).filter(p => p.id !== playlist.id),
+      }));
+      showToast('playlist deleted.');
+    } catch (err) {
+      showToast(`Couldn't delete — ${err.message}`);
+    }
   };
 
   // Collaborator leaving a shared playlist (owners use delete instead).
-  const leave = playlist => {
+  const leave = async playlist => {
     const me = getUser();
     if (!me?.id) {
       return;
     }
-    Alert.alert(
-      `Leave "${playlist.name}"?`,
-      "You'll lose access until you're invited again.",
-      [
-        { text: 'cancel', style: 'cancel' },
-        {
-          text: 'leave',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removePlaylistCollaborator(playlist.id, me.id);
-              setHit(h => ({
-                ...h,
-                data: (h.data ?? []).filter(p => p.id !== playlist.id),
-              }));
-              showToast('left the playlist.');
-            } catch (err) {
-              showToast(`Couldn't leave — ${err.message}`);
-            }
-          },
-        },
-      ],
-    );
+    const ok = await confirm({
+      title: `leave "${playlist.name}"?`,
+      body: "you'll lose access until you're invited again.",
+      action: 'leave',
+    });
+    if (!ok) {
+      return;
+    }
+    try {
+      await removePlaylistCollaborator(playlist.id, me.id);
+      setHit(h => ({
+        ...h,
+        data: (h.data ?? []).filter(p => p.id !== playlist.id),
+      }));
+      showToast('left the playlist.');
+    } catch (err) {
+      showToast(`Couldn't leave — ${err.message}`);
+    }
   };
 
   const lists = hit.data ?? [];

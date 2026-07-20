@@ -18,6 +18,13 @@ jest.mock('@shopify/react-native-skia', () =>
 // composes, so render it as nothing under jest — its children never paint.
 jest.mock('./src/components/ui/Goo', () => ({ Goo: () => null }));
 
+// CountUp animates via withTiming, which the reanimated jest clock never
+// finishes on its own — tests would read the rolling number mid-flight (0).
+// Stub it to the final value: tests assert the truth, devices get the roll.
+jest.mock('./src/components/ui/CountUp', () => ({
+  CountUp: ({ to = 0 }) => String(to),
+}));
+
 // react-native-mmkv binds a native TurboModule at import — swap in an
 // in-memory store so storage-backed libs run under jest.
 jest.mock('react-native-mmkv', () => {

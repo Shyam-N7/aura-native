@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getFeatured } from '../api/catalog';
 import { getUser, getActiveExplicitOff, subscribeAuth } from '../lib/auth';
 import { dropExplicit } from '../lib/explicit';
+import { readSnapshot, writeSnapshot } from '../lib/snapshot';
 
 // The featured pool drives four home sections from ONE fetch (hero = idx 0,
 // new-for-you = 1..4, stations = 5..8, quick-picks last-resort fallback) —
@@ -19,7 +20,16 @@ export function useFeaturedPool({ limit = 24 } = {}) {
     () => subscribeAuth(() => setMode(getUser()?.activeMode ?? 'everyday')),
     [],
   );
-  const [state, setState] = useState({ status: 'loading', tracks: [] });
+  // Cold starts seed from the last session's pool for THIS mode (re-filtered
+  // in case the explicit rule changed since) — hero/new-for-you/stations paint
+  // instantly; the fetch below still runs and swaps the fresh pool in.
+  const [state, setState] = useState(() => ({
+    status: 'loading',
+    tracks: dropExplicit(
+      readSnapshot(`featured.${mode}`) ?? [],
+      getActiveExplicitOff(),
+    ),
+  }));
 
   useEffect(() => {
     let stale = false;
@@ -35,10 +45,12 @@ export function useFeaturedPool({ limit = 24 } = {}) {
     getFeatured({ limit })
       .then(results => {
         if (!stale) {
-          setState({
-            status: 'ok',
-            tracks: dropExplicit(results ?? [], getActiveExplicitOff()),
-          });
+          const tracks = dropExplicit(results ?? [], getActiveExplicitOff());
+          // `mode` (not a fresh getUser read): the key must match the mode
+          // this fetch was keyed by — a swap mid-flight is already discarded
+          // via `stale`, so a live resolve always belongs to `mode`.
+          writeSnapshot(`featured.${mode}`, tracks);
+          setState({ status: 'ok', tracks });
         }
       })
       .catch(() => {

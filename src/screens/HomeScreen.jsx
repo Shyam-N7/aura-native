@@ -7,6 +7,7 @@ import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { showToast } from '../lib/toast';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { homeCache } from '../lib/homeCache';
+import { readSnapshot, writeSnapshot } from '../lib/snapshot';
 import { dropExplicit } from '../lib/explicit';
 import { getQuickPicks } from '../api/quickPicks';
 import { getMostPlayed, getTopArtists, getRecentlyPlayed } from '../api/stats';
@@ -73,10 +74,15 @@ function greeting() {
 
 // Cache-first section fetch (web homeCache contract): state seeds
 // synchronously from the cache so tab returns render fully without a cascade;
-// the fetch runs only when the key is absent. Failures resolve to [] without
-// caching, so a later visit retries. null = not loaded yet.
+// the fetch runs only when the in-memory key is absent. A persisted snapshot
+// of the last session's data fills the very first paint of a cold start too —
+// but it never suppresses the fetch, so it's shown-while-refreshing, and the
+// fresh result overwrites both layers. Failures resolve to [] without
+// caching, so a later visit retries. null = nothing to show yet.
 function useHomeSection(key, fetcher) {
-  const [data, setData] = useState(() => homeCache[key] ?? null);
+  const [data, setData] = useState(
+    () => homeCache[key] ?? readSnapshot(`home.${key}`),
+  );
   useEffect(() => {
     if (homeCache[key] !== undefined) {
       return undefined;
@@ -85,6 +91,7 @@ function useHomeSection(key, fetcher) {
     fetcher()
       .then(d => {
         homeCache[key] = d;
+        writeSnapshot(`home.${key}`, d);
         if (!stale) {
           setData(d);
         }
@@ -125,13 +132,14 @@ export default function HomeScreen({ navigation }) {
   // cached mixes render instantly, a fresh list swaps in on every mount
   // (mixes go stale mid-session — hidden tracks, edition boundaries).
   const [autoMixes, setAutoMixes] = useState(
-    () => homeCache.autoPlaylists ?? null,
+    () => homeCache.autoPlaylists ?? readSnapshot('home.autoPlaylists'),
   );
   useEffect(() => {
     let stale = false;
     listAutoPlaylists()
       .then(p => {
         homeCache.autoPlaylists = p;
+        writeSnapshot('home.autoPlaylists', p);
         if (!stale) {
           setAutoMixes(p);
         }
@@ -212,7 +220,9 @@ export default function HomeScreen({ navigation }) {
   // new-for-you, stations. Cached so returning to Home is instant; each field
   // stays null when there's no personalization (cold-start / not deployed), and
   // the featured pool fills that surface in below — never a fabricated "for you".
-  const [reco, setReco] = useState(() => homeCache.reco ?? null);
+  const [reco, setReco] = useState(
+    () => homeCache.reco ?? readSnapshot('home.reco'),
+  );
   useEffect(() => {
     let stale = false;
     Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
@@ -226,6 +236,7 @@ export default function HomeScreen({ navigation }) {
           stations: s?.stations?.length ? s.stations : null,
         };
         homeCache.reco = next;
+        writeSnapshot('home.reco', next);
         setReco(next);
       },
     );

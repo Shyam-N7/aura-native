@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  LinearTransition,
+  ReduceMotion,
+} from 'react-native-reanimated';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -24,6 +27,7 @@ import {
 import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
+import { confirm } from '../lib/confirm';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
 import { openWhatsNew } from '../lib/whatsNew';
@@ -43,13 +47,15 @@ import { openTrackActions } from '../lib/trackActionsSheet';
 import { useLikes } from '../hooks/useLikes';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { getLastCrash, clearLastCrash } from '../lib/crashLog';
+import { readSnapshot, writeSnapshot } from '../lib/snapshot';
 import { TopBar } from '../components/nav/TopBar';
 import { Avatar } from '../components/Avatar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { PressScale } from '../components/ui/PressScale';
 import { Shelf } from '../components/library/Shelf';
-import { Skeleton } from '../components/ui/Skeleton';
+import { AuraLoader } from '../components/ui/AuraLoader';
+import { CountUp } from '../components/ui/CountUp';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label } from '../theme/tokens';
@@ -78,6 +84,20 @@ let sessionShelf = null;
 const CHIP_LAYOUT = LinearTransition.duration(280).reduceMotion(
   ReduceMotion.System,
 );
+
+// Staggered rise-in for the cards below — each waits its turn, so opening
+// the tab reads as the library composing itself rather than popping on.
+function Arrive({ i = 0, children }) {
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(380)
+        .delay(70 * i)
+        .reduceMotion(ReduceMotion.System)}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 // Overlapping cover fan — the closed-shelf "peek" (three 26px arts).
 function PeekFan({ tracks }) {
@@ -155,11 +175,15 @@ export default function YouScreen({ navigation }) {
   useEffect(() => subscribeAuth(() => setUser(getUser())), []);
   const { isLiked, ready } = useLikes();
 
-  const [summary, setSummary] = useState(null);
-  const [liked, setLiked] = useState(null);
-  const [playlists, setPlaylists] = useState(null);
-  const [history, setHistory] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+  // Cold starts paint from the last session's library snapshot instantly (no
+  // loader) — load() below still refetches on mount + every tab focus and
+  // silently swaps the fresh data in.
+  const [snap] = useState(() => readSnapshot('you'));
+  const [summary, setSummary] = useState(() => snap?.summary ?? null);
+  const [liked, setLiked] = useState(() => snap?.liked ?? null);
+  const [playlists, setPlaylists] = useState(() => snap?.playlists ?? null);
+  const [history, setHistory] = useState(() => snap?.history ?? null);
+  const [loaded, setLoaded] = useState(() => !!snap);
   const [openShelf, setOpenShelf] = useState(() => sessionShelf);
   const [crash, setCrash] = useState(getLastCrash);
   const [hintOn] = useState(() => hintAvailable('libraryShelf'));
@@ -336,6 +360,11 @@ export default function YouScreen({ navigation }) {
         .then(r => r.plays)
         .catch(() => []),
     ]).then(([s, l, p, h]) => {
+      // Snapshot only a fully-successful summary load — a null summary (fetch
+      // failed) must not freeze "0 tracks played" into next session's paint.
+      if (s) {
+        writeSnapshot('you', { summary: s, liked: l, playlists: p, history: h });
+      }
       if (!alive.current) {
         return;
       }
@@ -378,11 +407,16 @@ export default function YouScreen({ navigation }) {
     openPlayer();
   };
 
-  const confirmSignOut = () => {
-    Alert.alert('sign out?', 'you can sign back in anytime.', [
-      { text: 'cancel', style: 'cancel' },
-      { text: 'sign out', style: 'destructive', onPress: () => logout() },
-    ]);
+  const confirmSignOut = async () => {
+    if (
+      await confirm({
+        title: 'sign out?',
+        body: 'you can sign back in anytime.',
+        action: 'sign out',
+      })
+    ) {
+      logout();
+    }
   };
 
   const emptyPeek = (
@@ -402,6 +436,7 @@ export default function YouScreen({ navigation }) {
         >
           {/* Your year — pinned open at the top: the listener's data is just
               there on arrival, no action needed. */}
+          <Arrive i={0}>
           <View
             style={[
               styles.yearCard,
@@ -410,18 +445,21 @@ export default function YouScreen({ navigation }) {
           >
             <Text style={[label(9.5), { color: t.inkFaint }]}>your year</Text>
             {!loaded ? (
-              <Skeleton height={18} radius={6} style={styles.yearSkeleton} />
+              // Blobs only — the card's own "your year" label already names
+              // it; the goo breathing IS the aura, no gray bars.
+              <AuraLoader style={styles.yearLoader} />
             ) : (
               <>
                 <Text style={[styles.yearLine, { color: t.ink }]}>
-                  {summary?.tracksPlayed ?? 0} tracks played
+                  <CountUp to={summary?.tracksPlayed ?? 0} /> tracks played
                 </Text>
                 <Text style={[label(10), { color: t.inkSoft }]}>
-                  for {summary?.minutesListened ?? 0} minutes
+                  for <CountUp to={summary?.minutesListened ?? 0} /> minutes
                 </Text>
               </>
             )}
           </View>
+          </Arrive>
 
           {loaded && summary && summary.tracksPlayed === 0 && (
             <Text style={[styles.allEmpty, { color: t.inkSoft }]}>
@@ -430,6 +468,7 @@ export default function YouScreen({ navigation }) {
           )}
 
           {/* The written-about-you pair: journal + sonic dna. */}
+          <Arrive i={1}>
           <View style={styles.duoRow}>
             <PressScale
               accessibilityRole="button"
@@ -462,8 +501,10 @@ export default function YouScreen({ navigation }) {
               </Text>
             </PressScale>
           </View>
+          </Arrive>
 
           {/* Mood bridges — gradual paths between feelings. */}
+          <Arrive i={2}>
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="mood bridges"
@@ -482,14 +523,14 @@ export default function YouScreen({ navigation }) {
               read you.
             </Text>
           </PressScale>
+          </Arrive>
 
           {!loaded ? (
-            <View style={styles.shelves}>
-              {[0, 1, 2].map(i => (
-                <Skeleton key={i} height={58} radius={16} />
-              ))}
+            <View style={styles.shelvesLoading}>
+              <AuraLoader label="opening your library" />
             </View>
           ) : (
+            <Arrive i={3}>
             <View style={styles.shelves}>
               <Shelf
                 title="liked songs"
@@ -1076,6 +1117,7 @@ export default function YouScreen({ navigation }) {
                 </Text>
               </Shelf>
             </View>
+            </Arrive>
           )}
 
           {/* Identity chip — you sign the corner of your own screen.
@@ -1111,7 +1153,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 5,
   },
-  yearSkeleton: { width: 160 },
+  // Left-aligned in the year card (AuraLoader centers by default) and sized
+  // to the two text lines it stands in for.
+  yearLoader: { alignItems: 'flex-start', paddingVertical: 2 },
+  shelvesLoading: { paddingVertical: 24 },
   yearLine: {
     fontFamily: fonts.semibold,
     fontSize: 22,

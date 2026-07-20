@@ -157,6 +157,16 @@ export function getActiveIndex() {
   return TrackPlayer.getActiveTrackIndex();
 }
 
+// How many tracks the NATIVE player holds right now. The play-retry path
+// compares this against the JS model: after a system kill the restore can die
+// before syncQueue runs, leaving the model full but the native queue EMPTY —
+// and play() on an empty native queue no-ops silently (no error to catch).
+// A zero here while the model has tracks means: rebuild before playing.
+export async function getQueueLength() {
+  const q = await TrackPlayer.getQueue();
+  return q?.length ?? 0;
+}
+
 export function play() {
   return TrackPlayer.play();
 }

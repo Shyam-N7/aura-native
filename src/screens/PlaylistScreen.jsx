@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   AppState,
   Image,
   Pressable,
@@ -34,6 +33,7 @@ import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { relTime } from '../lib/time';
 import { showToast } from '../lib/toast';
+import { confirm } from '../lib/confirm';
 import { storage } from '../storage/mmkv';
 import { filterTracks, sortTracks } from '../lib/listFilter';
 import {
@@ -295,102 +295,86 @@ export default function PlaylistScreen({ route, navigation }) {
     if (isPublic) {
       bits.push('the public link turns off');
     }
-    Alert.alert(
-      'Make this only you?',
-      `${bits.join(', ')}. You can share it again anytime.`,
-      [
-        { text: 'cancel', style: 'cancel' },
-        {
-          text: 'make private',
-          style: 'destructive',
-          onPress: async () => {
-            const prev = hit.data;
-            setHit(h => ({
-              ...h,
-              data: {
-                ...h.data,
-                collaborators: [],
-                isPublic: false,
-                shared: false,
-              },
-            }));
-            try {
-              await setPlaylistOnlyMe(id);
-              showToast('Only you can see this now.');
-            } catch (err) {
-              setHit({ data: prev, error: null });
-              showToast(`Couldn't update — ${err.message}`);
-            }
-          },
+    confirm({
+      title: 'make this only you?',
+      body: `${bits.join(', ')}. you can share it again anytime.`,
+      action: 'make private',
+    }).then(async ok => {
+      if (!ok) {
+        return;
+      }
+      const prev = hit.data;
+      setHit(h => ({
+        ...h,
+        data: {
+          ...h.data,
+          collaborators: [],
+          isPublic: false,
+          shared: false,
         },
-      ],
-    );
+      }));
+      try {
+        await setPlaylistOnlyMe(id);
+        showToast('Only you can see this now.');
+      } catch (err) {
+        setHit({ data: prev, error: null });
+        showToast(`Couldn't update — ${err.message}`);
+      }
+    });
   };
 
   // Owner removes a collaborator from the members sheet (with a confirm).
-  const dropCollaborator = c => {
-    Alert.alert(
-      `Remove ${c.name}?`,
-      'They lose access to this playlist. You can re-invite them anytime.',
-      [
-        { text: 'cancel', style: 'cancel' },
-        {
-          text: 'remove',
-          style: 'destructive',
-          onPress: async () => {
-            const prev = hit.data;
-            setHit(h => ({
-              ...h,
-              data: {
-                ...h.data,
-                collaborators: h.data.collaborators.filter(
-                  x => x.userId !== c.userId,
-                ),
-              },
-            }));
-            try {
-              await removePlaylistCollaborator(id, c.userId);
-              showToast(`Removed ${c.name}.`);
-            } catch (err) {
-              setHit({ data: prev, error: null });
-              showToast(`Couldn't remove — ${err.message}`);
-            }
-          },
-        },
-      ],
-    );
+  const dropCollaborator = async c => {
+    const ok = await confirm({
+      title: `remove ${c.name}?`,
+      body: 'they lose access to this playlist. you can re-invite them anytime.',
+      action: 'remove',
+    });
+    if (!ok) {
+      return;
+    }
+    const prev = hit.data;
+    setHit(h => ({
+      ...h,
+      data: {
+        ...h.data,
+        collaborators: h.data.collaborators.filter(x => x.userId !== c.userId),
+      },
+    }));
+    try {
+      await removePlaylistCollaborator(id, c.userId);
+      showToast(`Removed ${c.name}.`);
+    } catch (err) {
+      setHit({ data: prev, error: null });
+      showToast(`Couldn't remove — ${err.message}`);
+    }
   };
 
-  const removeTrack = track => {
-    Alert.alert(
-      `Remove "${cleanTitle(track.title)}"?`,
-      'This only removes it from this playlist. Your likes are untouched.',
-      [
-        { text: 'cancel', style: 'cancel' },
-        {
-          text: 'remove',
-          style: 'destructive',
-          onPress: async () => {
-            const prev = hit.data;
-            setHit(h => ({
-              ...h,
-              data: {
-                ...h.data,
-                tracks: h.data.tracks.filter(x => x.id !== track.id),
-                trackCount: (h.data.trackCount ?? 1) - 1,
-              },
-            }));
-            try {
-              await removeFromPlaylist(id, track.id);
-              showToast('Removed.');
-            } catch (err) {
-              setHit({ data: prev, error: null });
-              showToast(`Couldn't remove — ${err.message}`);
-            }
-          },
-        },
-      ],
-    );
+  const removeTrack = async track => {
+    const ok = await confirm({
+      title: `remove "${cleanTitle(track.title)}"?`,
+      body: 'this only removes it from this playlist. your likes are untouched.',
+      action: 'remove',
+    });
+    if (!ok) {
+      return;
+    }
+    const prev = hit.data;
+    setHit(h => ({
+      ...h,
+      data: {
+        ...h.data,
+        tracks: h.data.tracks.filter(x => x.id !== track.id),
+        trackCount: (h.data.trackCount ?? 1) - 1,
+      },
+    }));
+    try {
+      await removeFromPlaylist(id, track.id);
+      showToast('Removed.');
+    } catch (err) {
+      setHit({ data: prev, error: null });
+      showToast(`Couldn't remove — ${err.message}`);
+    }
   };
 
   // Upload a custom cover image (picker delivers it pre-resized).

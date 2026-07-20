@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { Alert } from 'react-native';
+import { confirm } from '../src/lib/confirm';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { storage } from '../src/storage/mmkv';
 import { QueueSheet } from '../src/overlays/QueueSheet';
@@ -53,6 +53,9 @@ jest.mock('../src/api/playlists', () => ({
   addToPlaylist: (...a) => mockAddToPlaylist(...a),
 }));
 const mockShowToast = jest.fn();
+jest.mock('../src/lib/confirm', () => ({
+  confirm: jest.fn(() => Promise.resolve(false)),
+}));
 jest.mock('../src/lib/toast', () => ({
   showToast: (...a) => mockShowToast(...a),
 }));
@@ -158,23 +161,29 @@ test('queue options menu lists every action with plain labels', async () => {
 });
 
 test('clear queue confirms first, then clears through the player context', async () => {
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const tree = await render();
   await openMenu(tree);
 
+  // Declining the house confirm leaves the queue alone.
+  confirm.mockResolvedValueOnce(false);
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'clear queue').props.onPress();
   });
-
-  // Nothing happens until the alert's destructive button is pressed.
+  expect(confirm).toHaveBeenCalledWith({
+    title: 'clear queue?',
+    body: "we'll keep the currently playing track.",
+    action: 'clear',
+  });
   expect(mockClearQueue).not.toHaveBeenCalled();
-  const [title, body, buttons] = alert.mock.calls[0];
-  expect(title).toBe('clear queue?');
-  expect(body).toBe("we'll keep the currently playing track.");
-  buttons.find(b => b.style === 'destructive').onPress();
+
+  // Accepting clears through the player context.
+  await openMenu(tree);
+  confirm.mockResolvedValueOnce(true);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'clear queue').props.onPress();
+  });
   expect(mockClearQueue).toHaveBeenCalled();
 
-  alert.mockRestore();
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
