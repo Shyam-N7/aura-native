@@ -103,6 +103,11 @@ test('renders nothing while the queue ui state is closed', async () => {
 });
 
 test('lists the queue with source, count and row actions', async () => {
+  // Fake timers for the WHOLE test (house pattern — SearchScreen/WhatsNew):
+  // flipping them on mid-test strands the frame-callback registrations the
+  // reanimated mock deferred at mount, and the advance then crashes its
+  // registry. One timer implementation end to end keeps the mock coherent.
+  jest.useFakeTimers();
   const tree = await render();
 
   const body = texts(tree.toJSON());
@@ -116,7 +121,15 @@ test('lists the queue with source, count and row actions', async () => {
 
   // The current row has no remove button; others do. (The list mounts from
   // initialScrollIndex, so row 0 may be virtualized away — use row 2.)
-  byLabel(tree, 'remove Third Song').props.onPress();
+  // Removal is animate-then-commit: the tap starts the row's storm-off in
+  // place, and the queue is only touched once the exit has finished.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'remove Third Song').props.onPress();
+  });
+  expect(mockRemoveAt).not.toHaveBeenCalled();
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(600);
+  });
   expect(mockRemoveAt).toHaveBeenCalledWith(2);
   expect(
     tree.root.findAllByProps({ accessibilityLabel: 'remove Second Song' }),
@@ -134,6 +147,7 @@ test('lists the queue with source, count and row actions', async () => {
   expect(mockCloseQueue).toHaveBeenCalled();
 
   await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
 });
 
 const openMenu = tree =>
@@ -224,6 +238,8 @@ test('save queue as playlist creates it and adds every queue track', async () =>
 });
 
 test('hide past songs trims rows before the current track, keeping queue indices', async () => {
+  // Whole-test fake timers — see 'lists the queue' for why.
+  jest.useFakeTimers();
   const tree = await render();
   await openMenu(tree);
   await ReactTestRenderer.act(async () => {
@@ -235,10 +251,16 @@ test('hide past songs trims rows before the current track, keeping queue indices
   expect(body).not.toContain('First Song');
   expect(body).toContain('2 tracks');
 
-  // Visible rows still act on ABSOLUTE queue indices.
+  // Visible rows still act on ABSOLUTE queue indices — the removal commit
+  // resolves its key over the visible slice, then addresses the real queue.
   byLabel(tree, 'play Third Song').props.onPress();
   expect(mockJumpTo).toHaveBeenCalledWith(2);
-  byLabel(tree, 'remove Third Song').props.onPress();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'remove Third Song').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(600);
+  });
   expect(mockRemoveAt).toHaveBeenCalledWith(2);
 
   // The row label reflects state and toggles the rows back.
@@ -251,6 +273,7 @@ test('hide past songs trims rows before the current track, keeping queue indices
   expect(texts(tree.toJSON())).toContain('3 tracks');
 
   await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
 });
 
 test('hide past persists across opens via the mmkv pref', async () => {

@@ -19,6 +19,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   LinearTransition,
+  interpolate,
   runOnJS,
   scrollTo,
   useAnimatedRef,
@@ -26,6 +27,7 @@ import Animated, {
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
+  withSequence,
   withSpring,
   withTiming,
   useReducedMotion,
@@ -110,12 +112,22 @@ function NowPlayingLine({ t }) {
 // earlier long-press arming, and even plain activation offsets, sometimes
 // did). No scrollEnabled toggling either: that state flip re-rendered the
 // whole list at the exact moment of pickup, which read as jank.
-function Row({
+//
+// Memoized because the sheet re-renders on EVERY player-context change; with
+// a few dozen mounted rows each re-rendering art + gestures, taps stuttered.
+// Everything it receives is either row data or a stable ref (context
+// callbacks, shared values), so the shallow compare holds.
+const Row = React.memo(function Row({
   item,
   index,
   isCurrent,
   isPast,
-  player,
+  rowKey,
+  leaving,
+  jumpTo,
+  reorder,
+  onRemove,
+  onGone,
   dragFrom,
   dragTo,
   dragShift,
@@ -133,6 +145,7 @@ function Row({
   listTop,
 }) {
   const { t } = useTheme();
+  const { width: winW } = useWindowDimensions();
   const title = cleanTitle(item.title);
 
   const pickup = useCallback(() => {
@@ -143,7 +156,7 @@ function Row({
     if (from !== to) {
       Vibration.vibrate(8);
     }
-    player.reorder(from, to);
+    reorder(from, to);
     // Release the drag one frame later so the list paints the new order
     // before rows stop compensating — avoids a one-frame jump-back.
     requestAnimationFrame(() => {
@@ -152,11 +165,35 @@ function Row({
     });
   };
 
+  // The storm-off. A removed song takes it personally: a beat of indignation
+  // (tiny lean-back and lift), then it wheels off the right edge, drooping
+  // and fading as it goes. It plays on the MOUNTED row — never a reanimated
+  // exiting animation, which aborts natively if the cell unmounts mid-flight
+  // — and only when it's fully out does onGone commit the actual removal
+  // (animate-then-commit; the sheet then glides the gap shut).
+  const gone = useSharedValue(0);
+  useEffect(() => {
+    if (!leaving) {
+      return;
+    }
+    gone.value = withSequence(
+      withTiming(0.18, { duration: 120, easing: EASE.settle }),
+      // Accelerating exit — it left, it didn't park.
+      withTiming(1, { duration: 310, easing: Easing.in(Easing.quad) }, done => {
+        if (done) {
+          runOnJS(onGone)(rowKey);
+        }
+      }),
+    );
+  }, [leaving, gone, onGone, rowKey]);
+
   // A second finger on another grip must not fight over the shared drag
   // slots — first pickup wins, the other pan runs inert.
   const owns = useSharedValue(false);
 
   const pan = Gesture.Pan()
+    // A row mid storm-off can't be picked up — its index is already spoken for.
+    .enabled(!leaving)
     .activeOffsetY([-4, 4])
     .failOffsetX([-16, 16])
     .blocksExternalGesture(listGesture)
@@ -256,6 +293,21 @@ function Row({
     });
 
   const rowStyle = useAnimatedStyle(() => {
+    if (gone.value > 0) {
+      return {
+        zIndex: 5,
+        // Fade late — the character is in the travel, not a dissolve. Past
+        // rows fold their static 0.55 in so the exit starts where they sat.
+        opacity:
+          interpolate(gone.value, [0, 0.55, 1], [1, 0.9, 0]) *
+          (isPast ? 0.55 : 1),
+        transform: [
+          { translateX: interpolate(gone.value, [0, 0.18, 1], [0, -10, winW]) },
+          { translateY: interpolate(gone.value, [0, 0.18, 1], [0, -3, 16]) },
+          { rotate: `${interpolate(gone.value, [0, 0.18, 1], [0, 1.5, -8])}deg` },
+        ],
+      };
+    }
     if (dragFrom.value === index) {
       return {
         zIndex: 5,
@@ -306,7 +358,8 @@ function Row({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`play ${title}`}
-        onPress={() => player.jumpTo(index)}
+        disabled={leaving}
+        onPress={() => jumpTo(index)}
         onLongPress={() =>
           openTrackActions({
             track: item,
@@ -348,7 +401,8 @@ function Row({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`remove ${title}`}
-          onPress={() => player.removeAt(index)}
+          disabled={leaving}
+          onPress={() => onRemove(rowKey, index)}
           hitSlop={8}
           style={styles.remove}
         >
@@ -357,7 +411,7 @@ function Row({
       )}
     </Animated.View>
   );
-}
+});
 
 // The queue overflow menu — web DesktopQueue's ⋯ actions (save / add / clear)
 // plus its hide-past header toggle, folded into one bottom sheet. Only the
@@ -569,6 +623,10 @@ export function QueueSheet() {
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
   const player = usePlayer();
+  // Stable context callbacks (useCallback in the provider) — handed to the
+  // memoized Row directly; passing `player` itself would defeat the memo,
+  // since the context value is a fresh object every provider render.
+  const { jumpTo, reorder, removeAt } = player;
   const reduced = useReducedMotion();
   const open = player.ui?.queueOpen ?? false;
   const { tracks, idx, source } = player.queue ?? {
@@ -582,22 +640,26 @@ export function QueueSheet() {
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);
 
-  // Shuffle animation: a short window during which the list's layout animation
-  // is armed, so shuffling flies the visible tiles to their new positions (and
-  // un-shuffle flies them back). Set synchronously with the toggle so the very
-  // render that reorders the data is the one that animates. Off otherwise, so
-  // it never touches the hand-tuned drag-reorder.
-  const [shuffleAnim, setShuffleAnim] = useState(false);
-  const shuffleTimer = useRef(null);
+  // Layout-animation window: flyMs > 0 arms the list's LinearTransition for a
+  // beat, so a data change landing inside the window animates rows to their
+  // new slots — a shuffle flies the visible tiles (420ms), a removal glides
+  // the gap shut (260ms). Zero otherwise, so it never touches the hand-tuned
+  // drag-reorder. Armed synchronously with the mutation so the very render
+  // that changes the data is the one that animates.
+  const [flyMs, setFlyMs] = useState(0);
+  const flyTimer = useRef(null);
+  const armFly = useCallback((ms, windowMs) => {
+    setFlyMs(ms);
+    clearTimeout(flyTimer.current);
+    flyTimer.current = setTimeout(() => setFlyMs(0), windowMs);
+  }, []);
   const doShuffle = useCallback(() => {
     if (!reduced) {
-      setShuffleAnim(true);
-      clearTimeout(shuffleTimer.current);
-      shuffleTimer.current = setTimeout(() => setShuffleAnim(false), 480);
+      armFly(420, 480);
     }
     player.toggleShuffle();
-  }, [reduced, player]);
-  useEffect(() => () => clearTimeout(shuffleTimer.current), []);
+  }, [reduced, armFly, player]);
+  useEffect(() => () => clearTimeout(flyTimer.current), []);
 
   // Overflow menu + the hide-past pref it toggles.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -624,6 +686,62 @@ export function QueueSheet() {
       return `${item.id}#${n}`;
     });
   }, [tracks, idx, hidePast]);
+
+  // Row removal, animate-then-commit: the tapped row joins `leaving` and plays
+  // its storm-off in place (Row.gone); only when it has fully left does onGone
+  // drop it from the queue, with the fly window armed so the rows below glide
+  // up into the gap instead of snapping.
+  const [leaving, setLeaving] = useState(() => new Set());
+  // The commit re-derives "which absolute index is this row NOW": other
+  // removals may have shifted it while the exit played, so a key ("id#nth
+  // occurrence", minted over the visible slice) is resolved against the live
+  // list at commit time. Splice-synced between commits so back-to-back
+  // removals stay correct even before the next render lands.
+  const commitRef = useRef({ tracks: [], base: 0 });
+  commitRef.current = { tracks, base: hidePast ? Math.max(0, idx) : 0 };
+  const removeRow = useCallback(
+    (key, index) => {
+      if (reduced) {
+        removeAt(index);
+        return;
+      }
+      setLeaving(prev => (prev.has(key) ? prev : new Set(prev).add(key)));
+    },
+    [reduced, removeAt],
+  );
+  const onGone = useCallback(
+    key => {
+      setLeaving(prev => {
+        if (!prev.has(key)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      const cut = key.lastIndexOf('#');
+      const id = key.slice(0, cut);
+      const nth = Number(key.slice(cut + 1));
+      const { tracks: list, base } = commitRef.current;
+      let seen = 0;
+      for (let i = base; i < list.length; i += 1) {
+        if (list[i].id !== id) {
+          continue;
+        }
+        seen += 1;
+        if (seen === nth) {
+          commitRef.current = {
+            tracks: list.slice(0, i).concat(list.slice(i + 1)),
+            base,
+          };
+          armFly(260, 340);
+          removeAt(i);
+          return;
+        }
+      }
+    },
+    [armFly, removeAt],
+  );
 
   const endClose = useCallback(() => setVis('closed'), []);
 
@@ -652,6 +770,10 @@ export function QueueSheet() {
     }
     setVis('closing');
     setMenuOpen(false);
+    // Removals still animating lose their exit here (the cells unmount with
+    // the sheet, cancelling the timing before its commit) — flush them now so
+    // a tapped ✕ always lands.
+    leaving.forEach(k => onGone(k));
     // Belt-and-suspenders: never leave the wide drag window pinned if the
     // sheet closes mid-drag (onFinalize normally clears this on gesture end).
     setDragging(false);
@@ -669,7 +791,7 @@ export function QueueSheet() {
         }
       },
     );
-  }, [vis, reduced, endClose, player.ui, winH, slide]);
+  }, [vis, reduced, endClose, player.ui, winH, slide, leaving, onGone]);
 
   useEffect(() => {
     if (!open) {
@@ -816,13 +938,19 @@ export function QueueSheet() {
 
   const renderItem = ({ item, index }) => {
     const at = index + pastHidden;
+    const key = rowKeys[index];
     return (
       <Row
         item={item}
         index={at}
         isCurrent={at === idx}
         isPast={at < idx}
-        player={player}
+        rowKey={key}
+        leaving={leaving.has(key)}
+        jumpTo={jumpTo}
+        reorder={reorder}
+        onRemove={removeRow}
+        onGone={onGone}
         dragFrom={dragFrom}
         dragTo={dragTo}
         dragShift={dragShift}
@@ -974,11 +1102,11 @@ export function QueueSheet() {
               renderItem={renderItem}
               keyExtractor={(_item, index) => rowKeys[index]}
               // Mounted at REST so reanimated is already tracking each cell's
-              // position when a shuffle lands (arming it only on the reorder
+              // position when a data change lands (arming it only on that
               // render is too late — the "before" layout was never captured);
-              // the duration is 0 except during the shuffle window (~420ms), so
-              // the tiles fly to their new slots then and snap instantly other-
-              // wise.
+              // the duration is 0 except inside an armed fly window (shuffle
+              // flight / removal collapse), so rows animate to their slots
+              // then and snap instantly otherwise.
               // But it is fully DETACHED during an active drag: the manual
               // drag-reorder owns every pixel of its motion through explicit
               // transforms, and a live layout animation — even at duration 0 the
@@ -987,9 +1115,7 @@ export function QueueSheet() {
               // when dragging a song to the bottom). undefined ⇒ plain cells
               // while dragging; it re-attaches on drop, in time for the shuffle.
               itemLayoutAnimation={
-                dragging
-                  ? undefined
-                  : LinearTransition.duration(shuffleAnim && !reduced ? 420 : 0)
+                dragging ? undefined : LinearTransition.duration(flyMs)
               }
               getItemLayout={(_, index) => ({
                 length: ROW_HEIGHT,
