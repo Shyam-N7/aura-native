@@ -21,6 +21,7 @@ export const DUR = {
   toastIn: 320,
   upNext: 340,
   bud: 380,
+  travel: 560, // directional track-change glide (the filmstrip)
   screen: 420,
   authRise: 600,
   crossfade: 900,

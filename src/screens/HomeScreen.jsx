@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
+import { useTrackDirection } from '../hooks/useTrackDirection';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { showToast } from '../lib/toast';
 import { openTrackActions } from '../lib/trackActionsSheet';
@@ -113,6 +114,8 @@ function useHomeSection(key, fetcher) {
 export default function HomeScreen({ navigation }) {
   const { t } = useTheme();
   const player = usePlayer();
+  // Filmstrip direction of the last track change — the banner steps with it.
+  const trackDir = useTrackDirection(player.queue);
   const user = getUser();
   const firstName = user?.name?.split(' ')[0]?.toLowerCase();
   // A question greeting ("still up?") reads wrong with a comma after it, so the
@@ -397,7 +400,12 @@ export default function HomeScreen({ navigation }) {
             />
           )}
 
-          <NowPlayingBanner track={player.current} onOpen={openPlayer} />
+          <NowPlayingBanner
+            track={player.current}
+            dir={trackDir}
+            playing={player.isPlaying}
+            onOpen={openPlayer}
+          />
 
           {picks.length > 0 && (
             <View>

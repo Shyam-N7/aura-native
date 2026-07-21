@@ -1,11 +1,12 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, {
   Easing,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
@@ -15,7 +16,8 @@ import { TrackArt } from '../TrackRow';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
 import { usePlaybackProgress } from '../../hooks/usePlaybackProgress';
-import { DUR, EASE } from '../../theme/motion';
+import { useTrackDirection } from '../../hooks/useTrackDirection';
+import { DUR, EASE, SPRING } from '../../theme/motion';
 
 export const BEAD_SIZE = 52;
 const RING_R = 24.75;
@@ -58,6 +60,28 @@ export function Bead() {
     transform: [{ scale: bud.value }],
   }));
 
+  // Filmstrip step: on a directional track change the art takes a small
+  // sideways step (arriving from the direction of travel) and springs back
+  // into the ring — the dock's echo of the player's glide.
+  const dir = useTrackDirection(player.queue);
+  const nudge = useSharedValue(0);
+  const prevId = useRef(player.current?.id);
+  useEffect(() => {
+    const id = player.current?.id;
+    if (!id || id === prevId.current) {
+      return;
+    }
+    prevId.current = id;
+    if (reduced || dir === 0) {
+      return;
+    }
+    nudge.value = dir * 10;
+    nudge.value = withSpring(0, SPRING.snapback);
+  }, [player, dir, reduced, nudge]);
+  const nudgeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: nudge.value }],
+  }));
+
   const track = player.current;
   if (!track) {
     return null;
@@ -73,9 +97,9 @@ export function Bead() {
         onPress={open}
       >
         <Glass radius={BEAD_SIZE / 2} style={styles.disc}>
-          <View style={styles.art}>
+          <Animated.View style={[styles.art, nudgeStyle]}>
             <TrackArt track={track} size={BEAD_SIZE - 8} radius={999} />
-          </View>
+          </Animated.View>
           <Svg
             width={BEAD_SIZE}
             height={BEAD_SIZE}

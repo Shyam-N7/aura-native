@@ -18,9 +18,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
   Easing,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -31,6 +33,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { useLikes } from '../hooks/useLikes';
+import { useTrackDirection } from '../hooks/useTrackDirection';
 import { QUALITIES } from '../lib/audioQuality';
 import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
@@ -75,44 +78,120 @@ const artUrl = (track, res = 500) =>
 // to SCREEN_H then inverted it into a dark strip of unscrimmed art.
 const SCREEN_H = Dimensions.get('screen').height;
 
-// Track-change crossfade, the web's "develop into focus": the new art arrives
-// blurred and sharpens while the old one fades underneath (900ms total).
-function ArtDevelop({ track, size }) {
-  const [twin, setTwin] = useState(null);
-  const prevId = useRef(track.id);
+// Track-change transition — the web's "develop into focus" made directional.
+// Forward travel flows like a filmstrip: the new art glides in from the right
+// while it sharpens (its blurred twin fading off it) and the old art slips
+// out to the left; backward is the mirror. A directionless change (a fresh
+// set) keeps the plain centered crossfade. All motion is shared values on
+// mounted layers — never an exiting layout animation, which aborts natively
+// when the sheet unmounts mid-flight.
+function ArtDevelop({ track, dir, size, reduced }) {
+  const [old, setOld] = useState(null);
+  const prev = useRef(track);
+  const p = useSharedValue(1);
+  const d = useSharedValue(0);
+  const timer = useRef(null);
 
   useEffect(() => {
-    if (track.id !== prevId.current) {
-      prevId.current = track.id;
-      setTwin(track.id);
-      const id = setTimeout(() => setTwin(null), DUR.crossfade);
-      return () => clearTimeout(id);
+    if (track.id === prev.current.id) {
+      return;
     }
-  }, [track.id]);
+    const outgoing = prev.current;
+    prev.current = track;
+    if (reduced) {
+      return;
+    }
+    const ms = dir === 0 ? DUR.crossfade : DUR.travel;
+    d.value = dir;
+    setOld(outgoing);
+    p.value = 0;
+    p.value = withTiming(1, { duration: ms, easing: EASE.enter });
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setOld(null), ms + 40);
+  }, [track, dir, reduced, p, d]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const oldStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 0.6, 1], [1, 0, 0]),
+    transform: [{ translateX: -p.value * d.value * size * 0.3 }],
+  }));
+  const curStyle = useAnimatedStyle(() => ({
+    opacity:
+      d.value === 0 ? p.value : interpolate(p.value, [0, 0.65, 1], [0, 1, 1]),
+    transform: [
+      { translateX: (1 - p.value) * d.value * size * 0.36 },
+      { scale: 0.97 + 0.03 * p.value },
+    ],
+  }));
+  const twinStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 0.55, 1], [1, 0.7, 0]),
+  }));
 
   const url = artUrl(track);
   return (
     <View style={{ width: size, height: size }}>
-      <View key={track.id} style={[StyleSheet.absoluteFill, elevation.art]}>
+      {old && (
+        <Animated.View style={[StyleSheet.absoluteFill, oldStyle]}>
+          <TrackArt
+            track={old}
+            size={size}
+            radius={radii.playerArt}
+            res={500}
+          />
+        </Animated.View>
+      )}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, elevation.art, curStyle]}
+      >
         <TrackArt
           track={track}
           size={size}
           radius={radii.playerArt}
           res={500}
         />
-      </View>
-      {twin && url && (
-        <Image
-          source={{ uri: url }}
-          blurRadius={8}
-          style={[
-            styles.twin,
-            { width: size, height: size, borderRadius: radii.playerArt },
-          ]}
-        />
-      )}
+        {old && url && (
+          <Animated.Image
+            source={{ uri: url }}
+            blurRadius={8}
+            style={[
+              styles.twin,
+              { width: size, height: size, borderRadius: radii.playerArt },
+              twinStyle,
+            ]}
+          />
+        )}
+      </Animated.View>
     </View>
   );
+}
+
+// One line of the track meta gliding in from the direction of travel — the
+// artist follows the title a beat later (the stagger). Directionless changes
+// just fade in place.
+function MetaGlide({ id, dir, delay = 0, reduced, children }) {
+  const m = useSharedValue(1);
+  const d = useSharedValue(0);
+  const prev = useRef(id);
+  useEffect(() => {
+    if (id === prev.current) {
+      return;
+    }
+    prev.current = id;
+    if (reduced) {
+      return;
+    }
+    d.value = dir;
+    m.value = 0;
+    m.value = withDelay(
+      delay,
+      withTiming(1, { duration: DUR.upNext, easing: EASE.enter }),
+    );
+  }, [id, dir, delay, reduced, m, d]);
+  const s = useAnimatedStyle(() => ({
+    opacity: m.value,
+    transform: [{ translateX: (1 - m.value) * d.value * 26 }],
+  }));
+  return <Animated.View style={s}>{children}</Animated.View>;
 }
 
 // A gentle side-to-side bob on the swipe-hint arrow — the motion suggests the
@@ -176,6 +255,9 @@ export function PlayerSheet() {
 
   const track = player.current;
   const open = player.ui?.playerOpen ?? false;
+  // Filmstrip direction for this change — feeds the art glide, the meta
+  // stagger and the backdrop parallax below.
+  const dir = useTrackDirection(player.queue);
 
   // 'closed' | 'open' | 'closing'
   const [vis, setVis] = useState('closed');
@@ -191,6 +273,28 @@ export function PlayerSheet() {
   const dragY = useSharedValue(0);
   const backdropFade = useSharedValue(0);
   const breathe = useSharedValue(0.85);
+  // Filmstrip parallax: on a directional change the blurred backdrop takes a
+  // small step with the travel and settles, lagging the art's bigger move —
+  // depth, not decoration. Its 1.3 paint scale leaves it slack to slide in.
+  const bdPan = useSharedValue(0);
+  const bdPrev = useRef(track?.id);
+  useEffect(() => {
+    if (!track || track.id === bdPrev.current) {
+      return;
+    }
+    bdPrev.current = track.id;
+    if (reduced || dir === 0) {
+      return;
+    }
+    bdPan.value = dir * 18;
+    bdPan.value = withTiming(0, {
+      duration: DUR.crossfade,
+      easing: EASE.enter,
+    });
+  }, [track, dir, reduced, bdPan]);
+  const bdPanStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: bdPan.value }],
+  }));
 
   const endClose = useCallback(() => setVis('closed'), []);
 
@@ -494,14 +598,16 @@ export function PlayerSheet() {
               pointerEvents="none"
               style={[StyleSheet.absoluteFill, backdropStyle]}
             >
-              <Image
-                source={{ uri: backdrop }}
-                blurRadius={14}
-                style={[
-                  styles.backdrop,
-                  { width: winW, height: Math.max(winH, SCREEN_H) },
-                ]}
-              />
+              <Animated.View style={[StyleSheet.absoluteFill, bdPanStyle]}>
+                <Image
+                  source={{ uri: backdrop }}
+                  blurRadius={14}
+                  style={[
+                    styles.backdrop,
+                    { width: winW, height: Math.max(winH, SCREEN_H) },
+                  ]}
+                />
+              </Animated.View>
             </Animated.View>
           )}
           <GradientBg
@@ -551,7 +657,12 @@ export function PlayerSheet() {
                 style={styles.hero}
                 onLayout={e => setHeroH(e.nativeEvent.layout.height)}
               >
-                <ArtDevelop track={track} size={artSize} />
+                <ArtDevelop
+                  track={track}
+                  dir={dir}
+                  size={artSize}
+                  reduced={reduced}
+                />
                 <TapHeart burst={burst} accent={t.accent} />
                 {/* Gesture hints, shown where the gestures live — each one
                     stays until the user has actually performed it once. */}
@@ -595,19 +706,23 @@ export function PlayerSheet() {
             </GestureDetector>
 
             <View style={styles.meta}>
-              <Text
-                numberOfLines={2}
-                style={[type.playerTitle, styles.center, { color: t.ink }]}
-              >
-                {cleanTitle(track.title)}
-              </Text>
-              {!!track.artist && (
+              <MetaGlide id={track.id} dir={dir} reduced={reduced}>
                 <Text
-                  numberOfLines={1}
-                  style={[type.body, styles.center, { color: t.inkSoft }]}
+                  numberOfLines={2}
+                  style={[type.playerTitle, styles.center, { color: t.ink }]}
                 >
-                  {track.artist}
+                  {cleanTitle(track.title)}
                 </Text>
+              </MetaGlide>
+              {!!track.artist && (
+                <MetaGlide id={track.id} dir={dir} delay={70} reduced={reduced}>
+                  <Text
+                    numberOfLines={1}
+                    style={[type.body, styles.center, { color: t.inkSoft }]}
+                  >
+                    {track.artist}
+                  </Text>
+                </MetaGlide>
               )}
             </View>
 
