@@ -30,6 +30,7 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
+import { storage } from '../storage/mmkv';
 import { usePlayer } from '../playback/PlayerContext';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { useLikes } from '../hooks/useLikes';
@@ -55,6 +56,8 @@ import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { PressScale } from '../components/ui/PressScale';
+import { Sheet } from '../components/ui/Sheet';
+import { SheetRow } from '../components/ui/SheetRow';
 import { Skeleton } from '../components/ui/Skeleton';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
@@ -77,6 +80,77 @@ const artUrl = (track, res = 500) =>
 // backdrop left a pale strip where the keyboard was; sizing only the backdrop
 // to SCREEN_H then inverted it into a dark strip of unscrimmed art.
 const SCREEN_H = Dimensions.get('screen').height;
+
+// Hold-to-seek: hold the art's side to scrub — right fast-forwards, left
+// rewinds — one step per tick until the finger lifts.
+const GESTURES_KEY = 'aura.playerGesturesOff';
+const HOLD_SEEK_STEP = 5;
+const HOLD_SEEK_TICK_MS = 400;
+
+// The gesture guide, in plain words — shown from the player ⋯ menu.
+const GUIDE = [
+  { how: 'double-tap the art', what: 'like the song' },
+  { how: 'swipe the art left or right', what: 'next song / previous song' },
+  {
+    how: 'hold the art near an edge',
+    what: 'right fast-forwards, left rewinds',
+  },
+  { how: 'swipe up over "up next"', what: 'open the queue' },
+  { how: 'drag down from the top', what: 'close the player' },
+];
+
+// The player's ⋯ menu — every gesture gets a button twin here (manual ops for
+// anyone who'd rather tap), the gestures themselves can be switched off, and
+// a step-by-step guide teaches them. Nested under the player's null gate, so
+// exits pop (animated={false}); the chassis rise still animates the open.
+function PlayerMenuSheet({ player, gesturesOff, onToggleGestures, onClose }) {
+  const { t } = useTheme();
+  const [guide, setGuide] = useState(false);
+  const act = fn => () => {
+    onClose();
+    fn();
+  };
+  if (guide) {
+    return (
+      <Sheet animated={false} onClose={onClose} closeLabel="close player menu">
+        <Text style={[styles.menuTitle, { color: t.ink }]}>
+          how gestures work
+        </Text>
+        {GUIDE.map(g => (
+          <View key={g.how} style={styles.guideRow}>
+            <Text style={[styles.guideHow, { color: t.ink }]}>{g.how}</Text>
+            <Text style={[styles.guideWhat, { color: t.inkSoft }]}>
+              {g.what}
+            </Text>
+          </View>
+        ))}
+      </Sheet>
+    );
+  }
+  return (
+    <Sheet animated={false} onClose={onClose} closeLabel="close player menu">
+      <Text style={[styles.menuTitle, { color: t.ink }]}>player options</Text>
+      <SheetRow icon="prev" label="previous song" onPress={act(player.prev)} />
+      <SheetRow icon="next" label="next song" onPress={act(player.next)} />
+      <SheetRow
+        icon="grip"
+        label="open queue"
+        onPress={act(() => player.ui?.openQueue?.())}
+      />
+      <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+      <SheetRow
+        icon={gesturesOff ? 'eye' : 'eye-off'}
+        label={gesturesOff ? 'turn gestures on' : 'turn gestures off'}
+        onPress={act(onToggleGestures)}
+      />
+      <SheetRow
+        icon="bloom"
+        label="how gestures work"
+        onPress={() => setGuide(true)}
+      />
+    </Sheet>
+  );
+}
 
 // Track-change transition — the web's "develop into focus" made directional.
 // Forward travel flows like a filmstrip: the new art glides in from the right
@@ -264,6 +338,22 @@ export function PlayerSheet() {
   const [heroH, setHeroH] = useState(0);
   // Where the last double-tap landed — drives the heart pop at that spot.
   const [burst, setBurst] = useState(null);
+  // Player ⋯ menu + the art-gesture kill switch it hosts (persisted).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [gesturesOff, setGesturesOff] = useState(
+    () => storage.getItem(GESTURES_KEY) === '1',
+  );
+  // Hold-to-seek: { dir, target } while a hold is scrubbing, else null. The
+  // refs mirror the 1Hz progress so the ticker reads live values, not the
+  // closure's stale render.
+  const [holdSeek, setHoldSeek] = useState(null);
+  const holdTimer = useRef(null);
+  const holdTarget = useRef(0);
+  const positionRef = useRef(0);
+  positionRef.current = position;
+  const durationRef = useRef(0);
+  durationRef.current = duration;
+  useEffect(() => () => clearInterval(holdTimer.current), []);
   // In-place gesture hints: each stays until its gesture is performed once.
   const likeHint = useHintActive(HINT_LIKE);
   const nextHint = useHintActive(HINT_NEXT);
@@ -331,6 +421,11 @@ export function PlayerSheet() {
       return;
     }
     setVis('closing');
+    setMenuOpen(false);
+    // A hold-to-seek can't outlive the sheet — its interval would keep
+    // scrubbing a player nobody is looking at.
+    clearInterval(holdTimer.current);
+    setHoldSeek(null);
     player.ui?.closePlayer?.();
     if (reduced) {
       endClose();
@@ -470,6 +565,7 @@ export function PlayerSheet() {
   const artDoubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .runOnJS(true)
+    .enabled(!gesturesOff)
     .onEnd((e, success) => {
       if (success) {
         markHintDone(HINT_LIKE);
@@ -482,6 +578,7 @@ export function PlayerSheet() {
   const artFlingNext = Gesture.Fling()
     .direction(Directions.LEFT)
     .runOnJS(true)
+    .enabled(!gesturesOff)
     .onEnd((_e, success) => {
       if (success) {
         markHintDone(HINT_NEXT);
@@ -491,13 +588,67 @@ export function PlayerSheet() {
   const artFlingPrev = Gesture.Fling()
     .direction(Directions.RIGHT)
     .runOnJS(true)
+    .enabled(!gesturesOff)
     .onEnd((_e, success) => {
       if (success) {
         markHintDone(HINT_NEXT);
         player.prev();
       }
     });
-  const artGestures = Gesture.Race(artFlingNext, artFlingPrev, artDoubleTap);
+  // Hold-to-seek (the Instagram zones): press-and-hold the art's side and it
+  // scrubs — HOLD_SEEK_STEP per tick until the finger lifts. Discrete seekTo
+  // calls ride the engine's op chain (coherent with screen-off and remote
+  // sessions); the chip shows the live scrub target because audio position
+  // only commits as fast as the engine can follow.
+  const stopHoldSeek = () => {
+    clearInterval(holdTimer.current);
+    holdTimer.current = null;
+    setHoldSeek(null);
+  };
+  const startHoldSeek = dirn => {
+    clearInterval(holdTimer.current);
+    holdTarget.current = positionRef.current;
+    const tick = () => {
+      const dur = durationRef.current;
+      let next = holdTarget.current + dirn * HOLD_SEEK_STEP;
+      next = Math.max(0, dur > 0 ? Math.min(next, dur - 1) : next);
+      holdTarget.current = next;
+      player.seekTo(next);
+      setHoldSeek({ dir: dirn, target: next });
+    };
+    tick();
+    holdTimer.current = setInterval(tick, HOLD_SEEK_TICK_MS);
+  };
+  const artHoldSeek = Gesture.LongPress()
+    .minDuration(300)
+    .maxDistance(48)
+    .runOnJS(true)
+    .enabled(!gesturesOff)
+    .onStart(e => {
+      // Side zones only — the middle stays inert so a lingering finger
+      // aiming for the double-tap never scrubs by surprise.
+      const w = winW - 48;
+      if (e.x < w * 0.4) {
+        startHoldSeek(-1);
+      } else if (e.x > w * 0.6) {
+        startHoldSeek(1);
+      }
+    })
+    .onFinalize(() => {
+      stopHoldSeek();
+    });
+  const artGestures = Gesture.Race(
+    artFlingNext,
+    artFlingPrev,
+    artDoubleTap,
+    artHoldSeek,
+  );
+  const toggleGestures = () => {
+    const next = !gesturesOff;
+    storage.setItem(GESTURES_KEY, next ? '1' : '0');
+    setGesturesOff(next);
+    showToast(next ? 'gestures off.' : 'gestures on.');
+  };
 
   // Swipe UP to open the queue — bound to the UP-NEXT area (its own detector),
   // not the art. On the art it fought the left/right flings; over the up-next
@@ -506,6 +657,7 @@ export function PlayerSheet() {
   const queueFling = Gesture.Fling()
     .direction(Directions.UP)
     .runOnJS(true)
+    .enabled(!gesturesOff)
     .onEnd((_e, success) => {
       if (success) {
         markHintDone(HINT_QUEUE_SWIPE);
@@ -581,9 +733,10 @@ export function PlayerSheet() {
   };
 
   return (
-    <Animated.View
-      style={[styles.root, { backgroundColor: t.pageBg }, sheetStyle]}
-    >
+    <>
+      <Animated.View
+        style={[styles.root, { backgroundColor: t.pageBg }, sheetStyle]}
+      >
       <GestureDetector gesture={dismissPan}>
         <View style={styles.fill}>
           <GradientBg
@@ -641,15 +794,24 @@ export function PlayerSheet() {
                   <Icon name="chevron-down" size={22} color={t.ink} />
                 </Glass>
               </PressScale>
-              {/* Centered source title — balanced by an empty chip-sized view
-                  on the right so it sits dead-centre (field report). */}
+              {/* Centered source title — the ⋯ chip on the right mirrors the
+                  close chip's size, so it stays dead-centre (field report). */}
               <Text
                 numberOfLines={1}
                 style={[label(11), styles.topSource, { color: t.inkFaint }]}
               >
                 {queue.source ?? 'now playing'}
               </Text>
-              <View style={styles.chip} />
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel="player menu"
+                onPress={() => setMenuOpen(true)}
+                hitSlop={10}
+              >
+                <Glass radius={19} style={styles.chip}>
+                  <Icon name="dots" size={20} color={t.ink} />
+                </Glass>
+              </PressScale>
             </View>
 
             <GestureDetector gesture={artGestures}>
@@ -666,7 +828,7 @@ export function PlayerSheet() {
                 <TapHeart burst={burst} accent={t.accent} />
                 {/* Gesture hints, shown where the gestures live — each one
                     stays until the user has actually performed it once. */}
-                {(likeHint || nextHint) && (
+                {(likeHint || nextHint) && !gesturesOff && (
                   <View pointerEvents="none" style={styles.hintStack}>
                     {likeHint && (
                       <View
@@ -700,6 +862,21 @@ export function PlayerSheet() {
                         </Text>
                       </View>
                     )}
+                  </View>
+                )}
+                {holdSeek && (
+                  <View pointerEvents="none" style={styles.holdStack}>
+                    <View
+                      style={[
+                        styles.hintChip,
+                        { backgroundColor: t.accentCard },
+                      ]}
+                    >
+                      <Text style={[styles.hintText, { color: t.ink }]}>
+                        {holdSeek.dir > 0 ? 'fast forward' : 'rewind'} ·{' '}
+                        {fmtTime(holdSeek.target)}
+                      </Text>
+                    </View>
                   </View>
                 )}
               </View>
@@ -897,7 +1074,7 @@ export function PlayerSheet() {
             <GestureDetector gesture={queueFling}>
               <View>
                 {/* Until the user has flicked up once, a quiet nudge sits here. */}
-                {queueHint && (
+                {queueHint && !gesturesOff && (
                   <View pointerEvents="none" style={styles.queueHintRow}>
                     <HintFloatUp reduced={reduced}>
                       <Icon name="chevron-down" size={13} color={t.accent} />
@@ -915,7 +1092,16 @@ export function PlayerSheet() {
           </View>
         </View>
       </GestureDetector>
-    </Animated.View>
+      </Animated.View>
+      {menuOpen && open && (
+        <PlayerMenuSheet
+          player={player}
+          gesturesOff={gesturesOff}
+          onToggleGestures={toggleGestures}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -973,6 +1159,19 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   hintText: { fontFamily: fonts.medium, fontSize: 11.5 },
+  holdStack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 12,
+    alignItems: 'center',
+  },
+  // Player ⋯ menu + gestures guide (QueueOptionsSheet's register).
+  menuTitle: { fontFamily: fonts.semibold, fontSize: 18, marginBottom: 8 },
+  menuSeparator: { height: 1, marginVertical: 6 },
+  guideRow: { paddingVertical: 8, gap: 2 },
+  guideHow: { fontFamily: fonts.medium, fontSize: 14.5 },
+  guideWhat: { fontFamily: fonts.regular, fontSize: 12.5 },
   twin: { position: 'absolute', left: 0, top: 0 },
   meta: { gap: 4, marginBottom: 10 },
   center: { textAlign: 'center' },
