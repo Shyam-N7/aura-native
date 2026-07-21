@@ -131,6 +131,7 @@ const Row = React.memo(function Row({
   dragFrom,
   dragTo,
   dragShift,
+  settling,
   scrollY,
   scrollStart,
   scrollCmd,
@@ -158,10 +159,14 @@ const Row = React.memo(function Row({
     }
     reorder(from, to);
     // Release the drag one frame later so the list paints the new order
-    // before rows stop compensating — avoids a one-frame jump-back.
+    // before rows stop compensating — avoids a one-frame jump-back. The
+    // release itself is a SNAP (see rowStyle): the settle in pan.onEnd left
+    // every transform at an exact row multiple, so the new data paints in
+    // the very positions the eye already sees and zeroing is invisible.
     requestAnimationFrame(() => {
       dragFrom.value = -1;
       dragShift.value = 0;
+      settling.value = 0;
     });
   };
 
@@ -271,12 +276,29 @@ const Row = React.memo(function Row({
       // the hidden history above the current track is not a drop target.
       dragTo.value = Math.max(base, Math.min(count - 1, to));
     })
-    .onEnd(() => {
+    .onEnd((_e, success) => {
       'worklet';
-      if (!owns.value) {
+      if (!owns.value || !success) {
         return;
       }
-      runOnJS(commit)(dragFrom.value, dragTo.value);
+      // Settle the card into its slot BEFORE the data commit. At commit time
+      // every compensating transform then sits at an exact multiple of
+      // ROW_HEIGHT, so the reorder paints exactly where the eye already sees
+      // the rows — the release becomes invisible instead of the 160ms
+      // slide-back that read as a glitch after dropping. `settling` also
+      // parks the auto-scroll loop: one of its dragShift writes would cancel
+      // this timing and the drop would never commit.
+      settling.value = 1;
+      const slot = (dragTo.value - dragFrom.value) * ROW_HEIGHT;
+      dragShift.value = withTiming(
+        slot,
+        { duration: 110, easing: EASE.settle },
+        done => {
+          if (done) {
+            runOnJS(commit)(dragFrom.value, dragTo.value);
+          }
+        },
+      );
     })
     .onFinalize((_e, success) => {
       'worklet';
@@ -284,8 +306,19 @@ const Row = React.memo(function Row({
         return;
       }
       if (!success) {
-        dragFrom.value = -1;
-        dragShift.value = 0;
+        // Cancelled drag: glide home (card and shifted neighbours together),
+        // then release. dragTo collapsing onto dragFrom zeroes the
+        // neighbours' shift targets so everyone returns in the same beat.
+        settling.value = 1;
+        dragTo.value = dragFrom.value;
+        dragShift.value = withTiming(
+          0,
+          { duration: SHIFT_MS },
+          () => {
+            dragFrom.value = -1;
+            settling.value = 0;
+          },
+        );
       }
       owns.value = false;
       // Drag over (committed or cancelled) — let the list shed the window.
@@ -314,13 +347,20 @@ const Row = React.memo(function Row({
         transform: [{ translateY: dragShift.value }, { scale: 1.01 }],
       };
     }
+    if (dragFrom.value < 0) {
+      // At rest / on release: plain zeros, NO timing. After a drop the data
+      // already sits where the eye left it — animating "back to 0" from the
+      // stale compensation was the visible post-drop glitch.
+      return {
+        zIndex: 0,
+        transform: [{ translateY: 0 }, { scale: 1 }],
+      };
+    }
     let shift = 0;
-    if (dragFrom.value >= 0) {
-      if (dragFrom.value < index && index <= dragTo.value) {
-        shift = -ROW_HEIGHT;
-      } else if (dragTo.value <= index && index < dragFrom.value) {
-        shift = ROW_HEIGHT;
-      }
+    if (dragFrom.value < index && index <= dragTo.value) {
+      shift = -ROW_HEIGHT;
+    } else if (dragTo.value <= index && index < dragFrom.value) {
+      shift = ROW_HEIGHT;
     }
     return {
       zIndex: 0,
@@ -807,6 +847,9 @@ export function QueueSheet() {
   const dragFrom = useSharedValue(-1);
   const dragTo = useSharedValue(-1);
   const dragShift = useSharedValue(0);
+  // 1 while a drop (or cancel) is settling into its slot — parks the
+  // auto-scroll loop so its dragShift writes can't cancel the settle timing.
+  const settling = useSharedValue(0);
   const scrollY = useSharedValue(0);
   const scrollStart = useSharedValue(0);
   const listH = useSharedValue(0);
@@ -846,7 +889,7 @@ export function QueueSheet() {
   // the slot as the list scrolls beneath it.
   const autoScroll = useFrameCallback(frame => {
     'worklet';
-    if (dragFrom.value < 0) {
+    if (dragFrom.value < 0 || settling.value === 1) {
       return;
     }
     const dt = (frame.timeSincePreviousFrame ?? 16) / 16.667;
@@ -954,6 +997,7 @@ export function QueueSheet() {
         dragFrom={dragFrom}
         dragTo={dragTo}
         dragShift={dragShift}
+        settling={settling}
         scrollY={scrollY}
         scrollStart={scrollStart}
         scrollCmd={scrollCmd}
