@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getFeatured } from '../api/catalog';
 import { getUser, getActiveExplicitOff, subscribeAuth } from '../lib/auth';
 import { dropExplicit } from '../lib/explicit';
-import { readSnapshot, writeSnapshot } from '../lib/snapshot';
+import { readSnapshot, snapshotOwner, writeSnapshot } from '../lib/snapshot';
 
 // The featured pool drives four home sections from ONE fetch (hero = idx 0,
 // new-for-you = 1..4, stations = 5..8, quick-picks last-resort fallback) —
@@ -31,16 +31,22 @@ export function useFeaturedPool({ limit = 24 } = {}) {
     ),
   }));
 
+  const shownMode = useRef(mode);
   useEffect(() => {
     let stale = false;
+    const as = snapshotOwner();
     // Stale-while-revalidate: keep the current pool visible while the new
     // mode's loads, so hero / new-for-you / stations don't all blank to
     // skeletons on every switch. EXCEPTION: a mode that filters explicit
     // (family / kids) blanks instead — the previous mode's tracks must never
-    // flash under a stricter one.
+    // flash under a stricter one. That only applies to an actual SWITCH: on
+    // mount the tracks on screen are this mode's own snapshot, already
+    // filtered, and blanking them would cost family/kids the instant paint.
+    const switched = shownMode.current !== mode;
+    shownMode.current = mode;
     setState(s => ({
       status: 'loading',
-      tracks: getActiveExplicitOff() ? [] : s.tracks,
+      tracks: switched && getActiveExplicitOff() ? [] : s.tracks,
     }));
     getFeatured({ limit })
       .then(results => {
@@ -49,7 +55,7 @@ export function useFeaturedPool({ limit = 24 } = {}) {
           // `mode` (not a fresh getUser read): the key must match the mode
           // this fetch was keyed by — a swap mid-flight is already discarded
           // via `stale`, so a live resolve always belongs to `mode`.
-          writeSnapshot(`featured.${mode}`, tracks);
+          writeSnapshot(`featured.${mode}`, tracks, as);
           setState({ status: 'ok', tracks });
         }
       })

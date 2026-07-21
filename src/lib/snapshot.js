@@ -24,10 +24,30 @@ export function readSnapshot(name) {
   }
 }
 
-export function writeSnapshot(name, d) {
+// Who was signed in when a fetch was DISPATCHED. Pass it back to
+// writeSnapshot as `as`: the stamp has to describe whose data this is, and a
+// request that outlives its own session (sign out, another account signs in)
+// would otherwise be stamped with — and served to — whoever is signed in when
+// it finally resolves.
+export function snapshotOwner() {
+  return owner();
+}
+
+export function writeSnapshot(name, d, as = owner()) {
+  if (!as || as !== owner()) {
+    return; // signed out, or the account changed mid-flight: dead data
+  }
   try {
-    storage.setItem(KEY(name), JSON.stringify({ u: owner(), d }));
+    storage.setItem(KEY(name), JSON.stringify({ u: as, d }));
   } catch {
     // Best-effort — a failed write just means a loader next cold start.
+  }
+}
+
+export function removeSnapshot(name) {
+  try {
+    storage.removeItem(KEY(name));
+  } catch {
+    // Best-effort.
   }
 }

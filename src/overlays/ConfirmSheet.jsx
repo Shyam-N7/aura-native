@@ -21,7 +21,11 @@ export function ConfirmSheet() {
   }
   const actionColor = req.danger ? SHEET_DANGER : t.accent;
   return (
-    <Sheet onClose={() => resolveConfirm(false)} closeLabel="cancel">
+    <Sheet
+      animated={!req.instant}
+      onClose={() => resolveConfirm(false)}
+      closeLabel="cancel"
+    >
       <Text style={[styles.title, { color: t.ink }]}>{req.title}</Text>
       {!!req.body && (
         <Text style={[styles.body, { color: t.inkSoft }]}>{req.body}</Text>

@@ -7,9 +7,14 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  FadeInDown,
+  cancelAnimation,
   LinearTransition,
   ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
 } from 'react-native-reanimated';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
@@ -47,7 +52,7 @@ import { openTrackActions } from '../lib/trackActionsSheet';
 import { useLikes } from '../hooks/useLikes';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { getLastCrash, clearLastCrash } from '../lib/crashLog';
-import { readSnapshot, writeSnapshot } from '../lib/snapshot';
+import { readSnapshot, snapshotOwner, writeSnapshot } from '../lib/snapshot';
 import { TopBar } from '../components/nav/TopBar';
 import { Avatar } from '../components/Avatar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -59,6 +64,7 @@ import { CountUp } from '../components/ui/CountUp';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label } from '../theme/tokens';
+import { EASE } from '../theme/motion';
 import { cleanTitle } from '../utils/title';
 
 // The library ("you" tab), ported from web DesktopLibrary: pinned "your year"
@@ -87,16 +93,30 @@ const CHIP_LAYOUT = LinearTransition.duration(280).reduceMotion(
 
 // Staggered rise-in for the cards below — each waits its turn, so opening
 // the tab reads as the library composing itself rather than popping on.
+// Driven by a plain animated style, NOT an `entering` layout animation: a
+// session that expires under us tears the whole navigator down (auth 401 →
+// clearSession → Shell swaps to the sign-in screen), and reanimated 4.2.3 on
+// Fabric aborts natively when a view is removed mid-entering. A shared value
+// is simply cancelled on unmount.
 function Arrive({ i = 0, children }) {
-  return (
-    <Animated.View
-      entering={FadeInDown.duration(380)
-        .delay(70 * i)
-        .reduceMotion(ReduceMotion.System)}
-    >
-      {children}
-    </Animated.View>
-  );
+  const reduced = useReducedMotion();
+  const p = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) {
+      p.value = 1;
+      return undefined;
+    }
+    p.value = withDelay(
+      70 * i,
+      withTiming(1, { duration: 380, easing: EASE.enter }),
+    );
+    return () => cancelAnimation(p);
+  }, [i, p, reduced]);
+  const style = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: [{ translateY: (1 - p.value) * 14 }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 // Overlapping cover fan — the closed-shelf "peek" (three 26px arts).
@@ -352,26 +372,44 @@ export default function YouScreen({ navigation }) {
   // blanks the screen). Refetched quietly on every tab focus — the web gets
   // the same freshness from remounting the screen per visit.
   const load = useCallback(() => {
+    const as = snapshotOwner();
+    // null (never []) means "this one failed" — an empty array is a real
+    // answer and has to stay distinguishable from a dead fetch.
     Promise.all([
       getLibrarySummary().catch(() => null),
-      listLiked().catch(() => []),
-      listPlaylists().catch(() => []),
+      listLiked().catch(() => null),
+      listPlaylists().catch(() => null),
       getHistory({ limit: 4 })
         .then(r => r.plays)
-        .catch(() => []),
+        .catch(() => null),
     ]).then(([s, l, p, h]) => {
-      // Snapshot only a fully-successful summary load — a null summary (fetch
-      // failed) must not freeze "0 tracks played" into next session's paint.
-      if (s) {
-        writeSnapshot('you', { summary: s, liked: l, playlists: p, history: h });
+      // Snapshot only a fully-successful load. A failed shelf must not freeze
+      // "0 tracks played" or an empty library into next session's paint.
+      if (s && l && p && h) {
+        writeSnapshot(
+          'you',
+          { summary: s, liked: l, playlists: p, history: h },
+          as,
+        );
       }
       if (!alive.current) {
         return;
       }
-      setSummary(s);
-      setLiked(l);
-      setPlaylists(p);
-      setHistory(h);
+      // Stale-while-revalidate cuts both ways: what came back replaces what is
+      // on screen, what failed leaves it alone. Offline, the snapshot-painted
+      // library stays put instead of being overwritten with confident zeros.
+      if (s) {
+        setSummary(s);
+      }
+      if (l) {
+        setLiked(l);
+      }
+      if (p) {
+        setPlaylists(p);
+      }
+      if (h) {
+        setHistory(h);
+      }
       setLoaded(true);
     });
   }, []);
@@ -413,6 +451,9 @@ export default function YouScreen({ navigation }) {
         title: 'sign out?',
         body: 'you can sign back in anytime.',
         action: 'sign out',
+        // Signing out unmounts the navigator this sheet lives in — it can't
+        // still be animating out when that happens.
+        instant: true,
       })
     ) {
       logout();

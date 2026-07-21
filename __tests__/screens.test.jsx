@@ -136,6 +136,10 @@ beforeEach(() => {
 });
 
 test("home greets and begins tonight's set from the hero band", async () => {
+  // The fallback hero rotates DAILY (heroFallbackIdx), so which track the
+  // band offers depends on the calendar — pin the clock to a day that lands
+  // on the first one, or this assertion flips every other night.
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1784505600000);
   const tracks = [
     {
       id: 't1',
@@ -166,6 +170,7 @@ test("home greets and begins tonight's set from the hero band", async () => {
   expect(mockOpenPlayer).toHaveBeenCalled();
 
   await ReactTestRenderer.act(() => tree.unmount());
+  clock.mockRestore();
 });
 
 test('you is the library: your year, accordion shelves, settings', async () => {

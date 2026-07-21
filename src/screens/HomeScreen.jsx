@@ -7,7 +7,7 @@ import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { showToast } from '../lib/toast';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { homeCache } from '../lib/homeCache';
-import { readSnapshot, writeSnapshot } from '../lib/snapshot';
+import { readSnapshot, snapshotOwner, writeSnapshot } from '../lib/snapshot';
 import { dropExplicit } from '../lib/explicit';
 import { getQuickPicks } from '../api/quickPicks';
 import { getMostPlayed, getTopArtists, getRecentlyPlayed } from '../api/stats';
@@ -88,10 +88,11 @@ function useHomeSection(key, fetcher) {
       return undefined;
     }
     let stale = false;
+    const as = snapshotOwner();
     fetcher()
       .then(d => {
         homeCache[key] = d;
-        writeSnapshot(`home.${key}`, d);
+        writeSnapshot(`home.${key}`, d, as);
         if (!stale) {
           setData(d);
         }
@@ -136,10 +137,11 @@ export default function HomeScreen({ navigation }) {
   );
   useEffect(() => {
     let stale = false;
+    const as = snapshotOwner();
     listAutoPlaylists()
       .then(p => {
         homeCache.autoPlaylists = p;
-        writeSnapshot('home.autoPlaylists', p);
+        writeSnapshot('home.autoPlaylists', p, as);
         if (!stale) {
           setAutoMixes(p);
         }
@@ -225,6 +227,7 @@ export default function HomeScreen({ navigation }) {
   );
   useEffect(() => {
     let stale = false;
+    const as = snapshotOwner();
     Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
       ([h, n, s]) => {
         if (stale) {
@@ -236,7 +239,7 @@ export default function HomeScreen({ navigation }) {
           stations: s?.stations?.length ? s.stations : null,
         };
         homeCache.reco = next;
-        writeSnapshot('home.reco', next);
+        writeSnapshot('home.reco', next, as);
         setReco(next);
       },
     );

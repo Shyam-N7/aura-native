@@ -76,6 +76,25 @@ function readStoredPosition() {
   }
 }
 
+// Where a restored queue should start playing: the saved spot, but only when
+// it still belongs to this track and isn't at either end (a nearly-finished
+// track is better restarted than resumed 2 seconds from the outro).
+function storedPositionSec(queue) {
+  const saved = readStoredPosition();
+  const cur = queue?.tracks?.[queue.idx];
+  if (
+    saved &&
+    cur &&
+    saved.trackId === cur.id &&
+    saved.progress > 0.01 &&
+    saved.progress < 0.98 &&
+    cur.durationSec > 0
+  ) {
+    return saved.progress * cur.durationSec;
+  }
+  return undefined;
+}
+
 const PlayerContext = createContext(null);
 
 export function PlayerProvider({ children }) {
@@ -295,7 +314,14 @@ export function PlayerProvider({ children }) {
       setIsPlaying(true);
       enqueuePlayOp(async () => {
         // Append around the still-current seed, then hop onto the batch.
-        await engine.syncQueue(seeded, { startIndex: q.idx });
+        // Anchor on where the native player ACTUALLY is, not the index this
+        // closure captured: a retry runs after the rebuild already moved it
+        // to the target, and re-anchoring on the old seed would skip audibly
+        // back to it before jumping forward again.
+        const active = await engine.getActiveIndex();
+        const anchor =
+          active != null && active < seeded.tracks.length ? active : q.idx;
+        await engine.syncQueue(seeded, { startIndex: anchor });
         await engine.skipToIndex(target.idx);
         await engine.play();
       });
@@ -451,7 +477,13 @@ export function PlayerProvider({ children }) {
         // button. Verify and rebuild first; then play always means play.
         const q = queueRef.current;
         if (q.tracks.length && (await engine.getQueueLength()) === 0) {
-          await engine.syncQueue(q, { startIndex: q.idx });
+          // Rebuilding here stands in for the restore that never ran, so it
+          // has to carry the same saved position — otherwise tapping play
+          // before the restore lands silently resumes from 0:00.
+          await engine.syncQueue(q, {
+            startIndex: q.idx,
+            positionSec: storedPositionSec(q),
+          });
         }
         await engine.play();
       });
@@ -852,19 +884,7 @@ export function PlayerProvider({ children }) {
           applyQueue(restored);
         }
       }
-      let positionSec;
-      const saved = readStoredPosition();
-      const cur = restored.tracks[restored.idx];
-      if (
-        saved &&
-        cur &&
-        saved.trackId === cur.id &&
-        saved.progress > 0.01 &&
-        saved.progress < 0.98 &&
-        cur.durationSec > 0
-      ) {
-        positionSec = saved.progress * cur.durationSec;
-      }
+      const positionSec = storedPositionSec(restored);
       enqueueOp(async () => {
         if (userActedRef.current) {
           return;
