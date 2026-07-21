@@ -9,6 +9,10 @@ export function openTrackActions({ track, menu = {} }) {
     track,
     omit: menu.omit ?? [],
     extras: menu.extras ?? [],
+    // Optional override for what "play song" does — surfaces whose tap
+    // used to mean more than play-this-one-track (a rail queued whole from
+    // the chosen tile) keep those semantics inside the sheet.
+    play: menu.play,
   };
   subscribers.forEach(fn => fn(event));
 }

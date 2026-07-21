@@ -76,6 +76,23 @@ test('play song plays live and opens the player', async () => {
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
+test('a play override replaces the default single-track play', async () => {
+  // Surfaces whose tap used to mean more than play-this-track (home's
+  // more-like rail queues itself whole from the chosen tile) keep those
+  // semantics inside the sheet.
+  const play = jest.fn();
+  const tree = await render(<TrackActionsSheet />);
+  await ReactTestRenderer.act(async () => {
+    openTrackActions({ track: TRACK, menu: { play } });
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'play song').props.onPress();
+  });
+  expect(play).toHaveBeenCalled();
+  expect(mockPlayTrack).not.toHaveBeenCalled();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
 test('per-surface extras render below the base actions', async () => {
   const onPress = jest.fn();
   const tree = await render(<TrackActionsSheet />);

@@ -318,6 +318,19 @@ export default function HomeScreen({ navigation }) {
     player.playTrack(track, { source: 'your pick' });
     openPlayer();
   };
+  // More-like tiles open the track menu on tap AND long-press — new listeners
+  // expect choices, not instant playback. "play song" keeps the old tap
+  // semantics: the rail is the recommended set, queued whole from that tile.
+  const pickMoreLike = (track, i) =>
+    openTrackActions({
+      track,
+      menu: {
+        play: () => {
+          player.playQueue(moreLike.tracks, i, 'more like this');
+          openPlayer();
+        },
+      },
+    });
   // A station tile starts a real radio from its seed: hydrate the seed + pull
   // its related tracks and play them as a queue (auto-radio extends from there).
   const pickStation = async station => {
@@ -442,15 +455,8 @@ export default function HomeScreen({ navigation }) {
               />
               <RelatedRail
                 tracks={moreLike.tracks}
-                onPick={(_, i) => {
-                  // The rail is the recommended set — queue it whole, start
-                  // at the tapped tile.
-                  player.playQueue(moreLike.tracks, i, 'more like this');
-                  player.ui?.openPlayer?.();
-                }}
-                // Long-press a tile for its options (add to playlist/queue,
-                // like, go to artist…) — the same track menu used everywhere.
-                onLongPress={track => openTrackActions({ track })}
+                onPick={pickMoreLike}
+                onLongPress={pickMoreLike}
               />
             </View>
           )}

@@ -8,9 +8,9 @@ import { cleanTitle } from '../../utils/title';
 
 // Compact cover-tile rail for recommendation shelves ("more like {song}") —
 // denser than MemoryRail's wide cards: a dozen picks scan in two swipes.
-// Tapping a tile hands back the track AND its index so the screen can queue
-// the whole rail from that point (the rail IS the set being recommended).
-// Long-pressing a tile hands back just the track for its options sheet.
+// Tap and long-press both hand back (track, index); the screen opens the
+// track options sheet for either (new listeners expect choices on tap, not
+// instant playback) and its "play song" queues the rail from that tile.
 export function RelatedRail({ tracks, onPick, onLongPress }) {
   const { t } = useTheme();
   return (
@@ -24,7 +24,7 @@ export function RelatedRail({ tracks, onPick, onLongPress }) {
         <PressScale
           key={track.id}
           accessibilityRole="button"
-          accessibilityLabel={`play ${cleanTitle(track.title)}`}
+          accessibilityLabel={`options for ${cleanTitle(track.title)}`}
           onPress={() => onPick(track, i)}
           onLongPress={onLongPress ? () => onLongPress(track, i) : undefined}
           style={styles.tile}

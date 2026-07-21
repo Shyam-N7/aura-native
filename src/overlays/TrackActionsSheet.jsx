@@ -36,7 +36,7 @@ export function TrackActionsSheet() {
   if (!event?.track) {
     return null;
   }
-  const { track, omit, extras } = event;
+  const { track, omit, extras, play } = event;
   const liked = isLiked(track.id);
 
   const act = fn => () => {
@@ -50,10 +50,12 @@ export function TrackActionsSheet() {
       id: 'play',
       icon: 'play',
       label: 'play song',
-      run: () => {
-        player.playTrack(track, { source: 'your pick' });
-        player.ui?.openPlayer?.();
-      },
+      run:
+        play ??
+        (() => {
+          player.playTrack(track, { source: 'your pick' });
+          player.ui?.openPlayer?.();
+        }),
     });
   }
   if (!omit.includes('playNext')) {
