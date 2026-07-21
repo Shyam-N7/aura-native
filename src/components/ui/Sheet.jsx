@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   BackHandler,
   Modal,
@@ -13,21 +13,20 @@ import {
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import Animated, {
-  FadeIn,
   FadeOut,
   ReduceMotion,
-  SlideInDown,
   SlideOutDown,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
 import { radii } from '../../theme/tokens';
-import { DUR, SPRING } from '../../theme/motion';
+import { DUR, EASE, SPRING } from '../../theme/motion';
 
 // The bottom-sheet chassis every overlay sheet mounts in: backdrop + grip +
 // slide-in card, dismissed by backdrop tap, the hardware back button, or
@@ -41,11 +40,18 @@ import { DUR, SPRING } from '../../theme/motion';
 // must keep scrolling it — only the header/grip dismisses, like every
 // platform sheet).
 //
-// `animated={false}` opts out of the entering/exiting pair. Required for any
-// sheet nested under ANOTHER component's null gate (e.g. the queue options
-// sheet inside QueueSheet): the parent can hard-unmount it mid-animation, and
-// reanimated 4.2.3/Fabric aborts natively on unmount-mid-entering/exiting —
-// this device's documented crash class. Such sheets pop instead of sliding.
+// The OPEN is chassis-owned: a shared-value rise started on first layout, so
+// every sheet slides in — including ones nested under another component's
+// null gate, which the old `entering` layout animation had to skip (field
+// report: the queue options sheet popped open). A cancelled shared value
+// survives any unmount; it is the entering/exiting layout-animation pair
+// reanimated 4.2.3/Fabric aborts natively on when a view is removed
+// mid-flight — this device's documented crash class.
+//
+// `animated={false}` therefore now opts out of only the EXIT pair. Still
+// required for any sheet nested under another component's null gate (e.g.
+// the queue options sheet inside QueueSheet) and for confirms whose accept
+// tears down the tree (`confirm({ instant: true })`): those pop closed.
 export function Sheet({
   onClose,
   closeLabel,
@@ -59,6 +65,20 @@ export function Sheet({
 
   const dragY = useSharedValue(0);
   const cardH = useSharedValue(0);
+  // Open progress: 0 = parked below the screen, 1 = at rest. Started on the
+  // first layout pass (the slide distance IS the measured card height — until
+  // then the card hides behind opacity 0, so there is no first-frame flash).
+  const p = useSharedValue(0);
+  const entered = useRef(false);
+  const onCardLayout = e => {
+    cardH.value = e.nativeEvent.layout.height;
+    if (!entered.current) {
+      entered.current = true;
+      p.value = reduced
+        ? 1
+        : withTiming(1, { duration: DUR.upNext, easing: EASE.enter });
+    }
+  };
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -91,8 +111,13 @@ export function Sheet({
       }
     });
 
-  const dragStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
+  // Drag and open ride one transform; the backdrop dims in step with the rise.
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: cardH.value === 0 ? 0 : 1,
+    transform: [{ translateY: dragY.value + (1 - p.value) * cardH.value }],
+  }));
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, p.value * 1.6),
   }));
 
   const grip = <View style={[styles.grip, { backgroundColor: t.line }]} />;
@@ -101,7 +126,7 @@ export function Sheet({
   // including deep inside a screen, where no zIndex can beat the app-level
   // dock overlay (field report: the dock painted over the playlist visibility
   // sheet). A separate window wins by construction. animationType="none"
-  // because the chassis plays its own entering/exiting; the inner
+  // because the chassis plays its own open/close; the inner
   // GestureHandlerRootView is required for the pan gesture to work inside a
   // Modal on Android.
   return (
@@ -116,17 +141,12 @@ export function Sheet({
       <GestureHandlerRootView style={StyleSheet.absoluteFill}>
         <View style={[StyleSheet.absoluteFill, styles.stack]}>
           <Animated.View
-            entering={
-              animated
-                ? FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)
-                : undefined
-            }
             exiting={
               animated
                 ? FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)
                 : undefined
             }
-            style={[StyleSheet.absoluteFill, styles.backdrop]}
+            style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}
           >
             <Pressable
               accessibilityRole="button"
@@ -136,13 +156,6 @@ export function Sheet({
             />
           </Animated.View>
           <Animated.View
-            entering={
-              animated
-                ? SlideInDown.duration(DUR.upNext).reduceMotion(
-                    ReduceMotion.System,
-                  )
-                : undefined
-            }
             exiting={
               animated
                 ? SlideOutDown.duration(DUR.dot).reduceMotion(
@@ -150,14 +163,12 @@ export function Sheet({
                   )
                 : undefined
             }
-            onLayout={e => {
-              cardH.value = e.nativeEvent.layout.height;
-            }}
+            onLayout={onCardLayout}
             style={[
               styles.card,
               header && styles.cardCapped,
               { backgroundColor: t.surface, paddingBottom: insets.bottom + 14 },
-              dragStyle,
+              cardStyle,
             ]}
           >
             {/* Surface-colored bleed below the card. On this device the Modal

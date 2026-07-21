@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  FadeInUp,
-  FadeOutUp,
-  ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -15,7 +16,7 @@ import { getTrack } from '../api/catalog';
 import { storage } from '../storage/mmkv';
 import { Icon } from '../components/Icon';
 import { fonts, radii } from '../theme/tokens';
-import { DUR } from '../theme/motion';
+import { DUR, EASE } from '../theme/motion';
 import { cleanTitle } from '../utils/title';
 
 // Multi-device awareness, ported from web App.jsx + NowPlayingElsewhere:
@@ -30,6 +31,27 @@ function readSavedTrackId() {
   } catch {
     return null;
   }
+}
+
+// Drops in from just above its resting spot. A plain animated style, NOT an
+// `entering` layout animation: these pills mount straight off network
+// responses (a presence beat, the boot resume offer) — the exact timing that
+// can race a session-expiry teardown of the whole navigator, and a shared
+// value cancels safely on unmount where a layout animation aborts natively
+// (reanimated 4.2.3/Fabric). Dismissal just pops, like a toast.
+function Pill({ style, children }) {
+  const reduced = useReducedMotion();
+  const p = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (!reduced) {
+      p.value = withTiming(1, { duration: DUR.toastIn, easing: EASE.enter });
+    }
+  }, [p, reduced]);
+  const rise = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: [{ translateY: (p.value - 1) * 16 }],
+  }));
+  return <Animated.View style={[style, rise]}>{children}</Animated.View>;
 }
 
 export function PresenceBanners() {
@@ -98,13 +120,7 @@ export function PresenceBanners() {
       style={[styles.wrap, { top: insets.top + 8 }]}
     >
       {showNpe && (
-        <Animated.View
-          entering={FadeInUp.duration(DUR.toastIn).reduceMotion(
-            ReduceMotion.System,
-          )}
-          exiting={FadeOutUp.duration(DUR.dot).reduceMotion(
-            ReduceMotion.System,
-          )}
+        <Pill
           style={[
             styles.pill,
             { backgroundColor: t.surface, borderColor: t.line },
@@ -126,16 +142,10 @@ export function PresenceBanners() {
           >
             <Icon name="close" size={13} color={t.inkFaint} />
           </Pressable>
-        </Animated.View>
+        </Pill>
       )}
       {resume && (
-        <Animated.View
-          entering={FadeInUp.duration(DUR.toastIn).reduceMotion(
-            ReduceMotion.System,
-          )}
-          exiting={FadeOutUp.duration(DUR.dot).reduceMotion(
-            ReduceMotion.System,
-          )}
+        <Pill
           style={[
             styles.pill,
             { backgroundColor: t.surface, borderColor: t.line },
@@ -160,7 +170,7 @@ export function PresenceBanners() {
           >
             <Icon name="close" size={13} color={t.inkFaint} />
           </Pressable>
-        </Animated.View>
+        </Pill>
       )}
     </View>
   );

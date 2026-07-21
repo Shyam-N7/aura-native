@@ -428,9 +428,10 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
     }
   };
 
-  // animated={false}: this sheet lives under QueueSheet's null gate, which an
+  // animated={false}: these sheets live under QueueSheet's null gate, which an
   // external queueOpen flip can hard-unmount mid-animation — the reanimated
-  // 4.2.3/Fabric native-abort class. It pops instead of sliding.
+  // 4.2.3/Fabric native-abort class. That now only skips the EXIT slide; the
+  // open is the chassis's shared-value rise, which is safe (and smooth) here.
   if (naming) {
     return (
       <Sheet animated={false} onClose={onClose} closeLabel="close queue options">

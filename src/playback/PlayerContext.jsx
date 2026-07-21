@@ -149,7 +149,14 @@ export function PlayerProvider({ children }) {
           try {
             const q = queueRef.current;
             if (q.tracks.length) {
-              await engine.syncQueue(q, { startIndex: q.idx });
+              // Carry the saved spot: storedPositionSec answers only when the
+              // saved position belongs to the CURRENT model track, so
+              // skip-style ops (whose idx already moved on) get no seek —
+              // only a same-track rebuild resumes mid-song instead of 0:00.
+              await engine.syncQueue(q, {
+                startIndex: q.idx,
+                positionSec: storedPositionSec(q),
+              });
             }
             await op();
           } catch (err2) {

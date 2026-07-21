@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  FadeIn,
   LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -21,6 +21,22 @@ import { DUR, EASE } from '../../theme/motion';
 const SHELF_LAYOUT = LinearTransition.duration(280).reduceMotion(
   ReduceMotion.System,
 );
+
+// The body's fade-in as a plain animated style, not an `entering` layout
+// animation: this mounts inside YouScreen, whose whole navigator a session
+// expiry can tear down mid-flight — the reanimated 4.2.3/Fabric native-abort
+// class. A shared value cancels cleanly instead.
+function BodyFade({ style, children }) {
+  const reduced = useReducedMotion();
+  const p = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (!reduced) {
+      p.value = withTiming(1, { duration: DUR.dot, easing: EASE.settle });
+    }
+  }, [p, reduced]);
+  const fade = useAnimatedStyle(() => ({ opacity: p.value }));
+  return <Animated.View style={[style, fade]}>{children}</Animated.View>;
+}
 
 export function Shelf({ title, peek, open, onToggle, hint, children }) {
   const { t } = useTheme();
@@ -64,14 +80,7 @@ export function Shelf({ title, peek, open, onToggle, hint, children }) {
         </Animated.Text>
       </Pressable>
       {hint}
-      {open && (
-        <Animated.View
-          entering={FadeIn.duration(DUR.dot).reduceMotion(ReduceMotion.System)}
-          style={styles.body}
-        >
-          {children}
-        </Animated.View>
-      )}
+      {open && <BodyFade style={styles.body}>{children}</BodyFade>}
     </Animated.View>
   );
 }

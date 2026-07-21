@@ -8,7 +8,7 @@ import { groupPlaysByDay } from '../src/screens/HistoryScreen';
 import { getFeatured } from '../src/api/catalog';
 import { updatePreferences } from '../src/lib/auth';
 import { invalidateHomeCache } from '../src/lib/homeCache';
-import { _resetLikesStore } from '../src/hooks/useLikes';
+import { resetLikesStore } from '../src/hooks/useLikes';
 
 const mockPlayQueue = jest.fn();
 const mockPlayTrack = jest.fn();
@@ -132,7 +132,7 @@ async function render(node) {
 beforeEach(() => {
   jest.clearAllMocks();
   invalidateHomeCache();
-  _resetLikesStore();
+  resetLikesStore();
 });
 
 test("home greets and begins tonight's set from the hero band", async () => {

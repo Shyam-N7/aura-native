@@ -3,7 +3,7 @@ import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { TrackActionsSheet } from '../src/overlays/TrackActionsSheet';
 import { openTrackActions } from '../src/lib/trackActionsSheet';
-import { _resetLikesStore } from '../src/hooks/useLikes';
+import { resetLikesStore } from '../src/hooks/useLikes';
 
 const mockEnqueueNext = jest.fn();
 const mockEnqueueLast = jest.fn();
@@ -38,7 +38,7 @@ async function render(node) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  _resetLikesStore();
+  resetLikesStore();
 });
 
 test('opens from the bus, honors omit, runs an action, then closes', async () => {

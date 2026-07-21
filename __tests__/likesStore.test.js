@@ -2,7 +2,7 @@ import {
   like,
   unlike,
   isLikedId,
-  _resetLikesStore,
+  resetLikesStore,
 } from '../src/hooks/useLikes';
 import { likeTrack, unlikeTrack } from '../src/api/likes';
 
@@ -14,7 +14,7 @@ jest.mock('../src/api/likes', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
-  _resetLikesStore();
+  resetLikesStore();
 });
 
 test('like is optimistic and sticks on success', async () => {

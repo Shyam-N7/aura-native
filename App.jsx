@@ -33,6 +33,8 @@ import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { getUser, subscribeAuth, showSensing, hasOnboarded } from './src/lib/auth';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
+import { invalidateHomeCache } from './src/lib/homeCache';
+import { resetLikesStore } from './src/hooks/useLikes';
 
 // Share links the app answers (web parity): /playlists?join=TOKEN joins a
 // playlist invite, /p/PUBLIC_ID opens a public playlist read-only. Tokens are
@@ -73,6 +75,13 @@ function Shell() {
           const next = computeFlow(u);
           if (uid !== lastUid.current) {
             lastUid.current = uid; // real login / logout / switch — reset the gate
+            // Module caches are per-process, not per-account: without this,
+            // the next account inherits the previous one's Home sections (a
+            // cache hit even suppresses the refetch) and liked-song hearts
+            // until the app is killed. Disk snapshots are owner-stamped
+            // already; these two live in plain module state.
+            invalidateHomeCache();
+            resetLikesStore();
             return next;
           }
           // Same user: only ever advance, so a preference refresh can't bounce a

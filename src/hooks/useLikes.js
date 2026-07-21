@@ -67,8 +67,10 @@ export async function unlike(id) {
   }
 }
 
-// Test hook: return the store to its pre-boot state.
-export function _resetLikesStore() {
+// Return the store to its pre-boot state — used by tests, and by the Shell on
+// an account change: the module Set outlives sign-out, so without this the
+// next account inherits the previous one's hearts until the process dies.
+export function resetLikesStore() {
   likedIds = new Set();
   booted = false;
   ready = false;
