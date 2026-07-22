@@ -46,6 +46,15 @@ import {
   HINT_QUEUE_SWIPE,
   markHintDone,
 } from '../lib/hints';
+import {
+  TOUR_STEPS,
+  endTour,
+  getTourState,
+  noteTourGesture,
+  startTour,
+  tourDone,
+} from '../lib/gestureTour';
+import { GestureTourOverlay } from '../components/player/GestureTourOverlay';
 import { useHintActive } from '../hooks/useHintActive';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
@@ -87,23 +96,21 @@ const GESTURES_KEY = 'aura.playerGesturesOff';
 const HOLD_SEEK_STEP = 5;
 const HOLD_SEEK_TICK_MS = 400;
 
-// The gesture guide, in plain words — shown from the player ⋯ menu.
-const GUIDE = [
-  { how: 'double-tap the art', what: 'like the song' },
-  { how: 'swipe the art left or right', what: 'next song / previous song' },
-  {
-    how: 'hold the art near an edge',
-    what: 'right fast-forwards, left rewinds',
-  },
-  { how: 'swipe up over "up next"', what: 'open the queue' },
-  { how: 'drag down from the top', what: 'close the player' },
-];
+// The gesture guide, in plain words — shown from the player ⋯ menu. One
+// source of truth with the do-it-live tour's steps (lib/gestureTour).
+const GUIDE = TOUR_STEPS;
 
 // The player's ⋯ menu — every gesture gets a button twin here (manual ops for
 // anyone who'd rather tap), the gestures themselves can be switched off, and
 // a step-by-step guide teaches them. Nested under the player's null gate, so
 // exits pop (animated={false}); the chassis rise still animates the open.
-function PlayerMenuSheet({ player, gesturesOff, onToggleGestures, onClose }) {
+function PlayerMenuSheet({
+  player,
+  gesturesOff,
+  onToggleGestures,
+  onReplayTour,
+  onClose,
+}) {
   const { t } = useTheme();
   const [guide, setGuide] = useState(false);
   const act = fn => () => {
@@ -147,6 +154,11 @@ function PlayerMenuSheet({ player, gesturesOff, onToggleGestures, onClose }) {
         icon="bloom"
         label="how gestures work"
         onPress={() => setGuide(true)}
+      />
+      <SheetRow
+        icon="repeat"
+        label="replay the gesture tour"
+        onPress={act(onReplayTour)}
       />
     </Sheet>
   );
@@ -420,6 +432,11 @@ export function PlayerSheet() {
     if (vis === 'closing') {
       return;
     }
+    // Closing IS the tour's final step; a close mid-tour ends it for good
+    // (quietly) — an abandoned tour must never auto-nag on the next open.
+    if (!noteTourGesture('close')) {
+      endTour();
+    }
     setVis('closing');
     setMenuOpen(false);
     // A hold-to-seek can't outlive the sheet — its interval would keep
@@ -445,6 +462,19 @@ export function PlayerSheet() {
   // Armed sleep timer tints the moon in the actions row.
   const [sleep, setSleep] = useState(getSleepState);
   useEffect(() => subscribeSleep(setSleep), []);
+
+  // First-run gesture tour: the first time the player is ever open (and
+  // gestures are on), start the do-it-live tour a beat after the slide
+  // lands. Once ended ANY way it never auto-starts again — replay lives in
+  // the ⋯ menu. An interrupted tour (app closed mid-tour) resumes because
+  // it is still active in the store, not via this trigger.
+  useEffect(() => {
+    if (vis !== 'open' || gesturesOff || tourDone() || getTourState().active) {
+      return undefined;
+    }
+    const id = setTimeout(startTour, 900);
+    return () => clearTimeout(id);
+  }, [vis, gesturesOff]);
 
   // Hardware back closes the player instead of popping the navigator under
   // it. Sheets stacked above register later, so they win first (LIFO).
@@ -569,6 +599,7 @@ export function PlayerSheet() {
     .onEnd((e, success) => {
       if (success) {
         markHintDone(HINT_LIKE);
+        noteTourGesture('like');
         setBurst(b => ({ x: e.x, y: e.y, key: (b?.key ?? 0) + 1 }));
         if (!liked) {
           likeNow();
@@ -582,6 +613,7 @@ export function PlayerSheet() {
     .onEnd((_e, success) => {
       if (success) {
         markHintDone(HINT_NEXT);
+        noteTourGesture('swipe');
         player.next();
       }
     });
@@ -592,6 +624,7 @@ export function PlayerSheet() {
     .onEnd((_e, success) => {
       if (success) {
         markHintDone(HINT_NEXT);
+        noteTourGesture('swipe');
         player.prev();
       }
     });
@@ -606,6 +639,7 @@ export function PlayerSheet() {
     setHoldSeek(null);
   };
   const startHoldSeek = dirn => {
+    noteTourGesture('hold');
     clearInterval(holdTimer.current);
     holdTarget.current = positionRef.current;
     const tick = () => {
@@ -647,7 +681,20 @@ export function PlayerSheet() {
     const next = !gesturesOff;
     storage.setItem(GESTURES_KEY, next ? '1' : '0');
     setGesturesOff(next);
+    // Gestures off mid-tour: nothing could ever land — over, quietly.
+    if (next) {
+      endTour();
+    }
     showToast(next ? 'gestures off.' : 'gestures on.');
+  };
+  // Replay from the ⋯ menu — turning gestures back on if they were off,
+  // since a tour over a gesture-dead player could never advance.
+  const replayTour = () => {
+    if (gesturesOff) {
+      storage.setItem(GESTURES_KEY, '0');
+      setGesturesOff(false);
+    }
+    startTour();
   };
 
   // Swipe UP to open the queue — bound to the UP-NEXT area (its own detector),
@@ -661,6 +708,7 @@ export function PlayerSheet() {
     .onEnd((_e, success) => {
       if (success) {
         markHintDone(HINT_QUEUE_SWIPE);
+        noteTourGesture('queue');
         player.ui?.openQueue?.();
       }
     });
@@ -1090,6 +1138,9 @@ export function PlayerSheet() {
               </View>
             </GestureDetector>
           </View>
+          {/* Do-it-live tour: dim + one card, anchored clear of every gesture
+              target; renders nothing while the tour is off. */}
+          <GestureTourOverlay reduced={reduced} />
         </View>
       </GestureDetector>
       </Animated.View>
@@ -1098,6 +1149,7 @@ export function PlayerSheet() {
           player={player}
           gesturesOff={gesturesOff}
           onToggleGestures={toggleGestures}
+          onReplayTour={replayTour}
           onClose={() => setMenuOpen(false)}
         />
       )}

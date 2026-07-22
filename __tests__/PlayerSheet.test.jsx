@@ -96,6 +96,9 @@ async function render() {
 
 beforeEach(() => {
   storage.removeItem('aura.hintsDone');
+  // Keep the first-open tour's 900ms auto-start out of tests that aren't
+  // about it — a real timer firing mid-test would mount the card unasked.
+  storage.setItem('aura.gestureTourDone', '1');
 });
 
 test('gesture hints ride the art until each gesture has been performed', async () => {
@@ -165,5 +168,82 @@ test('shows the current track with transport, quality and up next', async () => 
   expect(p.ui.openQueue).toHaveBeenCalled();
   expect(p.ui.closePlayer).toHaveBeenCalledTimes(1);
 
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('first open runs the do-it-live tour once; skipping ends it for good', async () => {
+  // Whole-test fake timers (house pattern — see QueueSheet.test).
+  jest.useFakeTimers();
+  storage.removeItem('aura.gestureTourDone');
+  mockState.player = basePlayer();
+  let tree = await render();
+
+  // The tour starts a beat after the slide lands, not on mount.
+  expect(texts(tree.toJSON())).not.toContain('double-tap the art');
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(1200);
+  });
+  let body = texts(tree.toJSON());
+  expect(body).toContain('try it · 1 of 5');
+  expect(body).toContain('double-tap the art');
+
+  // Skipping a step moves on; skipping the tour ends it and persists.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'skip this step').props.onPress();
+  });
+  expect(texts(tree.toJSON())).toContain('swipe the art left or right');
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'skip the tour').props.onPress();
+  });
+  expect(texts(tree.toJSON())).not.toContain('try it ·');
+  expect(storage.getItem('aura.gestureTourDone')).toBe('1');
+
+  // Done for good — a fresh open never auto-starts it again.
+  await ReactTestRenderer.act(() => tree.unmount());
+  tree = await render();
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(1500);
+  });
+  expect(texts(tree.toJSON())).not.toContain('try it ·');
+  await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
+});
+
+test('closing the player mid-tour retires it quietly', async () => {
+  jest.useFakeTimers();
+  storage.removeItem('aura.gestureTourDone');
+  mockState.player = basePlayer();
+  const tree = await render();
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(1200);
+  });
+  expect(texts(tree.toJSON())).toContain('try it · 1 of 5');
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'close player').props.onPress();
+  });
+  expect(storage.getItem('aura.gestureTourDone')).toBe('1');
+
+  await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
+});
+
+test('the ⋯ menu replays the tour on demand', async () => {
+  // Already done — only the replay row should bring it back, immediately.
+  mockState.player = basePlayer();
+  const tree = await render();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'player menu').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'replay the gesture tour').props.onPress();
+  });
+  expect(texts(tree.toJSON())).toContain('try it · 1 of 5');
+  expect(texts(tree.toJSON())).toContain('double-tap the art');
+
+  // Leave the module store inactive for any test that follows.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'skip the tour').props.onPress();
+  });
   await ReactTestRenderer.act(() => tree.unmount());
 });
