@@ -347,7 +347,11 @@ export function PlayerSheet() {
 
   // 'closed' | 'open' | 'closing'
   const [vis, setVis] = useState('closed');
-  const [heroH, setHeroH] = useState(0);
+  // Measured rects (content coordinates) — the art cap AND the tour's
+  // spotlight targets.
+  const [heroRect, setHeroRect] = useState(null);
+  const [topRect, setTopRect] = useState(null);
+  const [bandRect, setBandRect] = useState(null);
   // Where the last double-tap landed — drives the heart pop at that spot.
   const [burst, setBurst] = useState(null);
   // Player ⋯ menu + the art-gesture kill switch it hosts (persisted).
@@ -566,8 +570,18 @@ export function PlayerSheet() {
   const artSize = Math.min(
     winW - 72,
     360,
-    heroH > 0 ? heroH - 16 : Number.MAX_SAFE_INTEGER,
+    heroRect?.height > 0 ? heroRect.height - 16 : Number.MAX_SAFE_INTEGER,
   );
+  // The art's own rect (centered in the hero row) — the tour rings the ART,
+  // not the whole flexible row around it.
+  const artRect = heroRect
+    ? {
+        x: heroRect.x + (heroRect.width - artSize) / 2,
+        y: heroRect.y + (heroRect.height - artSize) / 2,
+        width: artSize,
+        height: artSize,
+      }
+    : null;
   // 150px source for the backdrop: it's blurred to a color wash anyway, and
   // the blur runs on the decoded bitmap — 150² is ~11× less memory and blur
   // work than 500². Radius scales with the bitmap, so 14/150 ≈ the old 48/500.
@@ -831,7 +845,10 @@ export function PlayerSheet() {
               },
             ]}
           >
-            <View style={styles.top}>
+            <View
+              style={styles.top}
+              onLayout={e => setTopRect(e.nativeEvent.layout)}
+            >
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel="close player"
@@ -865,7 +882,7 @@ export function PlayerSheet() {
             <GestureDetector gesture={artGestures}>
               <View
                 style={styles.hero}
-                onLayout={e => setHeroH(e.nativeEvent.layout.height)}
+                onLayout={e => setHeroRect(e.nativeEvent.layout)}
               >
                 <ArtDevelop
                   track={track}
@@ -1120,7 +1137,7 @@ export function PlayerSheet() {
             {/* Swipe up anywhere on this bottom band (hint + up-next) opens the
                 queue — where the user reaches for it. */}
             <GestureDetector gesture={queueFling}>
-              <View>
+              <View onLayout={e => setBandRect(e.nativeEvent.layout)}>
                 {/* Until the user has flicked up once, a quiet nudge sits here. */}
                 {queueHint && !gesturesOff && (
                   <View pointerEvents="none" style={styles.queueHintRow}>
@@ -1137,10 +1154,14 @@ export function PlayerSheet() {
                 {upNextSlot()}
               </View>
             </GestureDetector>
+            {/* Do-it-live tour: spotlight cutout + ring + acted-out gesture,
+                in content coordinates so the measured rects line up; renders
+                nothing while the tour is off. */}
+            <GestureTourOverlay
+              reduced={reduced}
+              targets={{ art: artRect, band: bandRect, top: topRect }}
+            />
           </View>
-          {/* Do-it-live tour: dim + one card, anchored clear of every gesture
-              target; renders nothing while the tour is off. */}
-          <GestureTourOverlay reduced={reduced} />
         </View>
       </GestureDetector>
       </Animated.View>
