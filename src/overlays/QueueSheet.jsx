@@ -78,6 +78,19 @@ const DRAG_WINDOW = 11;
 // read once per open, written on toggle.
 const HIDE_PAST_KEY = 'aura.queueHidePast';
 
+// Rows fade in the moment the sheet lands — they mount only then (see the
+// `landed` gate): committing ~14 art rows mid-spring dropped frames halfway
+// up the screen (field report: "it strucks at middle for a millisecond").
+// Shared values, never an entering animation (the 4.2.3/Fabric crash class).
+function ListFade({ reduced, children }) {
+  const o = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    o.value = withTiming(1, { duration: DUR.dot, easing: EASE.settle });
+  }, [o]);
+  const s = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[styles.listFade, s]}>{children}</Animated.View>;
+}
+
 // The current row's live line: 'now playing' + a thin bar gliding between
 // the 1Hz position ticks. No times here (field feedback: clutter at row
 // size) — the row's right edge keeps the total, the player owns the clock.
@@ -679,6 +692,10 @@ export function QueueSheet() {
   const [vis, setVis] = useState('closed');
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);
+  // The row list mounts only after the slide lands (see ListFade) — the
+  // chrome rides the spring alone, so the open never drops frames.
+  const [landed, setLanded] = useState(false);
+  const land = useCallback(() => setLanded(true), []);
 
   // Layout-animation window: flyMs > 0 arms the list's LinearTransition for a
   // beat, so a data change landing inside the window animates rows to their
@@ -790,9 +807,15 @@ export function QueueSheet() {
       dragY.value = 0;
       if (reduced) {
         slide.value = 0;
+        setLanded(true);
       } else {
         slide.value = winH;
-        slide.value = withSpring(0, SPRING.sheet);
+        setLanded(false);
+        slide.value = withSpring(0, SPRING.sheet, done => {
+          if (done) {
+            runOnJS(land)();
+          }
+        });
       }
       setVis('open');
     }
@@ -802,7 +825,7 @@ export function QueueSheet() {
       setVis('closed');
       setMenuOpen(false);
     }
-  }, [open, vis, reduced, winH, slide, dragY]);
+  }, [open, vis, reduced, winH, slide, dragY, land]);
 
   const close = useCallback(() => {
     if (vis === 'closing') {
@@ -1138,7 +1161,8 @@ export function QueueSheet() {
           <Text style={[styles.empty, { color: t.inkFaint }]}>
             nothing queued yet — play something first.
           </Text>
-        ) : (
+        ) : landed ? (
+          <ListFade reduced={reduced}>
           <GestureDetector gesture={listGesture}>
             <Animated.FlatList
               ref={listRef}
@@ -1200,7 +1224,8 @@ export function QueueSheet() {
               ]}
             />
           </GestureDetector>
-        )}
+          </ListFade>
+        ) : null}
       </Animated.View>
       {menuOpen && (
         <QueueOptionsSheet
@@ -1258,6 +1283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 4,
   },
+  listFade: { flex: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

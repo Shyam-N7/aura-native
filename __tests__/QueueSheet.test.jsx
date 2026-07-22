@@ -109,6 +109,10 @@ test('lists the queue with source, count and row actions', async () => {
   // registry. One timer implementation end to end keeps the mock coherent.
   jest.useFakeTimers();
   const tree = await render();
+  // Land the open spring first — rows mount only after the sheet settles.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(800);
+  });
 
   const body = texts(tree.toJSON());
   expect(body).toContain('more like this');
@@ -241,6 +245,10 @@ test('hide past songs trims rows before the current track, keeping queue indices
   // Whole-test fake timers — see 'lists the queue' for why.
   jest.useFakeTimers();
   const tree = await render();
+  // Land the open spring — rows mount only after the sheet settles.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(800);
+  });
   await openMenu(tree);
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'hide past songs').props.onPress();
@@ -277,12 +285,18 @@ test('hide past songs trims rows before the current track, keeping queue indices
 });
 
 test('hide past persists across opens via the mmkv pref', async () => {
+  jest.useFakeTimers();
   storage.setItem('aura.queueHidePast', '1');
   const tree = await render();
+  // Land the open spring — rows mount only after the sheet settles.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(800);
+  });
 
   const body = texts(tree.toJSON());
   expect(body).not.toContain('First Song');
   expect(body).toContain('2 tracks');
 
   await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
 });
