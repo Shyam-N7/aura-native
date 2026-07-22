@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The AURA accent — tints the status-bar icon of every FCM push
+         (see the manifest's default_notification_color meta-data). -->
+    <color name="push_accent">#d97757</color>
+</resources>

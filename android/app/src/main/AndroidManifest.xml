@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lockscreen/notification playback controls on Android 13+ (runtime-requested on first play).
@@ -17,6 +18,18 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
+      <!-- FCM notification branding: the white aura mark as the status-bar
+           icon (the launcher's monochrome layer) and the accent as its tint,
+           for every push the OS renders on our behalf. -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@drawable/ic_launcher_monochrome" />
+      <!-- tools:replace — react-native-firebase's own manifest declares this
+           as @color/white; ours must win the merge. -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_color"
+        android:resource="@color/push_accent"
+        tools:replace="android:resource" />
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

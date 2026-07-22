@@ -55,3 +55,24 @@ jest.mock(
 jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: jest.fn(async () => ({ didCancel: true })),
 }));
+
+// Firebase messaging binds a native module at import — mock the modular API
+// surface lib/push consumes; permission resolves DENIED so no test ever
+// "registers" a token unless it asks to.
+jest.mock('@react-native-firebase/messaging', () => ({
+  AuthorizationStatus: {
+    NOT_DETERMINED: -1,
+    DENIED: 0,
+    AUTHORIZED: 1,
+    PROVISIONAL: 2,
+  },
+  getMessaging: jest.fn(() => ({})),
+  getToken: jest.fn(async () => 'jest-push-token'),
+  hasPermission: jest.fn(async () => 0),
+  requestPermission: jest.fn(async () => 0),
+  onMessage: jest.fn(() => () => {}),
+  onTokenRefresh: jest.fn(() => () => {}),
+  onNotificationOpenedApp: jest.fn(() => () => {}),
+  getInitialNotification: jest.fn(async () => null),
+  setBackgroundMessageHandler: jest.fn(),
+}));

@@ -32,6 +32,7 @@ import AuthScreen from './src/screens/AuthScreen';
 import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { getUser, subscribeAuth, showSensing, hasOnboarded } from './src/lib/auth';
+import { initPush, setPushLinkHandler } from './src/lib/push';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
 import { invalidateHomeCache } from './src/lib/homeCache';
 import { resetLikesStore } from './src/hooks/useLikes';
@@ -138,6 +139,21 @@ function Shell() {
     const sub = Linking.addEventListener('url', e => handleLink(e.url));
     return () => sub.remove();
   }, [handleLink]);
+
+  // Push wiring for the signed-in shell: tapped notifications carry a link
+  // and ride the SAME handler as share links; foreground pushes become the
+  // house toast (see lib/push).
+  useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+    setPushLinkHandler(handleLink);
+    const unsub = initPush();
+    return () => {
+      setPushLinkHandler(null);
+      unsub();
+    };
+  }, [user, handleLink]);
 
   let content;
   if (!user || flow === 'auth') {

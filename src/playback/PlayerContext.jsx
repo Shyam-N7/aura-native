@@ -11,6 +11,7 @@ import { AppState } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { showToast } from '../lib/toast';
 import { isSignedIn, subscribeAuth } from '../lib/auth';
+import { ensurePushPermission } from '../lib/push';
 import {
   fireEndOfSetIfArmed,
   subscribeSleepFire,
@@ -995,6 +996,19 @@ export function PlayerProvider({ children }) {
     });
     return () => sub.remove();
   }, [applyQueue, enqueueOp]);
+
+  // Notification permission, asked a beat into the FIRST real play — music is
+  // audibly working, so the ask reads as "want to hear from us too?" instead
+  // of a cold boot dialog. lib/push no-ops forever after one ask.
+  useEffect(() => {
+    if (!isPlaying) {
+      return undefined;
+    }
+    const id = setTimeout(() => {
+      ensurePushPermission().catch(() => {});
+    }, 2500);
+    return () => clearTimeout(id);
+  }, [isPlaying]);
 
   // Sleep-timer expiry (duration or end-of-set) is a hard pause; the current
   // track position is retained (normal pause semantics, web parity).
