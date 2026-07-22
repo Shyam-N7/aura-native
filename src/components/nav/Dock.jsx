@@ -41,6 +41,10 @@ export const DOCK_CLEARANCE = 96;
 const GOO_PAD = 14;
 const GOO_WINDOW_MS = 460;
 
+// Focused tab off a root nav state: root stack route 0 is the Tabs navigator;
+// its nested index is the focused tab (0 until the tab navigator has state).
+const tabIndexOf = state => state?.routes?.[0]?.state?.index ?? 0;
+
 function DockTab({ route, focused, label: tabLabel, tint, accent, onPress }) {
   const reduced = useReducedMotion();
   const dot = useSharedValue(focused ? 1 : 0);
@@ -78,27 +82,36 @@ export function Dock({ navRef }) {
   const reduced = useReducedMotion();
   const hasTrack = !!player.current;
 
-  // Active tab, read off the container: root stack route 0 is the Tabs
-  // navigator; its nested index is the focused tab (0 until it has state).
+  // Active tab. The 'state' listener adopts the state carried BY the event —
+  // never a container re-read that could trail the commit — and syncTab is
+  // the on-demand live read for the moments no event will come.
   const [tabIndex, setTabIndex] = useState(0);
-  useEffect(() => {
-    const update = () => {
-      try {
-        const root = navRef?.getRootState?.();
-        setTabIndex(root?.routes?.[0]?.state?.index ?? 0);
-      } catch {
-        // Container not ready yet — keep the default.
-      }
-    };
-    update();
-    return navRef?.addListener?.('state', update);
+  const syncTab = useCallback(() => {
+    if (navRef?.isReady?.()) {
+      setTabIndex(tabIndexOf(navRef.getRootState()));
+    }
   }, [navRef]);
+  useEffect(() => {
+    syncTab();
+    return navRef?.addListener?.('state', e => {
+      if (e?.data?.state) {
+        setTabIndex(tabIndexOf(e.data.state));
+      }
+    });
+  }, [navRef, syncTab]);
 
   // Navigating to the Tabs route pops any detail screens off the root stack
   // AND focuses the tapped tab — one gesture gets you home from anywhere.
-  const goTab = (tabName, focused) => {
-    if (!focused && navRef?.isReady?.()) {
+  // Always dispatched: gating on the highlight deadlocked the dock whenever
+  // the highlight went stale — navigate-to-current emits no state event, so
+  // no tap or slide could ever correct it again (field report: parked on
+  // "you" over the home screen). navigate() to the focused tab is already a
+  // no-op internally, and syncTab heals the highlight in exactly that silent
+  // case.
+  const goTab = tabName => {
+    if (navRef?.isReady?.()) {
       navRef.navigate('Tabs', { screen: tabName });
+      syncTab();
     }
   };
 
@@ -151,16 +164,17 @@ export function Dock({ navRef }) {
   const commitSwipe = useCallback(
     i => {
       setDragTab(null);
-      // One navigation, only if it's a real change — so no pass-through tab is
-      // ever focused, and landing back on the current tab is a no-op.
-      if (i !== tabIndex) {
-        const tab = TABS[i];
-        if (tab && navRef?.isReady?.()) {
-          navRef.navigate('Tabs', { screen: tab.name });
-        }
+      // One navigation on release — no pass-through tab is ever focused.
+      // Unconditional for the same reason as goTab: landing on the current
+      // tab is a no-op inside navigate(), and syncTab re-trues the highlight
+      // so a stale one can't dead-end the slide.
+      const tab = TABS[i];
+      if (tab && navRef?.isReady?.()) {
+        navRef.navigate('Tabs', { screen: tab.name });
+        syncTab();
       }
     },
-    [navRef, tabIndex],
+    [navRef, syncTab],
   );
   const cancelSwipe = useCallback(() => setDragTab(null), []);
   const tabSwipe = useMemo(
@@ -254,7 +268,7 @@ export function Dock({ navRef }) {
                     label={tab.label}
                     tint={focused ? t.accent : t.inkFaint}
                     accent={t.accent}
-                    onPress={() => goTab(tab.name, focused)}
+                    onPress={() => goTab(tab.name)}
                   />
                 );
               })}

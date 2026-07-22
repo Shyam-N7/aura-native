@@ -189,6 +189,12 @@ export function getActiveIndex() {
   return TrackPlayer.getActiveTrackIndex();
 }
 
+// The active native track itself — pairs with getActiveIndex so the wake
+// resync can id-validate an adoption against a mid-rebuild transient.
+export function getActiveTrack() {
+  return TrackPlayer.getActiveTrack();
+}
+
 // How many tracks the NATIVE player holds right now. The play-retry path
 // compares this against the JS model: after a system kill the restore can die
 // before syncQueue runs, leaving the model full but the native queue EMPTY —

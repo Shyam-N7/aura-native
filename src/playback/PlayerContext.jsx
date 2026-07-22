@@ -960,6 +960,42 @@ export function PlayerProvider({ children }) {
     prev,
   ]);
 
+  // Screen-on resync: with the display off the service plays on and events
+  // keep arriving, but the UI-side catch-up (queued events → renders → art)
+  // can trail the audio by whole tracks and only settles seconds after wake
+  // (field report: home banner stuck on the song from before screen-off).
+  // One authoritative hop beats replaying the backlog — adopt the native
+  // truth the moment the app is foregrounded, exactly like the boot reattach.
+  // Riding the op chain orders the read after any in-flight user op, so a
+  // just-tapped play/pause can't be clobbered by a pre-op snapshot.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => {
+      if (s !== 'active') {
+        return;
+      }
+      enqueueOp(async () => {
+        const [idx, active, pwr] = await Promise.all([
+          engine.getActiveIndex(),
+          engine.getActiveTrack(),
+          engine.getPlayWhenReady(),
+        ]);
+        const q = queueRef.current;
+        if (
+          typeof idx === 'number' &&
+          idx !== q.idx &&
+          idx >= 0 &&
+          idx < q.tracks.length &&
+          active?.id &&
+          q.tracks[idx]?.id === active.id
+        ) {
+          applyQueue({ ...q, idx });
+        }
+        setIsPlaying(!!pwr);
+      });
+    });
+    return () => sub.remove();
+  }, [applyQueue, enqueueOp]);
+
   // Sleep-timer expiry (duration or end-of-set) is a hard pause; the current
   // track position is retained (normal pause semantics, web parity).
   useEffect(

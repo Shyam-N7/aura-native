@@ -9,6 +9,7 @@
 // as the service factory, so module.exports must BE the handler function.
 const TrackPlayer = require('react-native-track-player').default;
 const { Event } = require('react-native-track-player');
+const { Image } = require('react-native');
 const engine = require('./engine');
 const likes = require('../hooks/useLikes');
 
@@ -84,6 +85,14 @@ module.exports = async function service() {
     }
   });
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, e => {
+    // Warm the list-size art (150x150 — TrackRow.artUrl's token) for the new
+    // track while the screen may be off: the UI's own image fetch only starts
+    // at wake, which left the home banner sitting on the previous cover for
+    // seconds (field report). The native artwork is the 500x500 variant.
+    const art = e?.track?.artwork;
+    if (typeof art === 'string') {
+      Image.prefetch(art.replace(/\d+x\d+/, '150x150')).catch(() => {});
+    }
     if (handlers.onActiveTrackChanged) {
       handlers.onActiveTrackChanged(e);
     }
