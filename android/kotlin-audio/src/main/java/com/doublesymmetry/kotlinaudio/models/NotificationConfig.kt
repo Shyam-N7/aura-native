@@ -32,12 +32,13 @@ data class NotificationConfig(
  */
 @Suppress("ClassName")
 sealed class NotificationButton {
-    // AURA fork extension: an app-defined button carried as a media session
-    // custom action (on Android 13+ that is the ONLY way an extra button
-    // reaches the system media card / lock screen). Identity is the action
-    // string; the icon may change between createNotification calls (heart
-    // filled/outline) without tearing the notification down —
-    // isNotificationButtonsChanged deliberately ignores this type.
+    // AURA fork extension: an app-defined button carried BOTH as a media
+    // session custom action (what stock Android 13+ renders) AND as a classic
+    // notification action (what several OEM media cards — this device's
+    // ColorOS included — still read). Identity is the action string; an icon
+    // change (heart filled/outline) rebuilds the notification manager via
+    // isNotificationButtonsChanged, because it caches notification actions at
+    // construction.
     class CUSTOM(val action: String, @DrawableRes val icon: Int, val title: String = action): NotificationButton()
     class PLAY_PAUSE(@DrawableRes val playIcon: Int? = null, @DrawableRes val pauseIcon: Int? = null): NotificationButton()
     class STOP(@DrawableRes val icon: Int? = null): NotificationButton()

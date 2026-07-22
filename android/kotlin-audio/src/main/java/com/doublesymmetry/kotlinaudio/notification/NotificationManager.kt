@@ -473,44 +473,55 @@ class NotificationManager internal constructor(
             context: Context,
             instanceId: Int
         ): MutableMap<String, NotificationCompat.Action> {
-            if (!needsCustomActionsToAddMissingButtons) return mutableMapOf()
-            return mutableMapOf(
-                REWIND to createNotificationAction(
+            val actions = mutableMapOf<String, NotificationCompat.Action>()
+            if (needsCustomActionsToAddMissingButtons) {
+                actions[REWIND] = createNotificationAction(
                     rewindIcon ?: DEFAULT_REWIND_ICON,
                     REWIND,
                     instanceId
-                ),
-                FORWARD to createNotificationAction(
+                )
+                actions[FORWARD] = createNotificationAction(
                     forwardIcon ?: DEFAULT_FORWARD_ICON,
                     FORWARD,
                     instanceId
-                ),
-                STOP to createNotificationAction(
+                )
+                actions[STOP] = createNotificationAction(
                     stopIcon ?: DEFAULT_STOP_ICON,
                     STOP,
                     instanceId
                 )
-            )
+            }
+            // AURA fork extension: app-defined buttons ALSO ride the classic
+            // notification action row. Several OEM skins (this device's
+            // ColorOS included) build their media cards from notification
+            // actions, not PlaybackState custom actions, even on Android 13+
+            // — without this the heart exists in the session but never shows.
+            // PlayerNotificationManager CACHES this map at construction, so
+            // an icon change must rebuild the manager — see
+            // isNotificationButtonsChanged's CUSTOM branch.
+            buttons.filterIsInstance<NotificationButton.CUSTOM>().forEach {
+                actions[it.action] =
+                    createNotificationAction(it.icon, it.action, instanceId)
+            }
+            return actions
         }
 
         override fun getCustomActions(player: Player): List<String> {
-            if (!needsCustomActionsToAddMissingButtons) return emptyList()
-            return buttons.mapNotNull {
-                when (it) {
-                    is NotificationButton.BACKWARD -> {
-                        REWIND
-                    }
-                    is NotificationButton.FORWARD -> {
-                        FORWARD
-                    }
-                    is NotificationButton.STOP -> {
-                        STOP
-                    }
-                    else -> {
-                        null
+            val names = mutableListOf<String>()
+            if (needsCustomActionsToAddMissingButtons) {
+                buttons.forEach {
+                    when (it) {
+                        is NotificationButton.BACKWARD -> names.add(REWIND)
+                        is NotificationButton.FORWARD -> names.add(FORWARD)
+                        is NotificationButton.STOP -> names.add(STOP)
+                        else -> {}
                     }
                 }
             }
+            buttons.filterIsInstance<NotificationButton.CUSTOM>().forEach {
+                names.add(it.action)
+            }
+            return names
         }
 
         override fun onCustomAction(player: Player, action: String, intent: Intent) {
@@ -656,6 +667,16 @@ class NotificationManager internal constructor(
                 is NotificationButton.PREVIOUS -> {
                     (currentNotificationButtonsMapByType[NotificationButton.PREVIOUS::class] as? NotificationButton.PREVIOUS).let { currentButton ->
                         newButton.icon != currentButton?.icon
+                    }
+                }
+
+                // AURA fork extension: a CUSTOM icon change (heart filled ⇄
+                // outline) must rebuild the notification manager — it caches
+                // its custom actions at construction, so this is the only way
+                // the swapped icon reaches the notification action row.
+                is NotificationButton.CUSTOM -> {
+                    (currentNotificationButtonsMapByType[NotificationButton.CUSTOM::class] as? NotificationButton.CUSTOM).let { currentButton ->
+                        newButton.icon != currentButton?.icon || newButton.action != currentButton?.action
                     }
                 }
 
