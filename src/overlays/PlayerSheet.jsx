@@ -131,6 +131,8 @@ function PlayerMenuSheet({
             </Text>
           </View>
         ))}
+        {/* Reading about gestures flows straight into doing them. */}
+        <SheetRow icon="repeat" label="run the tour" onPress={act(onReplayTour)} />
       </Sheet>
     );
   }

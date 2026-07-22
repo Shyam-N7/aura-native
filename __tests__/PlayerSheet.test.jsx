@@ -228,6 +228,26 @@ test('closing the player mid-tour retires it quietly', async () => {
   jest.useRealTimers();
 });
 
+test('the gesture guide flows straight into running the tour', async () => {
+  mockState.player = basePlayer();
+  const tree = await render();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'player menu').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'how gestures work').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'run the tour').props.onPress();
+  });
+  expect(texts(tree.toJSON())).toContain('try it · 1 of 5');
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'skip the tour').props.onPress();
+  });
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
 test('the ⋯ menu replays the tour on demand', async () => {
   // Already done — only the replay row should bring it back, immediately.
   mockState.player = basePlayer();
