@@ -25,6 +25,7 @@ import {
 import { getTrack } from '../api/catalog';
 import { getLoudness, requestMeasure } from '../api/loudness';
 import { prefetchLyrics } from '../api/lyrics';
+import { useLikes } from '../hooks/useLikes';
 import * as engine from './engine';
 import * as model from './queueModel';
 import * as autoRadio from './autoRadio';
@@ -755,6 +756,19 @@ export function PlayerProvider({ children }) {
     return () => clearTimeout(id);
   }, [currentId, nextId]);
 
+  // The notification heart mirrors the likes store: follow the current track
+  // and every like/unlike, wherever it happens (an in-app heart, or the
+  // notification heart itself via the service handler). `currentLiked` is
+  // derived at render so the store's subscriber bump re-fires the effect;
+  // engine.setLikeButton no-ops on repeats.
+  const { isLiked } = useLikes();
+  const currentLiked = currentId ? isLiked(currentId) : false;
+  useEffect(() => {
+    if (currentId) {
+      engine.setLikeButton(currentLiked).catch(() => {});
+    }
+  }, [currentId, currentLiked]);
+
   // Volume leveling: set the player volume to the current track's measured
   // gain (lib/leveling; api/loudness caches, so repeat runs are free — the
   // next track's number rides the same batch fetch). An unmeasured track
@@ -859,6 +873,21 @@ export function PlayerProvider({ children }) {
         return;
       }
       enqueueOp(() => engine.setNativeRepeat(repeatRef.current));
+
+      // Reattach: if the service kept playing while this JS process was dead
+      // (swipe-away with ContinuePlayback), adopt its live intent — without
+      // this the button boots showing "play" and the ribbon freezes while
+      // audio runs on (no PlayWhenReadyChanged event fires on reattach; the
+      // field report). syncQueue's rebuild-around-active path already keeps
+      // the audio itself uninterrupted.
+      engine
+        .getPlayWhenReady()
+        .then(pwr => {
+          if (!cancelled && pwr) {
+            setIsPlaying(true);
+          }
+        })
+        .catch(() => {});
 
       // Cold restore: the persisted queue lost its stream URLs — refetch the
       // current + next, then mirror into the engine PAUSED, seeking back only

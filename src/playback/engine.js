@@ -53,6 +53,55 @@ function toRntpTrack(t, quality = getAudioQuality()) {
 }
 
 let ready = false;
+// The notification heart's last-pushed state. updateOptions REPLACES the
+// whole option set, so a flip re-sends the full base options.
+let likeShown = false;
+
+const baseOptions = () => ({
+  android: {
+    appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+    // AURA's vendored player renders this as a media-session custom action —
+    // the lock-screen / media-card heart. Icons are app drawable names.
+    likeButton: {
+      liked: likeShown,
+      likedIcon: 'ic_heart_filled',
+      unlikedIcon: 'ic_heart',
+    },
+  },
+  capabilities: [
+    Capability.Play,
+    Capability.Pause,
+    Capability.SkipToNext,
+    Capability.SkipToPrevious,
+    Capability.SeekTo,
+  ],
+  compactCapabilities: [
+    Capability.Play,
+    Capability.Pause,
+    Capability.SkipToNext,
+  ],
+  progressUpdateEventInterval: 1,
+});
+
+// Flip the notification heart. Safe pre-setup (the state simply rides along
+// when setupPlayer sends the options) and a no-op on repeats, so callers can
+// mirror freely.
+export async function setLikeButton(liked) {
+  if (liked === likeShown) {
+    return;
+  }
+  likeShown = liked;
+  if (ready) {
+    await TrackPlayer.updateOptions(baseOptions());
+  }
+}
+
+// Whether the engine intends to play right now — the same signal
+// PlaybackPlayWhenReadyChanged mirrors. Lets a fresh JS process adopt the
+// live state of a service that kept playing after the last process died.
+export function getPlayWhenReady() {
+  return TrackPlayer.getPlayWhenReady();
+}
 
 export async function setupPlayer() {
   if (ready) {
@@ -68,24 +117,7 @@ export async function setupPlayer() {
       throw err;
     }
   }
-  await TrackPlayer.updateOptions({
-    android: {
-      appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
-    },
-    capabilities: [
-      Capability.Play,
-      Capability.Pause,
-      Capability.SkipToNext,
-      Capability.SkipToPrevious,
-      Capability.SeekTo,
-    ],
-    compactCapabilities: [
-      Capability.Play,
-      Capability.Pause,
-      Capability.SkipToNext,
-    ],
-    progressUpdateEventInterval: 1,
-  });
+  await TrackPlayer.updateOptions(baseOptions());
   ready = true;
   // Auto-quality sampler follows the pref from here on (guarded by `ready`,
   // so this subscription happens exactly once).

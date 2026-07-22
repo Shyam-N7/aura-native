@@ -1,3 +1,18 @@
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicEvents.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicEvents.kt
+index 9a2ee90..56ebea5 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicEvents.kt
++++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicEvents.kt
+@@ -34,6 +34,10 @@ class MusicEvents(private val reactContext: ReactContext) : BroadcastReceiver()
+         const val BUTTON_SET_RATING = "remote-set-rating"
+         const val BUTTON_JUMP_FORWARD = "remote-jump-forward"
+         const val BUTTON_JUMP_BACKWARD = "remote-jump-backward"
++        // AURA fork extension: the notification heart (see MusicService's
++        // likeButton option). The JS side listens for the raw string —
++        // addEventListener is an unvalidated passthrough.
++        const val BUTTON_LIKE = "remote-like"
+         const val BUTTON_DUCK = "remote-duck"
+ 
+         // Playback Events
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
 index b2409a0..5d3d74b 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
@@ -413,7 +428,7 @@ index b2409a0..5d3d74b 100644
 +    } }
  }
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
-index afa6b0f..eabe679 100644
+index afa6b0f..6d8ff99 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 @@ -120,9 +120,18 @@ class MusicService : HeadlessJsTaskService() {
@@ -438,7 +453,46 @@ index afa6b0f..eabe679 100644
      }
  
      @MainThread
-@@ -739,9 +748,19 @@ class MusicService : HeadlessJsTaskService() {
+@@ -223,6 +232,18 @@ class MusicService : HeadlessJsTaskService() {
+             }
+         }
+ 
++        // AURA fork extension: a heart on the media session, driven by
++        // `android.likeButton` from JS ({ liked, likedIcon, unlikedIcon } —
++        // icons are app drawable names). The filled/outline swap is just
++        // another updateOptions call with `liked` flipped.
++        val likeButton = androidOptions?.getBundle("likeButton")?.let { likeOptions ->
++            val iconName = likeOptions.getString(
++                if (likeOptions.getBoolean("liked")) "likedIcon" else "unlikedIcon"
++            )
++            val icon = iconName?.let { resources.getIdentifier(it, "drawable", packageName) } ?: 0
++            if (icon != 0) NotificationButton.CUSTOM(LIKE_ACTION, icon, "like") else null
++        }
++
+         val openAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+             // Add the Uri data so apps can identify that it was a notification click
+@@ -233,7 +254,7 @@ class MusicService : HeadlessJsTaskService() {
+         val accentColor = BundleUtils.getIntOrNull(options, "color")
+         val smallIcon = BundleUtils.getIconOrNull(this, options, "icon")
+         val pendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, getPendingIntentFlags())
+-        val notificationConfig = NotificationConfig(buttonsList, accentColor, smallIcon, pendingIntent)
++        val notificationConfig = NotificationConfig(buttonsList + listOfNotNull(likeButton), accentColor, smallIcon, pendingIntent)
+ 
+         player.notificationManager.createNotification(notificationConfig)
+ 
+@@ -668,6 +689,10 @@ class MusicService : HeadlessJsTaskService() {
+                             emit(MusicEvents.BUTTON_JUMP_BACKWARD, this)
+                         }
+                     }
++                    is MediaSessionCallback.CUSTOM -> {
++                        // AURA fork extension: only the heart exists today.
++                        if (it.action == LIKE_ACTION) emit(MusicEvents.BUTTON_LIKE)
++                    }
+                 }
+             }
+         }
+@@ -739,9 +764,19 @@ class MusicService : HeadlessJsTaskService() {
          return bundle
      }
  
@@ -459,7 +513,7 @@ index afa6b0f..eabe679 100644
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, data?.let { Arguments.fromBundle(it) })
      }
-@@ -751,7 +770,7 @@ class MusicService : HeadlessJsTaskService() {
+@@ -751,7 +786,7 @@ class MusicService : HeadlessJsTaskService() {
          val payload = Arguments.createArray()
          data.forEach { payload.pushMap(Arguments.fromBundle(it)) }
  
@@ -468,3 +522,12 @@ index afa6b0f..eabe679 100644
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, payload)
      }
+@@ -850,5 +885,8 @@ class MusicService : HeadlessJsTaskService() {
+ 
+         const val DEFAULT_JUMP_INTERVAL = 15.0
+         const val DEFAULT_STOP_FOREGROUND_GRACE_PERIOD = 5
++
++        // AURA fork extension: the notification heart's custom action name.
++        const val LIKE_ACTION = "like"
+     }
+ }

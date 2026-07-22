@@ -10,6 +10,7 @@
 const TrackPlayer = require('react-native-track-player').default;
 const { Event } = require('react-native-track-player');
 const engine = require('./engine');
+const likes = require('../hooks/useLikes');
 
 const handlers = {};
 
@@ -52,6 +53,29 @@ module.exports = async function service() {
     } else {
       engine.prev().catch(() => {});
     }
+  });
+  // 'remote-like' is an AURA fork event — the notification heart (vendored
+  // kotlin-audio custom action + the RNTP patch). RNTP's Event enum doesn't
+  // know it, but addEventListener is an unvalidated passthrough. The toggle
+  // goes through the likes store — the same optimistic Set + rollback +
+  // subscriber fan-out an in-app heart uses, so every mounted heart follows;
+  // the icon is re-synced here directly so it also flips with no UI mounted.
+  TrackPlayer.addEventListener('remote-like', async () => {
+    const id = (await TrackPlayer.getActiveTrack().catch(() => null))?.id;
+    if (!id) {
+      return;
+    }
+    try {
+      if (likes.isLikedId(id)) {
+        await likes.unlike(id);
+      } else {
+        await likes.like(id);
+      }
+    } catch {
+      // The optimistic Set already rolled itself back — the re-sync below
+      // simply paints whatever state survived.
+    }
+    engine.setLikeButton(likes.isLikedId(id)).catch(() => {});
   });
 
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, e => {

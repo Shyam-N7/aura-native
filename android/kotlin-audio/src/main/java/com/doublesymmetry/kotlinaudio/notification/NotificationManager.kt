@@ -459,7 +459,12 @@ class NotificationManager internal constructor(
             STOP -> {
                 playerEventHolder.updateOnPlayerActionTriggeredExternally(MediaSessionCallback.STOP)
             }
-
+            else -> {
+                // AURA fork extension: any other action string is an
+                // app-defined NotificationButton.CUSTOM — hand it through
+                // as-is for the service layer to route.
+                playerEventHolder.updateOnPlayerActionTriggeredExternally(MediaSessionCallback.CUSTOM(action))
+            }
         }
     }
 
@@ -691,8 +696,8 @@ class NotificationManager internal constructor(
                 }
             }
         )
-        if (needsCustomActionsToAddMissingButtons) {
-            val customActionProviders = buttons
+        val missingButtonProviders = if (needsCustomActionsToAddMissingButtons) {
+            buttons
                 .sortedBy {
                     when (it) {
                         is NotificationButton.BACKWARD -> 1
@@ -717,8 +722,21 @@ class NotificationManager internal constructor(
                         }
                     }
                 }
-            mediaSessionConnector.setCustomActionProviders(*customActionProviders.toTypedArray())
+        } else {
+            emptyList()
         }
+        // AURA fork extension: app-defined buttons (the notification heart)
+        // ride the media session on EVERY version — on Android 13+ custom
+        // actions are the only channel to the system media card at all.
+        // Re-registering the providers here (every createNotification call)
+        // is also what lets an icon swap — heart filled ⇄ outline — land
+        // live: the connector invalidates the playback state on set.
+        val customButtonProviders = buttons
+            .filterIsInstance<NotificationButton.CUSTOM>()
+            .map { createMediaSessionAction(it.icon, it.action, it.title) }
+        mediaSessionConnector.setCustomActionProviders(
+            *(missingButtonProviders + customButtonProviders).toTypedArray()
+        )
     }
 
     private fun setupInternalNotificationManager(config: NotificationConfig) {
@@ -796,11 +814,14 @@ class NotificationManager internal constructor(
 
     private fun createMediaSessionAction(
         @DrawableRes drawableRes: Int,
-        actionName: String
+        actionName: String,
+        // Read by TalkBack / Assistant surfaces; defaults to the action name
+        // for the stock rewind/forward/stop actions.
+        title: String = actionName
     ): MediaSessionConnector.CustomActionProvider {
         return object : MediaSessionConnector.CustomActionProvider {
             override fun getCustomAction(player: Player): PlaybackStateCompat.CustomAction? {
-                return PlaybackStateCompat.CustomAction.Builder(actionName, actionName, drawableRes)
+                return PlaybackStateCompat.CustomAction.Builder(actionName, title, drawableRes)
                     .build()
             }
 
