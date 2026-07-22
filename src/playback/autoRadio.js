@@ -59,7 +59,22 @@ export function noteQueueState(queue, repeat = 'off') {
   const eligible =
     atEnd && queue.source !== "tonight's set" && repeat === 'off' && seed?.id;
   if (!eligible) {
-    reset();
+    // No longer at the end — but if the batch's seed still IS the current
+    // track (the user queued one of the picks behind it; field report:
+    // adding one made the rest vanish), keep the batch published. The
+    // display dedupes queued picks out, and the moment a NEW last track
+    // becomes current the eligible path replaces the batch with that seed's
+    // — the honest hand-off. Anything else (jumped to another set, seed
+    // left behind, repeat/wrap modes) clears as before.
+    const held = state.seedId ?? snapshot.seedId;
+    const holdable =
+      held != null &&
+      held === seed?.id &&
+      queue.source !== "tonight's set" &&
+      repeat === 'off';
+    if (!holdable) {
+      reset();
+    }
     return;
   }
   if (state.seedId === seed.id) {

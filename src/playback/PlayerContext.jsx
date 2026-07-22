@@ -285,11 +285,15 @@ export function PlayerProvider({ children }) {
   // source, or under repeat, it would never play.
   const autoNextTracks = useMemo(() => {
     const seed = queue.tracks[queue.idx];
+    // Shown while the batch's SEED is still the current track — not only at
+    // the queue's end: queueing a pick used to vanish the rest of the batch
+    // (field report). Queued picks drop out of the shown list via the dedupe;
+    // when playback moves onto them the seed check hides the stale batch
+    // until the new last track's prefetch replaces it.
     if (
       !autoNext.candidates?.length ||
       !seed?.id ||
       autoNext.seedId !== seed.id ||
-      queue.idx !== queue.tracks.length - 1 ||
       queue.source === "tonight's set" ||
       repeat !== 'off'
     ) {
@@ -316,7 +320,10 @@ export function PlayerProvider({ children }) {
       const freshCount = extended.tracks.length - q.tracks.length;
       const jump = Math.min(Math.max(0, offset), freshCount - 1);
       const seeded = { ...extended, source: 'more like this' };
-      const target = { ...seeded, idx: q.idx + 1 + jump };
+      // Appended rows start at the OLD queue length — same as idx + 1 when
+      // the current track is last, but the batch now also shows with queued
+      // picks sitting in between (see autoNextTracks).
+      const target = { ...seeded, idx: q.tracks.length + jump };
       autoRadio.reset();
       applyQueue(target);
       setIsPlaying(true);
