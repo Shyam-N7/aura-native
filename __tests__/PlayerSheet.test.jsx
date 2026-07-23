@@ -248,6 +248,29 @@ test('the gesture guide flows straight into running the tour', async () => {
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
+test('the ⋯ menu switches the progress bar style and persists it', async () => {
+  mockState.player = basePlayer();
+  const tree = await render();
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'player menu').props.onPress();
+  });
+  // Default is the wavy ribbon; the row names the CURRENT style.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'progress bar: wavy').props.onPress();
+  });
+  expect(storage.getItem('aura.ribbonStyle')).toBe('line');
+
+  // Reopen: the row now reads straight, and flips back.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'player menu').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'progress bar: straight').props.onPress();
+  });
+  expect(storage.getItem('aura.ribbonStyle')).toBe('wave');
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
 test('the ⋯ menu replays the tour on demand', async () => {
   // Already done — only the replay row should bring it back, immediately.
   mockState.player = basePlayer();

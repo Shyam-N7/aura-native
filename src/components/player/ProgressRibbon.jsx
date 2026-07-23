@@ -6,6 +6,7 @@ import Animated, {
   Easing,
   runOnJS,
   useAnimatedProps,
+  useAnimatedReaction,
   useDerivedValue,
   useFrameCallback,
   useSharedValue,
@@ -24,6 +25,10 @@ const PAD = 10;
 // Direct port of the web ProgressRibbon: a per-track seeded sine ribbon whose
 // phase drifts at ~30Hz while playing; the accent stroke is clipped to
 // progress and the thumb rides the wave. All motion runs on the UI thread.
+// variant 'line' flattens the SAME machinery to a straight bar (amplitude 0,
+// wave clock parked); onScrub reports the dragged position in WHOLE SECONDS
+// (-1 = not scrubbing) so the time labels can follow the finger without a
+// 60fps JS storm.
 export function ProgressRibbon({
   progress = 0,
   playing,
@@ -31,7 +36,10 @@ export function ProgressRibbon({
   accent,
   dim,
   height = 60,
+  variant = 'wave',
+  durationSec = 0,
   onSeek,
+  onScrub,
 }) {
   const [width, setWidth] = useState(0);
 
@@ -41,7 +49,7 @@ export function ProgressRibbon({
   for (const c of seed) {
     s = (s * 31 + c.charCodeAt(0)) & 0xffffffff;
   }
-  const amp = ((s >>> 0) % 50) / 220 + 0.16;
+  const amp = variant === 'line' ? 0 : ((s >>> 0) % 50) / 220 + 0.16;
   const freq = 1.4 + ((s >>> 4) % 40) / 40;
   /* eslint-enable no-bitwise */
 
@@ -74,8 +82,25 @@ export function ProgressRibbon({
     }
   }, playing);
   useEffect(() => {
-    wave.setActive(playing);
-  }, [playing, wave]);
+    // A flat line has no wave to advance — park the frame clock entirely.
+    wave.setActive(playing && variant !== 'line');
+  }, [playing, variant, wave]);
+
+  // Scrub reporter: fires only when the DISPLAYED second changes (not per
+  // frame), and once with -1 when the finger lifts.
+  const notifyScrub = sec => onScrub?.(sec);
+  useAnimatedReaction(
+    () =>
+      drag.value >= 0 && durationSec > 0
+        ? Math.floor(drag.value * durationSec)
+        : -1,
+    (sec, prev) => {
+      if (sec !== prev && prev !== null) {
+        runOnJS(notifyScrub)(sec);
+      }
+    },
+    [durationSec],
+  );
 
   const effective = useDerivedValue(() =>
     drag.value >= 0

@@ -77,6 +77,7 @@ const ICONS = {
   },
   // Lines of verse — the lyrics entry on the player (a lyric sheet, not a mic).
   lyrics: { d: 'M5 6 h14 M5 10 h9 M5 14 h12 M5 18 h7' },
+  wave: { d: 'M3 12 c1.5 -4.5 4.5 -4.5 6 0 s4.5 4.5 6 0 s4.5 -4.5 6 0' },
   // Send arrow — the talk composer's submit.
   'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
   // Checkmark — "already in this playlist" on the add-to-playlist rows.

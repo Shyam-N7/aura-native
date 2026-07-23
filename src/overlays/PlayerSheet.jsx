@@ -93,6 +93,7 @@ const SCREEN_H = Dimensions.get('screen').height;
 // Hold-to-seek: hold the art's side to scrub — right fast-forwards, left
 // rewinds — one step per tick until the finger lifts.
 const GESTURES_KEY = 'aura.playerGesturesOff';
+const RIBBON_KEY = 'aura.ribbonStyle'; // 'wave' (default) | 'line'
 const HOLD_SEEK_STEP = 5;
 const HOLD_SEEK_TICK_MS = 400;
 
@@ -107,6 +108,8 @@ const GUIDE = TOUR_STEPS;
 function PlayerMenuSheet({
   player,
   gesturesOff,
+  ribbonStyle,
+  onToggleRibbon,
   onToggleGestures,
   onReplayTour,
   onClose,
@@ -147,6 +150,15 @@ function PlayerMenuSheet({
         onPress={act(() => player.ui?.openQueue?.())}
       />
       <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+      <SheetRow
+        icon="wave"
+        label={
+          ribbonStyle === 'wave'
+            ? 'progress bar: wavy'
+            : 'progress bar: straight'
+        }
+        onPress={act(onToggleRibbon)}
+      />
       <SheetRow
         icon={gesturesOff ? 'eye' : 'eye-off'}
         label={gesturesOff ? 'turn gestures on' : 'turn gestures off'}
@@ -364,6 +376,35 @@ export function PlayerSheet() {
   const [gesturesOff, setGesturesOff] = useState(
     () => storage.getItem(GESTURES_KEY) === '1',
   );
+  // Progress-bar style — wavy ribbon (the house look) or a straight line,
+  // the user's pick from the ⋯ menu (persisted).
+  const [ribbonStyle, setRibbonStyle] = useState(() =>
+    storage.getItem(RIBBON_KEY) === 'line' ? 'line' : 'wave',
+  );
+  // While the finger scrubs the ribbon, the left timer follows it (whole
+  // seconds, reported by the ribbon). holdSec keeps showing the sought time
+  // after release until the engine's position catches up — otherwise the
+  // label would flash back to the pre-seek time for a beat.
+  const [scrubSec, setScrubSec] = useState(-1);
+  const [holdSec, setHoldSec] = useState(-1);
+  const handleScrub = sec => {
+    if (sec >= 0) {
+      setScrubSec(sec);
+      setHoldSec(sec);
+    } else {
+      setScrubSec(-1);
+    }
+  };
+  useEffect(() => {
+    if (holdSec >= 0 && Math.abs(position - holdSec) <= 2) {
+      setHoldSec(-1);
+    }
+  }, [position, holdSec]);
+  const trackId = track?.id;
+  useEffect(() => {
+    setScrubSec(-1);
+    setHoldSec(-1);
+  }, [trackId]);
   // Hold-to-seek: { dir, target } while a hold is scrubbing, else null. The
   // refs mirror the 1Hz progress so the ticker reads live values, not the
   // closure's stale render.
@@ -715,6 +756,12 @@ export function PlayerSheet() {
     }
     startTour();
   };
+  const toggleRibbonStyle = () => {
+    const next = ribbonStyle === 'wave' ? 'line' : 'wave';
+    storage.setItem(RIBBON_KEY, next);
+    setRibbonStyle(next);
+    showToast(next === 'wave' ? 'progress bar: wavy.' : 'progress bar: straight.');
+  };
 
   // Swipe UP to open the queue — bound to the UP-NEXT area (its own detector),
   // not the art. On the art it fought the left/right flings; over the up-next
@@ -980,14 +1027,25 @@ export function PlayerSheet() {
               accent={t.accent}
               dim={t.ink}
               height={56}
+              variant={ribbonStyle}
+              durationSec={duration}
               onSeek={p => player.seekTo(p * duration)}
+              onScrub={handleScrub}
             />
+            {/* The left timer follows the finger during a scrub (accent =
+                "this is where you're pointing"), holds the sought time until
+                the engine catches up, then goes back to the live clock. */}
             <View style={styles.timeRow}>
-              <Text style={[type.time, { color: t.inkFaint }]}>
-                {fmtTime(position)}
+              <Text
+                style={[
+                  type.time,
+                  { color: scrubSec >= 0 ? t.accent : t.inkFaint },
+                ]}
+              >
+                {fmtTime(scrubSec >= 0 ? scrubSec : holdSec >= 0 ? holdSec : position)}
               </Text>
               <Text style={[type.time, { color: t.inkFaint }]}>
-                -{fmtTime(Math.max(0, duration - position))}
+                -{fmtTime(Math.max(0, duration - (scrubSec >= 0 ? scrubSec : holdSec >= 0 ? holdSec : position)))}
               </Text>
             </View>
 
@@ -1174,6 +1232,8 @@ export function PlayerSheet() {
         <PlayerMenuSheet
           player={player}
           gesturesOff={gesturesOff}
+          ribbonStyle={ribbonStyle}
+          onToggleRibbon={toggleRibbonStyle}
           onToggleGestures={toggleGestures}
           onReplayTour={replayTour}
           onClose={() => setMenuOpen(false)}
