@@ -18,6 +18,7 @@ import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, label } from '../theme/tokens';
 import { adminPushReach, adminPushSend } from '../lib/push';
+import { API_BASE } from '../lib/auth';
 import { showToast } from '../lib/toast';
 
 // The admin composer as its own SCREEN (user-directed after two failed sheet
@@ -100,10 +101,20 @@ export default function AdminComposeScreen({ navigation }) {
   const canSend = !busy && !!form.title.trim() && !!form.body.trim();
   const set = (key, v) => setForm(f => ({ ...f, [key]: v }));
 
-  const previewImage =
-    form.image.trim().startsWith('https://') && !imageBroken
-      ? form.image.trim()
-      : null;
+  // Every aura push wears the composed card (server /api/push/card-art):
+  // no image → the brand-only card; catalog art → composited with the scrim,
+  // seeded ribbon wave and wordmark; any other https url can't be composited
+  // (the public endpoint only fetches aura-hosted art) and rides raw. The
+  // preview loads the EXACT url the push will carry — true WYSIWYG.
+  const raw = form.image.trim();
+  const cardImage = !raw
+    ? `${API_BASE}/api/push/card-art`
+    : /^https:\/\/c\.saavncdn\.com\//.test(raw)
+    ? `${API_BASE}/api/push/card-art?art=${encodeURIComponent(raw)}`
+    : raw.startsWith('https://')
+    ? raw
+    : null;
+  const previewImage = cardImage && !imageBroken ? cardImage : null;
 
   const send = async () => {
     if (!canSend) {
@@ -115,7 +126,7 @@ export default function AdminComposeScreen({ navigation }) {
       const out = await adminPushSend({
         title: form.title,
         body: form.body,
-        image: form.image.trim() || undefined,
+        image: cardImage ?? undefined,
         link: form.link.trim() || undefined,
         audience,
       });
@@ -257,7 +268,7 @@ export default function AdminComposeScreen({ navigation }) {
                 setImageBroken(false);
                 set('image', v);
               }}
-              placeholder="image url (optional — the big picture)"
+              placeholder="image url (optional — empty = the aura card)"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}

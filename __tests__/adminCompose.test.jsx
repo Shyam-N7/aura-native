@@ -45,12 +45,16 @@ beforeEach(() => {
   mockSend.mockResolvedValue({ sent: 2 });
 });
 
-test('empty form shows the default preview and a disabled send', async () => {
+test('empty form shows the default preview, the aura card and a disabled send', async () => {
   const tree = await render(<AdminComposeScreen navigation={nav()} />);
   const body = texts(tree.toJSON());
   expect(body).toContain('hello from aura');
   expect(body).toContain('your message shows here, exactly how it lands.');
   expect(body).toContain('goes only to your own devices (a safe test).');
+  // No image typed → the brand-only composed card is the banner.
+  expect(byLabel(tree, 'notification image preview').props.source).toEqual({
+    uri: 'https://www.aurafm.live/api/push/card-art',
+  });
   expect(byLabel(tree, 'send notification').props.disabled).toBe(true);
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -75,7 +79,8 @@ test('typing feeds the live preview; send posts to me and goes back', async () =
       title: 'fresh mixes',
       body: 'three new sets today.',
       audience: 'me',
-      image: undefined,
+      // Every push wears a card — empty image field = the brand-only card.
+      image: 'https://www.aurafm.live/api/push/card-art',
     }),
   );
   expect(mockToast).toHaveBeenCalledWith('sent to 2 devices.', { tick: true });
@@ -117,21 +122,34 @@ test('a typed email wins the audience and disables the toggle', async () => {
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
-test('an https image url rides the payload and the preview banner', async () => {
+test('catalog art gets composited; foreign https urls ride raw', async () => {
+  const art = 'https://c.saavncdn.com/795/AM-500x500.jpg';
+  const composed = `https://www.aurafm.live/api/push/card-art?art=${encodeURIComponent(art)}`;
   const tree = await render(<AdminComposeScreen navigation={nav()} />);
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'notification title').props.onChangeText('t');
     byLabel(tree, 'notification message').props.onChangeText('b');
-    byLabel(tree, 'notification image url').props.onChangeText('https://cdn.example/art.jpg');
+    byLabel(tree, 'notification image url').props.onChangeText(art);
   });
   expect(byLabel(tree, 'notification image preview').props.source).toEqual({
-    uri: 'https://cdn.example/art.jpg',
+    uri: composed,
   });
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'send notification').props.onPress();
   });
   expect(mockSend).toHaveBeenCalledWith(
-    expect.objectContaining({ image: 'https://cdn.example/art.jpg' }),
+    expect.objectContaining({ image: composed }),
   );
   await ReactTestRenderer.act(() => tree.unmount());
+
+  // A non-aura host can't be composited (the public endpoint only fetches
+  // aura-hosted art) — it previews and sends exactly as typed.
+  const tree2 = await render(<AdminComposeScreen navigation={nav()} />);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree2, 'notification image url').props.onChangeText('https://cdn.example/x.jpg');
+  });
+  expect(byLabel(tree2, 'notification image preview').props.source).toEqual({
+    uri: 'https://cdn.example/x.jpg',
+  });
+  await ReactTestRenderer.act(() => tree2.unmount());
 });
