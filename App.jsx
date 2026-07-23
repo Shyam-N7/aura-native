@@ -31,7 +31,7 @@ import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
 import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
-import { getUser, subscribeAuth, showSensing, hasOnboarded } from './src/lib/auth';
+import { getUser, subscribeAuth, showSensing, hasOnboarded, fetchMe } from './src/lib/auth';
 import { initPush, setPushLinkHandler } from './src/lib/push';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
 import { invalidateHomeCache } from './src/lib/homeCache';
@@ -139,6 +139,16 @@ function Shell() {
     const sub = Linking.addEventListener('url', e => handleLink(e.url));
     return () => sub.remove();
   }, [handleLink]);
+
+  // One profile refresh per launch. The cached user only updated on sign-in
+  // or after a 401 forced a revalidation — anything granted server-side since
+  // (the admin flag, settings changed on the web) never reached a signed-in
+  // phone. Best-effort: offline launches keep the cache.
+  useEffect(() => {
+    if (getUser()) {
+      fetchMe().catch(() => {});
+    }
+  }, []);
 
   // Push wiring for the signed-in shell: tapped notifications carry a link
   // and ride the SAME handler as share links; foreground pushes become the
