@@ -13,6 +13,7 @@ import {
 import { autoTier, noteAutoSample, resetAuto } from '../lib/autoQuality';
 import { getTrack as fetchTrack } from '../api/catalog';
 import { showToast } from '../lib/toast';
+import { storage } from '../storage/mmkv';
 
 // The ONLY module that talks to react-native-track-player (one read-only
 // exception: hooks/usePlaybackProgress renders RNTP's position ticker).
@@ -57,9 +58,18 @@ let ready = false;
 // whole option set, so a flip re-sends the full base options.
 let likeShown = false;
 
+// Background play — on (the default): closing the app keeps the music and
+// the media card alive; off: swiping the app away stops playback and clears
+// the card. The service reads the CURRENT options in onTaskRemoved, so a
+// runtime flip only needs the same full-options resend the heart uses.
+const BG_PLAY_KEY = 'aura.backgroundPlay';
+let bgPlay = storage.getItem(BG_PLAY_KEY) !== '0';
+
 const baseOptions = () => ({
   android: {
-    appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+    appKilledPlaybackBehavior: bgPlay
+      ? AppKilledPlaybackBehavior.ContinuePlayback
+      : AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
     // AURA's vendored player renders this as a media-session custom action —
     // the lock-screen / media-card heart. Icons are app drawable names.
     likeButton: {
@@ -91,6 +101,23 @@ export async function setLikeButton(liked) {
     return;
   }
   likeShown = liked;
+  if (ready) {
+    await TrackPlayer.updateOptions(baseOptions());
+  }
+}
+
+export function isBackgroundPlay() {
+  return bgPlay;
+}
+
+// Flip background play (the home-screen toggle). Persisted, and pushed to
+// the live service immediately — the next app close honors the new setting.
+export async function setBackgroundPlay(on) {
+  if (on === bgPlay) {
+    return;
+  }
+  bgPlay = on;
+  storage.setItem(BG_PLAY_KEY, on ? '1' : '0');
   if (ready) {
     await TrackPlayer.updateOptions(baseOptions());
   }

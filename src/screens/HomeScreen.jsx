@@ -38,6 +38,10 @@ import { PlaylistGrid } from '../components/home/PlaylistGrid';
 import { Skeleton } from '../components/ui/Skeleton';
 import { ModeMixCard } from '../components/home/ModeMixCard';
 import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
+import { OtterToggle } from '../components/ui/OtterToggle';
+import { ConfirmPopup } from '../components/ui/ConfirmPopup';
+import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
+import { storage } from '../storage/mmkv';
 import { fonts } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
@@ -111,6 +115,9 @@ function useHomeSection(key, fetcher) {
   return data;
 }
 
+// "don't ask again" for the background-play confirm popup.
+const BG_NO_CONFIRM_KEY = 'aura.backgroundPlayNoConfirm';
+
 export default function HomeScreen({ navigation }) {
   const { t } = useTheme();
   const player = usePlayer();
@@ -123,6 +130,33 @@ export default function HomeScreen({ navigation }) {
   // their comma.
   const greet = greeting();
   const explicitOff = getActiveExplicitOff();
+
+  // Background play — the greeting-row switch. Flips the engine's app-killed
+  // behavior; a popup confirms each flip unless the user opted out of asking.
+  const [bgPlay, setBgPlayState] = useState(isBackgroundPlay);
+  const [bgAsk, setBgAsk] = useState(null); // { next } while the popup is up
+  const [bgDontAsk, setBgDontAsk] = useState(false);
+  const applyBgPlay = next => {
+    setBgPlayState(next);
+    setBackgroundPlay(next).catch(() => {});
+    showToast(next ? 'background play on.' : 'background play off.');
+  };
+  const onBgToggle = () => {
+    const next = !bgPlay;
+    if (storage.getItem(BG_NO_CONFIRM_KEY) === '1') {
+      applyBgPlay(next);
+      return;
+    }
+    setBgDontAsk(false);
+    setBgAsk({ next });
+  };
+  const confirmBgPlay = () => {
+    if (bgDontAsk) {
+      storage.setItem(BG_NO_CONFIRM_KEY, '1');
+    }
+    applyBgPlay(bgAsk.next);
+    setBgAsk(null);
+  };
 
   const pool = useFeaturedPool({ limit: 24 });
   const quickPicks = useHomeSection('quickPicks', getQuickPicks);
@@ -378,14 +412,23 @@ export default function HomeScreen({ navigation }) {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.pad}>
-            <Text style={[styles.greeting, { color: t.ink }]}>
-              {greet}
-              {firstName ? `${greet.endsWith('?') ? ' ' : ', '}${firstName}` : ''}
-            </Text>
-            <Text style={[styles.tagline, { color: t.inkSoft }]}>
-              music that gets your mood
-            </Text>
+          <View style={[styles.pad, styles.greetRow]}>
+            <View style={styles.greetCol}>
+              <Text style={[styles.greeting, { color: t.ink }]}>
+                {greet}
+                {firstName
+                  ? `${greet.endsWith('?') ? ' ' : ', '}${firstName}`
+                  : ''}
+              </Text>
+              <Text style={[styles.tagline, { color: t.inkSoft }]}>
+                music that gets your mood
+              </Text>
+            </View>
+            <OtterToggle
+              value={bgPlay}
+              onPress={onBgToggle}
+              label="background play"
+            />
           </View>
 
           {activeMode !== 'everyday' && (
@@ -610,6 +653,24 @@ export default function HomeScreen({ navigation }) {
           )}
         </BounceScrollView>
       </ScreenFade>
+      <ConfirmPopup
+        visible={!!bgAsk}
+        title={
+          bgAsk?.next
+            ? 'turn on background play?'
+            : 'turn off background play?'
+        }
+        body={
+          bgAsk?.next
+            ? 'music keeps playing when you close the app.'
+            : 'music stops when you close the app.'
+        }
+        action={bgAsk?.next ? 'turn on' : 'turn off'}
+        onConfirm={confirmBgPlay}
+        onCancel={() => setBgAsk(null)}
+        dontAsk={bgDontAsk}
+        onToggleDontAsk={() => setBgDontAsk(v => !v)}
+      />
     </View>
   );
 }
@@ -622,6 +683,8 @@ const styles = StyleSheet.create({
     paddingBottom: 24 + DOCK_CLEARANCE,
   },
   pad: { paddingHorizontal: 22, gap: 4 },
+  greetRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  greetCol: { flex: 1, gap: 4 },
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
   tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
   wheelWrap: { alignItems: 'center', paddingTop: 6 },

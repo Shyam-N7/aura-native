@@ -9,6 +9,7 @@ import { getFeatured } from '../src/api/catalog';
 import { updatePreferences } from '../src/lib/auth';
 import { invalidateHomeCache } from '../src/lib/homeCache';
 import { resetLikesStore } from '../src/hooks/useLikes';
+import { storage } from '../src/storage/mmkv';
 
 const mockPlayQueue = jest.fn();
 const mockPlayTrack = jest.fn();
@@ -106,6 +107,13 @@ jest.mock('../src/api/impressions', () => ({
 jest.mock('../src/lib/confirm', () => ({
   confirm: jest.fn(() => Promise.resolve(false)),
 }));
+// The playback engine behind the background-play switch — isolated so the
+// screen tests never touch RNTP or the quality chain.
+const mockSetBackgroundPlay = jest.fn(() => Promise.resolve());
+jest.mock('../src/playback/engine', () => ({
+  isBackgroundPlay: () => true,
+  setBackgroundPlay: (...a) => mockSetBackgroundPlay(...a),
+}));
 
 // Rendered text only, joined in order (a Text's children can be split).
 function texts(node) {
@@ -136,6 +144,8 @@ beforeEach(() => {
   invalidateHomeCache();
   resetLikesStore();
   mockUser = { name: 'Shyam N', email: 's@x.y' };
+  // The don't-ask flag persists in the in-memory MMKV across tests.
+  storage.removeItem('aura.backgroundPlayNoConfirm');
 });
 
 test("home greets and begins tonight's set from the hero band", async () => {
@@ -174,6 +184,58 @@ test("home greets and begins tonight's set from the hero band", async () => {
 
   await ReactTestRenderer.act(() => tree.unmount());
   clock.mockRestore();
+});
+
+test('background play: the greeting-row switch confirms, then flips the engine', async () => {
+  const tree = await render(<HomeScreen />);
+  // On the greeting row, on by default, captioned.
+  const toggle = byLabel(tree, 'background play');
+  expect(toggle.props.accessibilityState).toEqual({ checked: true });
+  expect(texts(tree.toJSON())).toContain('background play');
+
+  // Tap → the confirm POPUP asks; cancel changes nothing.
+  await ReactTestRenderer.act(async () => {
+    toggle.props.onPress();
+  });
+  const body = texts(tree.toJSON());
+  expect(body).toContain('turn off background play?');
+  expect(body).toContain('music stops when you close the app.');
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'cancel').props.onPress();
+  });
+  expect(mockSetBackgroundPlay).not.toHaveBeenCalled();
+
+  // Tap → confirm: the engine flips off.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'background play').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'turn off').props.onPress();
+  });
+  expect(mockSetBackgroundPlay).toHaveBeenCalledWith(false);
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test("background play: don't ask again silences the popup for good", async () => {
+  const tree = await render(<HomeScreen />);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'background play').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, "don't ask again").props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'turn off').props.onPress();
+  });
+  expect(mockSetBackgroundPlay).toHaveBeenCalledWith(false);
+
+  // The next flip applies straight away — no popup.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'background play').props.onPress();
+  });
+  expect(texts(tree.toJSON())).not.toContain('turn on background play?');
+  expect(mockSetBackgroundPlay).toHaveBeenCalledWith(true);
+  await ReactTestRenderer.act(() => tree.unmount());
 });
 
 test('you is the library: your year, accordion shelves, settings', async () => {
