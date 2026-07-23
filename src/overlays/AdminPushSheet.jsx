@@ -69,10 +69,13 @@ export function AdminPushSheet({ onClose }) {
       : 'goes to every enrolled device.'
     : 'goes only to your own devices (a safe test).';
 
-  return (
-    <Sheet onClose={onClose} closeLabel="close notification composer">
+  // The title + preview ride the Sheet's PINNED header (the drag zone) while
+  // the fields scroll beneath — so the preview stays on screen above the
+  // keyboard no matter which field has focus. That's the point of a live
+  // preview: you watch the card change as you type.
+  const previewHeader = (
+    <>
       <Text style={[styles.title, { color: t.ink }]}>send a notification</Text>
-
       <Text style={[label(9.5), styles.head, { color: t.inkFaint }]}>
         preview
       </Text>
@@ -100,7 +103,15 @@ export function AdminPushSheet({ onClose }) {
           {form.body.trim() || 'your message shows here, exactly how it lands.'}
         </Text>
       </View>
+    </>
+  );
 
+  return (
+    <Sheet
+      onClose={onClose}
+      closeLabel="close notification composer"
+      header={previewHeader}
+    >
       <TextInput
         value={form.title}
         onChangeText={v => setForm(f => ({ ...f, title: v }))}
