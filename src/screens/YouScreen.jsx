@@ -32,7 +32,8 @@ import {
 import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
-import { getPushPrefs, setPushPrefs, adminPushReach, adminPushSend } from '../lib/push';
+import { getPushPrefs, setPushPrefs } from '../lib/push';
+import { AdminPushSheet } from '../overlays/AdminPushSheet';
 import { confirm } from '../lib/confirm';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
@@ -322,58 +323,12 @@ export default function YouScreen({ navigation }) {
     }
   };
 
-  // Admin push console — the compose form, same contract as the web settings
-  // console. Rendered only when the server marked this account admin
-  // (sanitizeUser.admin rides the cached user); every admin route re-checks
-  // the allowlist server-side regardless.
+  // Admin composer — one settings row opening the AdminPushSheet (live
+  // preview + fields). Rendered only when the server marked this account
+  // admin (sanitizeUser.admin rides the cached user); every admin route
+  // re-checks the allowlist server-side regardless.
   const isAdmin = !!user?.admin;
-  const [reach, setReach] = useState(null);
-  useEffect(() => {
-    if (!isAdmin || openShelf !== 'settings' || reach) {
-      return undefined;
-    }
-    let live = true;
-    adminPushReach()
-      .then(r => {
-        if (live) {
-          setReach(r);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [isAdmin, openShelf, reach]);
-  const [pushForm, setPushForm] = useState({
-    title: '',
-    body: '',
-    link: '',
-    email: '',
-    toAll: false,
-  });
-  const [pushSendBusy, setPushSendBusy] = useState(false);
-  const sendAdminPush = async () => {
-    if (pushSendBusy || !pushForm.title.trim() || !pushForm.body.trim()) {
-      return;
-    }
-    setPushSendBusy(true);
-    try {
-      const audience = pushForm.email.trim() || (pushForm.toAll ? 'all' : 'me');
-      const out = await adminPushSend({
-        title: pushForm.title,
-        body: pushForm.body,
-        link: pushForm.link.trim() || undefined,
-        audience,
-      });
-      showToast(`sent to ${out.sent} device${out.sent === 1 ? '' : 's'}.`, {
-        tick: true,
-      });
-    } catch (err) {
-      showToast(`couldn't send — ${err.message}`);
-    } finally {
-      setPushSendBusy(false);
-    }
-  };
+  const [composeOpen, setComposeOpen] = useState(false);
 
   // Profile photo — upload (picker delivers it pre-resized) or remove; the
   // cached user updates via persistUser so every avatar on screen refreshes.
@@ -1107,133 +1062,29 @@ export default function YouScreen({ navigation }) {
                 {isAdmin && (
                   <>
                     <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                      admin · send a notification
+                      admin
                     </Text>
-                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                      {reach
-                        ? reach.configured
-                          ? `reaches ${reach.devices} device${reach.devices === 1 ? '' : 's'} across ${reach.users} user${reach.users === 1 ? '' : 's'}.`
-                          : 'sender not configured — add the firebase key to the server env first.'
-                        : 'checking reach…'}
-                    </Text>
-                    <TextInput
-                      value={pushForm.title}
-                      onChangeText={v => setPushForm(f => ({ ...f, title: v }))}
-                      placeholder="title"
-                      placeholderTextColor={t.inkFaint}
-                      cursorColor={t.accent}
-                      selectionColor={t.accent}
-                      maxLength={120}
-                      accessibilityLabel="notification title"
-                      style={[
-                        styles.adminInput,
-                        { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
-                      ]}
-                    />
-                    <TextInput
-                      value={pushForm.body}
-                      onChangeText={v => setPushForm(f => ({ ...f, body: v }))}
-                      placeholder="message"
-                      placeholderTextColor={t.inkFaint}
-                      cursorColor={t.accent}
-                      selectionColor={t.accent}
-                      maxLength={300}
-                      multiline
-                      accessibilityLabel="notification message"
-                      style={[
-                        styles.adminInput,
-                        styles.adminInputTall,
-                        { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
-                      ]}
-                    />
-                    <TextInput
-                      value={pushForm.link}
-                      onChangeText={v => setPushForm(f => ({ ...f, link: v }))}
-                      placeholder="link (optional — opens on tap)"
-                      placeholderTextColor={t.inkFaint}
-                      cursorColor={t.accent}
-                      selectionColor={t.accent}
-                      autoCapitalize="none"
-                      keyboardType="url"
-                      accessibilityLabel="notification link"
-                      style={[
-                        styles.adminInput,
-                        { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
-                      ]}
-                    />
-                    <TextInput
-                      value={pushForm.email}
-                      onChangeText={v => setPushForm(f => ({ ...f, email: v }))}
-                      placeholder="send to one email (optional)"
-                      placeholderTextColor={t.inkFaint}
-                      cursorColor={t.accent}
-                      selectionColor={t.accent}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      accessibilityLabel="send to one email"
-                      style={[
-                        styles.adminInput,
-                        { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
-                      ]}
-                    />
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="send to everyone"
-                      accessibilityState={pushForm.toAll ? { selected: true } : {}}
-                      onPress={() => setPushForm(f => ({ ...f, toAll: !f.toAll }))}
+                      accessibilityLabel="send a notification"
+                      onPress={() => setComposeOpen(true)}
                       style={({ pressed }) => [
                         styles.qualityRow,
                         pressed && styles.pressed,
                       ]}
                     >
                       <View style={styles.rowMeta}>
-                        <Text
-                          style={[
-                            styles.rowTitle,
-                            { color: pushForm.toAll ? t.accent : t.ink },
-                          ]}
-                        >
-                          send to everyone
+                        <Text style={[styles.rowTitle, { color: t.ink }]}>
+                          send a notification
                         </Text>
                         <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                          {pushForm.email.trim()
-                            ? 'ignored — the email above wins.'
-                            : pushForm.toAll
-                            ? 'goes to every enrolled device.'
-                            : 'off — goes only to your own devices (a safe test).'}
+                          compose a push with a live preview of the card.
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.dot,
-                          { borderColor: pushForm.toAll ? t.accent : t.line },
-                          pushForm.toAll && { backgroundColor: t.accent },
-                        ]}
-                      />
                     </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="send notification"
-                      disabled={
-                        pushSendBusy ||
-                        !pushForm.title.trim() ||
-                        !pushForm.body.trim()
-                      }
-                      onPress={sendAdminPush}
-                      style={({ pressed }) => [
-                        styles.adminSend,
-                        { borderColor: t.accent },
-                        (pushSendBusy ||
-                          !pushForm.title.trim() ||
-                          !pushForm.body.trim() ||
-                          pressed) &&
-                          styles.pressed,
-                      ]}
-                    >
-                      <Text style={[label(9.5), { color: t.accent }]}>
-                        {pushSendBusy ? 'sending…' : 'send notification'}
-                      </Text>
-                    </Pressable>
+                    {composeOpen && (
+                      <AdminPushSheet onClose={() => setComposeOpen(false)} />
+                    )}
                   </>
                 )}
 
@@ -1612,24 +1463,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 9,
-  },
-  adminInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    fontFamily: fonts.regular,
-    fontSize: 14.5,
-    marginTop: 8,
-  },
-  adminInputTall: { minHeight: 64, textAlignVertical: 'top' },
-  adminSend: {
-    borderWidth: 1,
-    borderRadius: 999,
-    alignItems: 'center',
-    paddingVertical: 11,
-    marginTop: 10,
-    marginBottom: 4,
   },
   crashCard: {
     borderWidth: 1,
