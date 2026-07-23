@@ -88,6 +88,28 @@ test('typing feeds the live preview; send posts to me and goes back', async () =
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
+test('image toggle off drops the banner, hides the url field, sends plain text', async () => {
+  const tree = await render(<AdminComposeScreen navigation={nav()} />);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'notification title').props.onChangeText('t');
+    byLabel(tree, 'notification message').props.onChangeText('b');
+    byLabel(tree, 'include an image').props.onPress();
+  });
+  expect(
+    tree.root.findAllByProps({ accessibilityLabel: 'notification image preview' }),
+  ).toHaveLength(0);
+  expect(
+    tree.root.findAllByProps({ accessibilityLabel: 'notification image url' }),
+  ).toHaveLength(0);
+  expect(texts(tree.toJSON())).toContain('off — sends as plain text.');
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'send notification').props.onPress();
+  });
+  expect(mockSend).toHaveBeenCalledTimes(1);
+  expect(mockSend.mock.calls[0][0].image).toBeUndefined();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
 test('the everyone toggle sends to all', async () => {
   const tree = await render(<AdminComposeScreen navigation={nav()} />);
   await ReactTestRenderer.act(async () => {

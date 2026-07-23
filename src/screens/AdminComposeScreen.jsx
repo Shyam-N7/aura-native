@@ -91,6 +91,7 @@ export default function AdminComposeScreen({ navigation }) {
   const [form, setForm] = useState({
     title: '',
     body: '',
+    withImage: true,
     image: '',
     link: '',
     email: '',
@@ -101,13 +102,16 @@ export default function AdminComposeScreen({ navigation }) {
   const canSend = !busy && !!form.title.trim() && !!form.body.trim();
   const set = (key, v) => setForm(f => ({ ...f, [key]: v }));
 
-  // Every aura push wears the composed card (server /api/push/card-art):
-  // no image → the brand-only card; catalog art → composited with the scrim,
-  // seeded ribbon wave and wordmark; any other https url can't be composited
-  // (the public endpoint only fetches aura-hosted art) and rides raw. The
-  // preview loads the EXACT url the push will carry — true WYSIWYG.
+  // With the image toggle on, the push wears the composed card (server
+  // /api/push/card-art): no image → the brand-only card; catalog art →
+  // composited with the scrim, seeded ribbon wave and wordmark; any other
+  // https url can't be composited (the public endpoint only fetches
+  // aura-hosted art) and rides raw. Toggle off → plain text, no picture.
+  // The preview loads the EXACT url the push will carry — true WYSIWYG.
   const raw = form.image.trim();
-  const cardImage = !raw
+  const cardImage = !form.withImage
+    ? null
+    : !raw
     ? `${API_BASE}/api/push/card-art`
     : /^https:\/\/c\.saavncdn\.com\//.test(raw)
     ? `${API_BASE}/api/push/card-art?art=${encodeURIComponent(raw)}`
@@ -262,21 +266,56 @@ export default function AdminComposeScreen({ navigation }) {
               accessibilityLabel="notification message"
               style={[inputStyle, styles.inputTall]}
             />
-            <TextInput
-              value={form.image}
-              onChangeText={v => {
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="include an image"
+              accessibilityState={form.withImage ? { selected: true } : {}}
+              onPress={() => {
                 setImageBroken(false);
-                set('image', v);
+                set('withImage', !form.withImage);
               }}
-              placeholder="image url (optional — empty = the aura card)"
-              placeholderTextColor={t.inkFaint}
-              cursorColor={t.accent}
-              selectionColor={t.accent}
-              autoCapitalize="none"
-              keyboardType="url"
-              accessibilityLabel="notification image url"
-              style={inputStyle}
-            />
+              style={styles.row}
+            >
+              <View style={styles.rowMeta}>
+                <Text
+                  style={[
+                    styles.rowTitle,
+                    { color: form.withImage ? t.accent : t.ink },
+                  ]}
+                >
+                  include an image
+                </Text>
+                <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
+                  {form.withImage
+                    ? 'the aura card, or an image url below.'
+                    : 'off — sends as plain text.'}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.dot,
+                  { borderColor: form.withImage ? t.accent : t.line },
+                  form.withImage && { backgroundColor: t.accent },
+                ]}
+              />
+            </Pressable>
+            {form.withImage && (
+              <TextInput
+                value={form.image}
+                onChangeText={v => {
+                  setImageBroken(false);
+                  set('image', v);
+                }}
+                placeholder="image url (optional — empty = the aura card)"
+                placeholderTextColor={t.inkFaint}
+                cursorColor={t.accent}
+                selectionColor={t.accent}
+                autoCapitalize="none"
+                keyboardType="url"
+                accessibilityLabel="notification image url"
+                style={inputStyle}
+              />
+            )}
             <TextInput
               value={form.link}
               onChangeText={v => set('link', v)}
