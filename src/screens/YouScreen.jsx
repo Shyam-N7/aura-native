@@ -32,6 +32,7 @@ import {
 import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
+import { getPushPrefs, setPushPrefs } from '../lib/push';
 import { confirm } from '../lib/confirm';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
@@ -282,6 +283,42 @@ export default function YouScreen({ navigation }) {
       showToast(`couldn't update — ${err.message}`);
     } finally {
       setSensingOverride(null);
+    }
+  };
+
+  // Notification switches — server-persisted (the sender checks the same row
+  // before every triggered push, so a switch here silences that category for
+  // every device). Loaded when the settings shelf opens, like the hidden
+  // list; each row flips optimistically and reverts if the save fails.
+  const [pushPrefs, setPushPrefsState] = useState(null);
+  useEffect(() => {
+    if (openShelf !== 'settings' || pushPrefs) {
+      return undefined;
+    }
+    let live = true;
+    getPushPrefs()
+      .then(p => {
+        if (live) {
+          setPushPrefsState(p);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [openShelf, pushPrefs]);
+  const togglePushPref = async key => {
+    if (!pushPrefs) {
+      return;
+    }
+    const prev = pushPrefs;
+    const flipped = !prev[key];
+    setPushPrefsState({ ...prev, [key]: flipped });
+    try {
+      setPushPrefsState(await setPushPrefs({ [key]: flipped }));
+    } catch (err) {
+      setPushPrefsState(prev);
+      showToast(`couldn't update — ${err.message}`);
     }
   };
 
@@ -950,6 +987,69 @@ export default function YouScreen({ navigation }) {
                     ]}
                   />
                 </Pressable>
+
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  notifications
+                </Text>
+                {[
+                  {
+                    key: 'mixes',
+                    title: 'new music for you',
+                    onCap: 'a heads-up when your daily mixes are ready.',
+                    offCap: 'no mix announcements.',
+                  },
+                  {
+                    key: 'social',
+                    title: 'friends & playlists',
+                    onCap: 'someone joins your playlist or adds a song.',
+                    offCap: 'playlist activity stays quiet.',
+                  },
+                  {
+                    key: 'nudges',
+                    title: 'listening reminders',
+                    onCap: "an occasional nudge when your music's been waiting a while.",
+                    offCap: 'no reminders.',
+                  },
+                ].map(row => {
+                  const on = pushPrefs ? pushPrefs[row.key] !== false : true;
+                  return (
+                    <Pressable
+                      key={row.key}
+                      accessibilityRole="button"
+                      accessibilityLabel={row.title}
+                      accessibilityState={on ? { selected: true } : {}}
+                      disabled={!pushPrefs}
+                      onPress={() => togglePushPref(row.key)}
+                      style={({ pressed }) => [
+                        styles.qualityRow,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <View style={styles.rowMeta}>
+                        <Text
+                          style={[
+                            styles.rowTitle,
+                            { color: on ? t.accent : t.ink },
+                          ]}
+                        >
+                          {row.title}
+                        </Text>
+                        <Text
+                          style={[styles.qualityCaption, { color: t.inkSoft }]}
+                        >
+                          {on ? row.onCap : row.offCap}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.dot,
+                          { borderColor: on ? t.accent : t.line },
+                          on && { backgroundColor: t.accent },
+                        ]}
+                      />
+                    </Pressable>
+                  );
+                })}
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   audio quality

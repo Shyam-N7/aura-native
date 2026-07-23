@@ -114,3 +114,27 @@ export function initPush() {
     .catch(() => {});
   return () => subs.forEach(u => u());
 }
+
+// ── Notification preferences (settings switches) ─────────────────────
+// Server-persisted — the sender checks the same row before every triggered
+// push, so a switch flipped here silences that category on every device.
+export async function getPushPrefs() {
+  const res = await fetchAuthed('/api/push/prefs');
+  if (!res.ok) {
+    throw new Error(`prefs fetch failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function setPushPrefs(prefs) {
+  const res = await fetchAuthed('/api/push/prefs', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? 'update failed');
+  }
+  return data;
+}
