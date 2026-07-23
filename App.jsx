@@ -142,9 +142,12 @@ function Shell() {
 
   // Push wiring for the signed-in shell: tapped notifications carry a link
   // and ride the SAME handler as share links; foreground pushes become the
-  // house toast (see lib/push).
+  // house toast (see lib/push). Keyed on the user's ID, not the object —
+  // every profile edit re-notifies auth with a fresh object, and each one
+  // was tearing down + re-initing FCM and re-POSTing the registration.
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       return undefined;
     }
     setPushLinkHandler(handleLink);
@@ -153,7 +156,7 @@ function Shell() {
       setPushLinkHandler(null);
       unsub();
     };
-  }, [user, handleLink]);
+  }, [userId, handleLink]);
 
   let content;
   if (!user || flow === 'auth') {

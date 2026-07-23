@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -19,6 +20,9 @@ export function Skeleton({ height, radius = 14, style }) {
     if (!reduced) {
       pulse.value = withRepeat(withTiming(1, { duration: 900 }), -1, true);
     }
+    // An infinite repeat outlives its component on the UI thread unless it's
+    // cancelled — skeletons churn per load, so orphans would pile up.
+    return () => cancelAnimation(pulse);
   }, [pulse, reduced]);
 
   const animated = useAnimatedStyle(() => ({ opacity: pulse.value }));

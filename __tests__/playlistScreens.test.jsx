@@ -10,6 +10,13 @@ import {
 } from '../src/api/playlists';
 import { listAutoPlaylists } from '../src/api/autoPlaylists';
 
+// The rev-poll's focus gate — these tests render bare (no NavigationContainer),
+// so give the hook a constant answer.
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => true,
+}));
+
 const mockPlayQueue = jest.fn();
 const mockOpenPlayer = jest.fn();
 jest.mock('../src/playback/PlayerContext', () => ({

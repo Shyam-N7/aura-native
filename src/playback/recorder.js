@@ -106,7 +106,9 @@ export function startRecorder(getSource) {
     TrackPlayer.addEventListener(Event.PlaybackState, async e => {
       if (e.state === State.Playing) {
         if (!current) {
-          current = (await TrackPlayer.getActiveTrack()) ?? null;
+          // Same guard as every other RNTP read in this file — a rejection
+          // here would be an unhandled one inside a native event callback.
+          current = (await TrackPlayer.getActiveTrack().catch(() => null)) ?? null;
         }
         if (!current || playedOnce) {
           return;

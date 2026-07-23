@@ -57,11 +57,12 @@ export function ProgressRibbon({
     });
   }, [progress, shownProgress]);
 
-  useFrameCallback(frame => {
+  // useFrameCallback reads its autostart arg ONCE at mount and registers the
+  // worklet's closure ONCE — a bare `playing` in either place is frozen at its
+  // mount value (opened-while-paused = wave never moves; opened-while-playing
+  // = 60fps loop through every pause). setActive() is the live control.
+  const wave = useFrameCallback(frame => {
     'worklet';
-    if (!playing) {
-      return;
-    }
     // ~30Hz like the web (each tick advances the wave one step).
     if (
       frame.timeSincePreviousFrame == null ||
@@ -72,6 +73,9 @@ export function ProgressRibbon({
         (Math.PI * 2);
     }
   }, playing);
+  useEffect(() => {
+    wave.setActive(playing);
+  }, [playing, wave]);
 
   const effective = useDerivedValue(() =>
     drag.value >= 0

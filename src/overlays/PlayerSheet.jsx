@@ -337,12 +337,15 @@ export function PlayerSheet() {
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
   const player = usePlayer();
-  const { position, duration } = usePlaybackProgress();
+  const open = player.ui?.playerOpen ?? false;
+  // 4Hz only while the sheet is actually shown. Closed, this component stays
+  // mounted for the whole session (hours, screen off) — a 250ms RNTP poll
+  // there is pure background churn the OS holds against us.
+  const { position, duration } = usePlaybackProgress(open ? 250 : 60_000);
   const reduced = useReducedMotion();
   const { isLiked, like, unlike } = useLikes();
 
   const track = player.current;
-  const open = player.ui?.playerOpen ?? false;
   // Filmstrip direction for this change — feeds the art glide, the meta
   // stagger and the backdrop parallax below.
   const dir = useTrackDirection(player.queue);

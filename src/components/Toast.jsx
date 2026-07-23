@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  Keyframe,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
   withSpring,
+  withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,25 +19,20 @@ import { DUR } from '../theme/motion';
 // Success green — reads on all three themes; no theme has a success token.
 const TICK_GREEN = '#3f9d6b';
 
-// Web toast motion: rise 16 + scale .96 in, reverse out, short hold.
-const enter = new Keyframe({
-  0: { opacity: 0, transform: [{ translateY: 16 }, { scale: 0.96 }] },
-  100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
-}).duration(DUR.toastIn);
-const exit = new Keyframe({
-  0: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
-  100: { opacity: 0, transform: [{ translateY: 16 }, { scale: 0.96 }] },
-}).duration(DUR.toastIn);
-
 // Renders the most recent toast (last-write-wins), ported from web Toast.jsx.
+// Web toast motion: rise 16 + scale .96 in, reverse out, short hold — all
+// driven by ONE mounted shared value. entering/exiting props are banned here:
+// the pill is a null-gated view replaced per toast, the documented reanimated
+// 4.2.3 abort class (an exit animation on a churny conditional view aborts
+// the native process — this was crashing the app in the field).
 export function Toast() {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const [current, setCurrent] = useState(null);
+  // 0 → hidden, 1 → landed. Drives opacity/rise/scale of the pill.
+  const pill = useSharedValue(0);
   // The success tick pops in just after the pill lands — a beat of "done".
-  // Shared-value driven (not entering props): the disc lives inside a churny
-  // conditional view, the documented reanimated 4.2.3 abort class.
   const tickScale = useSharedValue(0);
 
   useEffect(() => subscribeToast(setCurrent), []);
@@ -46,6 +41,8 @@ export function Toast() {
     if (!current) {
       return;
     }
+    pill.value = 0;
+    pill.value = reduced ? 1 : withTiming(1, { duration: DUR.toastIn });
     if (current.tick) {
       tickScale.value = 0;
       tickScale.value = reduced
@@ -55,12 +52,31 @@ export function Toast() {
             withSpring(1, { mass: 1, stiffness: 320, damping: 14 }),
           );
     }
-    const id = setTimeout(
-      () => setCurrent(c => (c?.id === current.id ? null : c)),
-      DUR.toastIn + DUR.toastHold,
-    );
-    return () => clearTimeout(id);
-  }, [current, reduced, tickScale]);
+    // Hold, animate out, THEN unmount — the timer chain (not a worklet
+    // callback) sequences it, and both timers clear if a newer toast lands.
+    let unmountId = null;
+    const outId = setTimeout(() => {
+      pill.value = reduced ? 0 : withTiming(0, { duration: DUR.toastIn });
+      unmountId = setTimeout(
+        () => setCurrent(c => (c?.id === current.id ? null : c)),
+        reduced ? 0 : DUR.toastIn,
+      );
+    }, DUR.toastIn + DUR.toastHold);
+    return () => {
+      clearTimeout(outId);
+      if (unmountId) {
+        clearTimeout(unmountId);
+      }
+    };
+  }, [current, reduced, pill, tickScale]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    opacity: pill.value,
+    transform: [
+      { translateY: 16 * (1 - pill.value) },
+      { scale: 0.96 + 0.04 * pill.value },
+    ],
+  }));
 
   const tickStyle = useAnimatedStyle(() => ({
     transform: [{ scale: tickScale.value }],
@@ -74,7 +90,7 @@ export function Toast() {
       pointerEvents="none"
       style={[styles.wrap, { bottom: insets.bottom + 88 }]}
     >
-      <Animated.View key={current.id} entering={enter} exiting={exit}>
+      <Animated.View style={pillStyle}>
         <Glass radius={22} style={styles.pill}>
           <View style={styles.row}>
             {current.tick && (

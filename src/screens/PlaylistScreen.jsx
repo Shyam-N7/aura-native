@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { BounceFlatList } from '../components/ui/Bounce';
 import { LONG_LIST } from '../lib/listWindow';
 import { AuraLoader } from '../components/ui/AuraLoader';
@@ -201,9 +202,12 @@ export default function PlaylistScreen({ route, navigation }) {
     : 'private';
 
   // Live sync for shared playlists — poll the cheap rev cursor while the
-  // screen is open and the app is foregrounded, refetch on change.
+  // screen is open, FOCUSED and the app is foregrounded, refetch on change.
+  // Without the focus gate, a shared playlist left in the nav stack keeps
+  // polling for the rest of the session.
+  const focused = useIsFocused();
   useEffect(() => {
-    if (!shared || publicId) {
+    if (!shared || publicId || !focused) {
       return undefined;
     }
     let stop = false;
@@ -229,7 +233,7 @@ export default function PlaylistScreen({ route, navigation }) {
       stop = true;
       clearInterval(timer);
     };
-  }, [id, publicId, shared, updatedAt]);
+  }, [id, publicId, shared, updatedAt, focused]);
 
   // ── Share flows (system share sheet; it carries its own copy action) ──
   const shareLink = async (link, title) => {

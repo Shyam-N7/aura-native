@@ -735,11 +735,12 @@ export function LyricsOverlay() {
   const insets = useSafeAreaInsets();
   const { width: winW } = useWindowDimensions();
   const player = usePlayer();
-  const { position, duration } = usePlaybackProgress();
+  const open = player.ui?.lyricsOpen ?? false;
+  // 4Hz only while shown — same background-churn rule as PlayerSheet.
+  const { position, duration } = usePlaybackProgress(open ? 250 : 60_000);
   const reduced = useReducedMotion();
 
   const track = player.current;
-  const open = player.ui?.lyricsOpen ?? false;
 
   const [vis, setVis] = useState('closed'); // 'closed' | 'open' | 'closing'
   const [hit, setHit] = useState({ trackId: null, data: null, error: null });
