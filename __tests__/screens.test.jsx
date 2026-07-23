@@ -26,8 +26,10 @@ jest.mock('../src/playback/PlayerContext', () => ({
     ui: { playerOpen: false, openPlayer: mockOpenPlayer },
   }),
 }));
+// Mutable so individual tests can flip capabilities (e.g. the admin row).
+let mockUser = { name: 'Shyam N', email: 's@x.y' };
 jest.mock('../src/lib/auth', () => ({
-  getUser: () => ({ name: 'Shyam N', email: 's@x.y' }),
+  getUser: () => mockUser,
   getActiveExplicitOff: () => false,
   subscribeAuth: jest.fn(() => () => {}),
   setMyAvatar: jest.fn(),
@@ -133,6 +135,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   invalidateHomeCache();
   resetLikesStore();
+  mockUser = { name: 'Shyam N', email: 's@x.y' };
 });
 
 test("home greets and begins tonight's set from the hero band", async () => {
@@ -272,4 +275,31 @@ test('history groups plays into contiguous local-day sections', () => {
   ]);
   expect(days[0].data).toHaveLength(2);
   expect(days[2].data.map(p => p.id)).toEqual(['d']);
+});
+
+test('the settings admin row shows only for admins and routes to the composer', async () => {
+  const navigation = {
+    navigate: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+  };
+
+  // Not an admin: no row.
+  let tree = await render(<YouScreen navigation={navigation} />);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'settings').props.onPress();
+  });
+  expect(byLabel(tree, 'send a notification')).toBeUndefined();
+  await ReactTestRenderer.act(() => tree.unmount());
+
+  // Admin: the row exists and routes to the AdminCompose screen.
+  mockUser = { name: 'Shyam N', email: 's@x.y', admin: true };
+  tree = await render(<YouScreen navigation={navigation} />);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'settings').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'send a notification').props.onPress();
+  });
+  expect(navigation.navigate).toHaveBeenCalledWith('AdminCompose');
+  await ReactTestRenderer.act(() => tree.unmount());
 });

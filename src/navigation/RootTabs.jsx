@@ -101,6 +101,11 @@ export default function RootTabs() {
         getComponent={() => require('../screens/PlaylistScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="AdminCompose"
+        getComponent={() => require('../screens/AdminComposeScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }

@@ -33,7 +33,6 @@ import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
 import { getPushPrefs, setPushPrefs } from '../lib/push';
-import { AdminPushSheet } from '../overlays/AdminPushSheet';
 import { confirm } from '../lib/confirm';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
@@ -323,12 +322,12 @@ export default function YouScreen({ navigation }) {
     }
   };
 
-  // Admin composer — one settings row opening the AdminPushSheet (live
-  // preview + fields). Rendered only when the server marked this account
-  // admin (sanitizeUser.admin rides the cached user); every admin route
-  // re-checks the allowlist server-side regardless.
+  // Admin composer — one settings row routing to the AdminCompose SCREEN
+  // (live preview + fields; a full screen, per the sheets-are-for-menus
+  // rule). Rendered only when the server marked this account admin
+  // (sanitizeUser.admin rides the cached user); every admin route re-checks
+  // the allowlist server-side regardless.
   const isAdmin = !!user?.admin;
-  const [composeOpen, setComposeOpen] = useState(false);
 
   // Profile photo — upload (picker delivers it pre-resized) or remove; the
   // cached user updates via persistUser so every avatar on screen refreshes.
@@ -1067,7 +1066,7 @@ export default function YouScreen({ navigation }) {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="send a notification"
-                      onPress={() => setComposeOpen(true)}
+                      onPress={() => navigation.navigate('AdminCompose')}
                       style={({ pressed }) => [
                         styles.qualityRow,
                         pressed && styles.pressed,
@@ -1082,9 +1081,6 @@ export default function YouScreen({ navigation }) {
                         </Text>
                       </View>
                     </Pressable>
-                    {composeOpen && (
-                      <AdminPushSheet onClose={() => setComposeOpen(false)} />
-                    )}
                   </>
                 )}
 
