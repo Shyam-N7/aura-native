@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -40,6 +41,9 @@ import { ModeMixCard } from '../components/home/ModeMixCard';
 import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
 import { OtterToggle } from '../components/ui/OtterToggle';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
+import { SpotlightTourOverlay } from '../components/ui/SpotlightTourOverlay';
+import { useTourHost } from '../lib/useTourHost';
+import { HOME_TOUR } from '../lib/tourSteps';
 import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
 import { storage } from '../storage/mmkv';
 import { fonts } from '../theme/tokens';
@@ -157,6 +161,16 @@ export default function HomeScreen({ navigation }) {
     applyBgPlay(bgAsk.next);
     setBgAsk(null);
   };
+
+  // First-visit guided tour — spotlights the home chrome once, replayable
+  // from Settings. anchorRef tags the elements; the overlay reads the rects.
+  const scrollRef = useRef(null);
+  const focused = useIsFocused();
+  const { anchorRef, targets } = useTourHost({
+    scrollRef,
+    autoStartTour: HOME_TOUR,
+    focused,
+  });
 
   const pool = useFeaturedPool({ limit: 24 });
   const quickPicks = useHomeSection('quickPicks', getQuickPicks);
@@ -406,9 +420,12 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <TopBar navigation={navigation} />
+      <View ref={anchorRef('search')} collapsable={false}>
+        <TopBar navigation={navigation} />
+      </View>
       <ScreenFade>
         <BounceScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
@@ -424,11 +441,13 @@ export default function HomeScreen({ navigation }) {
                 music that gets your mood
               </Text>
             </View>
-            <OtterToggle
-              value={bgPlay}
-              onPress={onBgToggle}
-              label="background play"
-            />
+            <View ref={anchorRef('bgToggle')} collapsable={false}>
+              <OtterToggle
+                value={bgPlay}
+                onPress={onBgToggle}
+                label="background play"
+              />
+            </View>
           </View>
 
           {activeMode !== 'everyday' && (
@@ -451,7 +470,7 @@ export default function HomeScreen({ navigation }) {
           />
 
           {picks.length > 0 && (
-            <View>
+            <View ref={anchorRef('quickPicks')} collapsable={false}>
               <SectionHeader
                 title="quick picks"
                 sub={
@@ -470,23 +489,25 @@ export default function HomeScreen({ navigation }) {
             </View>
           )}
 
-          <HeroBand
-            track={hero}
-            reason={heroReason}
-            loading={poolLoading && !hero}
-            onBegin={() => {
-              if (!hero) {
-                return;
-              }
-              // A personal hero starts a radio from itself; a featured-pool
-              // hero opens the set from its spot in the pool.
-              if (personalHero?.track) {
-                pickLive(hero);
-              } else {
-                pickFromPool(hero);
-              }
-            }}
-          />
+          <View ref={anchorRef('hero')} collapsable={false}>
+            <HeroBand
+              track={hero}
+              reason={heroReason}
+              loading={poolLoading && !hero}
+              onBegin={() => {
+                if (!hero) {
+                  return;
+                }
+                // A personal hero starts a radio from itself; a featured-pool
+                // hero opens the set from its spot in the pool.
+                if (personalHero?.track) {
+                  pickLive(hero);
+                } else {
+                  pickFromPool(hero);
+                }
+              }}
+            />
+          </View>
 
           {(recent?.length ?? 0) > 0 && (
             <View>
@@ -531,7 +552,7 @@ export default function HomeScreen({ navigation }) {
           )}
 
           {(poolLoading || stations.length > 0) && (
-            <View>
+            <View ref={anchorRef('stations')} collapsable={false}>
               <SectionHeader
                 title="stations"
                 sub={
@@ -575,7 +596,7 @@ export default function HomeScreen({ navigation }) {
           )}
 
           {visibleAuto.length > 0 && (
-            <View>
+            <View ref={anchorRef('mixes')} collapsable={false}>
               <SectionHeader
                 title="made for you"
                 sub="fresh editions from your plays — skips count"
@@ -671,6 +692,7 @@ export default function HomeScreen({ navigation }) {
         dontAsk={bgDontAsk}
         onToggleDontAsk={() => setBgDontAsk(v => !v)}
       />
+      {focused && <SpotlightTourOverlay targets={targets} />}
     </View>
   );
 }

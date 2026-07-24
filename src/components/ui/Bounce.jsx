@@ -31,7 +31,9 @@ const KICK_MAX = 72;
 const BOUNCE_SPRING = { mass: 1, stiffness: 220, damping: 22 };
 
 function withRubberBand(Scroller) {
-  return function Bouncy({ style, ...props }) {
+  // forwardRef is additive: existing callers pass no ref; the tour host passes
+  // one to reach scrollTo/measureLayout for scroll-into-view.
+  return React.forwardRef(function Bouncy({ style, ...props }, ref) {
     const scrollY = useSharedValue(0);
     const prevY = useSharedValue(0);
     const contentH = useSharedValue(0);
@@ -125,6 +127,7 @@ function withRubberBand(Scroller) {
     return (
       <GestureDetector gesture={Gesture.Simultaneous(native, pan)}>
         <Scroller
+          ref={ref}
           {...props}
           // The band replaces the platform edge treatment entirely; the
           // dimension seeds below make the very first gesture edge-aware
@@ -142,7 +145,7 @@ function withRubberBand(Scroller) {
         />
       </GestureDetector>
     );
-  };
+  });
 }
 
 export const BounceScrollView = withRubberBand(Animated.ScrollView);

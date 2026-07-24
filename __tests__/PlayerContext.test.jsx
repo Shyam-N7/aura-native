@@ -1,7 +1,11 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { Text } from 'react-native';
-import { __getMockState, __resetMock } from 'react-native-track-player';
+import TrackPlayer, {
+  __getMockState,
+  __resetMock,
+  __setProgress,
+} from 'react-native-track-player';
 import { storage } from '../src/storage/mmkv';
 import { clearSession } from '../src/lib/auth';
 import { PlayerProvider, usePlayer } from '../src/playback/PlayerContext';
@@ -138,6 +142,87 @@ describe('PlayerProvider clearQueue', () => {
     expect(ctx.shuffleActive).toBe(false);
     expect(__getMockState().queue.map(x => x.id)).toEqual(['t2']);
 
+    await ReactTestRenderer.act(() => tree.unmount());
+  });
+});
+
+// Previous is restart-then-skip: past ~3s it restarts the current track, only
+// near the start does it step back one. The lock-screen control shares this
+// exact path (onRemotePrev: prev), so both behave identically.
+describe('PlayerProvider previous — restart then skip', () => {
+  beforeEach(() => {
+    __resetMock();
+    global.fetch = jest.fn(() => Promise.reject(new Error('offline')));
+    storage.setItem('aura.authToken', 'jwt');
+    storage.setItem('aura.authUser', JSON.stringify({ id: 1, name: 'aura' }));
+    storage.setItem(
+      'aura.queue',
+      JSON.stringify({
+        tracks: [
+          { id: 't1', title: 'one' },
+          { id: 't2', title: 'two' },
+          { id: 't3', title: 'three' },
+        ],
+        idx: 1,
+        source: 'more like this',
+      }),
+    );
+  });
+
+  afterEach(() => {
+    clearSession();
+    delete global.fetch;
+  });
+
+  async function mount() {
+    let ctx;
+    function Grab() {
+      ctx = usePlayer();
+      return null;
+    }
+    let tree;
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(
+        <PlayerProvider>
+          <Grab />
+        </PlayerProvider>,
+      );
+    });
+    await flush(tree);
+    return { tree, get: () => ctx };
+  }
+
+  test('past the threshold, previous restarts the current track', async () => {
+    const { tree, get } = await mount();
+    expect(get().current.id).toBe('t2');
+
+    const seek = jest.spyOn(TrackPlayer, 'seekTo');
+    __setProgress({ position: 5 });
+    await ReactTestRenderer.act(async () => {
+      get().prev();
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    // Same track, restarted to 0 — no step back.
+    expect(get().current.id).toBe('t2');
+    expect(__getMockState().activeIndex).toBe(1);
+    expect(seek).toHaveBeenCalledWith(0);
+    seek.mockRestore();
+    await ReactTestRenderer.act(() => tree.unmount());
+  });
+
+  test('near the start, previous steps to the previous track', async () => {
+    const { tree, get } = await mount();
+    expect(get().current.id).toBe('t2');
+
+    __setProgress({ position: 1 });
+    await ReactTestRenderer.act(async () => {
+      get().prev();
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(get().current.id).toBe('t1');
+    expect(__getMockState().activeIndex).toBe(0);
     await ReactTestRenderer.act(() => tree.unmount());
   });
 });

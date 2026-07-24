@@ -16,6 +16,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -34,6 +35,10 @@ import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
 import { getPushPrefs, setPushPrefs } from '../lib/push';
 import { confirm } from '../lib/confirm';
+import { SpotlightTourOverlay } from '../components/ui/SpotlightTourOverlay';
+import { useTourHost } from '../lib/useTourHost';
+import { startTour } from '../lib/spotlightTour';
+import { HOME_TOUR, buildSettingsTour } from '../lib/tourSteps';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
 import { openWhatsNew } from '../lib/whatsNew';
@@ -329,6 +334,22 @@ export default function YouScreen({ navigation }) {
   // the allowlist server-side regardless.
   const isAdmin = !!user?.admin;
 
+  // First-visit guided tour — spotlights the you-screen sections once,
+  // replayable from the guides rows below. Steps carry an `open` shelf the
+  // host expands before measuring.
+  const scrollRef = useRef(null);
+  const focused = useIsFocused();
+  const { anchorRef, targets } = useTourHost({
+    scrollRef,
+    autoStartTour: buildSettingsTour({ admin: isAdmin }),
+    focused,
+    onStep: step => {
+      if (step?.open) {
+        setOpenShelf(step.open);
+      }
+    },
+  });
+
   // Profile photo — upload (picker delivers it pre-resized) or remove; the
   // cached user updates via persistUser so every avatar on screen refreshes.
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -516,6 +537,7 @@ export default function YouScreen({ navigation }) {
       <TopBar navigation={navigation} />
       <ScreenFade>
         <BounceScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
@@ -554,7 +576,11 @@ export default function YouScreen({ navigation }) {
 
           {/* The written-about-you pair: journal + sonic dna. */}
           <Arrive i={1}>
-          <View style={styles.duoRow}>
+          <View
+            ref={anchorRef('duo')}
+            collapsable={false}
+            style={styles.duoRow}
+          >
             <PressScale
               accessibilityRole="button"
               accessibilityLabel="your journal"
@@ -590,6 +616,7 @@ export default function YouScreen({ navigation }) {
 
           {/* Mood bridges — gradual paths between feelings. */}
           <Arrive i={2}>
+          <View ref={anchorRef('bridges')} collapsable={false}>
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="mood bridges"
@@ -608,6 +635,7 @@ export default function YouScreen({ navigation }) {
               read you.
             </Text>
           </PressScale>
+          </View>
           </Arrive>
 
           {!loaded ? (
@@ -616,7 +644,11 @@ export default function YouScreen({ navigation }) {
             </View>
           ) : (
             <Arrive i={3}>
-            <View style={styles.shelves}>
+            <View
+              ref={anchorRef('shelves')}
+              collapsable={false}
+              style={styles.shelves}
+            >
               <Shelf
                 title="liked songs"
                 open={openShelf === 'liked'}
@@ -1188,6 +1220,52 @@ export default function YouScreen({ navigation }) {
                   </View>
                 </Pressable>
 
+                {/* Replay the guided tours (they auto-show once on first visit). */}
+                <Text
+                  style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
+                >
+                  guides
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="home tour"
+                  onPress={() => {
+                    navigation.navigate('Home');
+                    setTimeout(() => startTour(HOME_TOUR), 450);
+                  }}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text style={[styles.rowTitle, { color: t.ink }]}>
+                      home tour
+                    </Text>
+                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
+                      a quick spotlight walk through the home screen.
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="settings tour"
+                  onPress={() => startTour(buildSettingsTour({ admin: isAdmin }))}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text style={[styles.rowTitle, { color: t.ink }]}>
+                      settings tour
+                    </Text>
+                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
+                      walk through everything on this screen again.
+                    </Text>
+                  </View>
+                </Pressable>
+
                 <Text
                   style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
                 >
@@ -1309,6 +1387,7 @@ export default function YouScreen({ navigation }) {
           </Animated.View>
         </BounceScrollView>
       </ScreenFade>
+      {focused && <SpotlightTourOverlay targets={targets} />}
     </View>
   );
 }

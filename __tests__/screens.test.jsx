@@ -107,6 +107,12 @@ jest.mock('../src/api/impressions', () => ({
 jest.mock('../src/lib/confirm', () => ({
   confirm: jest.fn(() => Promise.resolve(false)),
 }));
+// The screens call useIsFocused (tour focus-gating) — outside a navigator it
+// would throw, so pin it true for these renders.
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => true,
+}));
 // The playback engine behind the background-play switch — isolated so the
 // screen tests never touch RNTP or the quality chain.
 const mockSetBackgroundPlay = jest.fn(() => Promise.resolve());

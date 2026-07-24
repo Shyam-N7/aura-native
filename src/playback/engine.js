@@ -244,7 +244,24 @@ export function next() {
   return TrackPlayer.skipToNext();
 }
 
-export function prev() {
+// Past this many seconds into a track, a "previous" press restarts the current
+// song instead of stepping back a track (the universal player convention).
+export const RESTART_THRESHOLD_SEC = 3;
+
+export async function getPosition() {
+  const { position } = await TrackPlayer.getProgress().catch(() => ({
+    position: 0,
+  }));
+  return position;
+}
+
+// Restart-then-skip. PlayerContext's prev is the primary path and carries the
+// queue model; this mirrors the decision for the headless fallback — a remote
+// 'previous' that arrives before the context has registered onRemotePrev.
+export async function prev() {
+  if ((await getPosition()) > RESTART_THRESHOLD_SEC) {
+    return TrackPlayer.seekTo(0);
+  }
   return TrackPlayer.skipToPrevious();
 }
 

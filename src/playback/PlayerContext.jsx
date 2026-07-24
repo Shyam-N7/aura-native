@@ -532,18 +532,25 @@ export function PlayerProvider({ children }) {
     if (!q.tracks.length) {
       return;
     }
+    // Which track "previous" would step to, if we step at all.
     let idx = null;
     if (q.idx > 0) {
       idx = q.idx - 1;
     } else if (q.source === "tonight's set" || repeatRef.current === 'all') {
       idx = q.tracks.length - 1;
     }
-    if (idx == null) {
-      return;
-    }
-    applyQueue({ ...q, idx });
-    setIsPlaying(true);
     enqueuePlayOp(async () => {
+      // Past the threshold — or with nothing to go back to — a previous press
+      // RESTARTS the current track, keeping idx and the play/pause state as
+      // they are. Only near the start does it step to the previous song (the
+      // universal convention; the lock-screen control routes here too).
+      const pos = await engine.getPosition();
+      if (pos > engine.RESTART_THRESHOLD_SEC || idx == null) {
+        await engine.seekTo(0);
+        return;
+      }
+      applyQueue({ ...q, idx });
+      setIsPlaying(true);
       await engine.skipToIndex(idx);
       await engine.play();
     });
