@@ -33,6 +33,7 @@ import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { getUser, subscribeAuth, showSensing, hasOnboarded, fetchMe } from './src/lib/auth';
 import { initPush, setPushLinkHandler } from './src/lib/push';
+import { initEqualizer } from './src/lib/equalizer';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
 import { invalidateHomeCache } from './src/lib/homeCache';
 import { resetLikesStore } from './src/hooks/useLikes';
@@ -150,6 +151,13 @@ function Shell() {
     }
   }, []);
 
+  // Ask the device what its equalizer offers, and re-apply the user's curve if
+  // they had it on. Cheap and silent when it's off (the default) — nothing is
+  // attached to the audio session until they enable it.
+  useEffect(() => {
+    initEqualizer().catch(() => {});
+  }, []);
+
   // Push wiring for the signed-in shell: tapped notifications carry a link
   // and ride the SAME handler as share links; foreground pushes become the
   // house toast (see lib/push). Keyed on the user's ID, not the object —
@@ -185,7 +193,9 @@ function Shell() {
         {/* The dock floats above every screen, detail pages included (web
             parity); the player and sheets still stack over it. */}
         <Dock navRef={navRef} />
-        <PlayerSheet />
+        {/* navRef, not useNavigation: the player is a sibling of the navigator,
+            not a screen inside it (same reason the Dock takes one). */}
+        <PlayerSheet navRef={navRef} />
         {/* Lyrics ride above the player; closing them lands back there. */}
         <LyricsOverlay />
         {/* The queue rides above the player; closing it lands back there. */}

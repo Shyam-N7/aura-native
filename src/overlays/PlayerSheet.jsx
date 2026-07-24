@@ -110,6 +110,7 @@ function PlayerMenuSheet({
   gesturesOff,
   ribbonStyle,
   onToggleRibbon,
+  onOpenEqualizer,
   onToggleGestures,
   onReplayTour,
   onClose,
@@ -150,6 +151,11 @@ function PlayerMenuSheet({
         onPress={act(() => player.ui?.openQueue?.())}
       />
       <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+      <SheetRow
+        icon="sliders"
+        label="equalizer"
+        onPress={act(onOpenEqualizer)}
+      />
       <SheetRow
         icon="wave"
         label={
@@ -344,7 +350,7 @@ function HintFloatUp({ reduced, children }) {
 // bottom sheet (the backdrop art develops in once the slide lands), closes by
 // the reverse or by a drag-follow pull down. Mount inside NavigationContainer
 // (sibling of RootTabs).
-export function PlayerSheet() {
+export function PlayerSheet({ navRef }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -756,6 +762,13 @@ export function PlayerSheet() {
     }
     startTour();
   };
+  // The equalizer is a screen, and the player covers the whole display — so
+  // close the player first, then navigate, or the screen would open behind it.
+  const openEqualizer = () => {
+    close();
+    setTimeout(() => navRef?.current?.navigate?.('Equalizer'), 60);
+  };
+
   const toggleRibbonStyle = () => {
     const next = ribbonStyle === 'wave' ? 'line' : 'wave';
     storage.setItem(RIBBON_KEY, next);
@@ -1234,6 +1247,7 @@ export function PlayerSheet() {
           gesturesOff={gesturesOff}
           ribbonStyle={ribbonStyle}
           onToggleRibbon={toggleRibbonStyle}
+          onOpenEqualizer={openEqualizer}
           onToggleGestures={toggleGestures}
           onReplayTour={replayTour}
           onClose={() => setMenuOpen(false)}

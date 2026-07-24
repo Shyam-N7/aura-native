@@ -106,6 +106,11 @@ export default function RootTabs() {
         getComponent={() => require('../screens/AdminComposeScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="Equalizer"
+        getComponent={() => require('../screens/EqualizerScreen').default}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }

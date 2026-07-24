@@ -93,6 +93,13 @@ abstract class BaseAudioPlayer internal constructor(
 
     val notificationManager: NotificationManager
 
+    // AURA: the audio session the equalizer attaches to. exoPlayer is protected,
+    // so nothing above this class could reach it. C.AUDIO_SESSION_ID_UNSET (0)
+    // means "no real session yet" — the equalizer stays off rather than falling
+    // back to session 0, which would process every other app's audio too.
+    val audioSessionId: Int
+        get() = exoPlayer.audioSessionId
+
     open val playerOptions: PlayerOptions = DefaultPlayerOptions()
 
     open val currentItem: AudioItem?

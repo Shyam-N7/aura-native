@@ -40,8 +40,9 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
       context = applicationContext,
       packageList =
         PackageList(this, MainPackageConfig(frescoConfig)).packages.apply {
-          // Packages that cannot be autolinked yet can be added manually here, for example:
-          // add(MyReactNativePackage())
+          // The equalizer's platform-effects bridge — app-local, so nothing to
+          // autolink.
+          add(AuraEqualizerPackage())
         },
     )
   }

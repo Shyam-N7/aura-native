@@ -14,7 +14,7 @@ index 9a2ee90..56ebea5 100644
  
          // Playback Events
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
-index b2409a0..5d3d74b 100644
+index b2409a0..d0a447b 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/module/MusicModule.kt
 @@ -251,7 +251,7 @@ class MusicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
@@ -175,7 +175,7 @@ index b2409a0..5d3d74b 100644
          if (verifyServiceBoundOrReject(callback)) return@launch
  
          musicService.stop()
-@@ -430,136 +430,136 @@ class MusicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
+@@ -430,136 +430,145 @@ class MusicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
          musicService.clear()
  
          callback.resolve(null)
@@ -252,8 +252,17 @@ index b2409a0..5d3d74b 100644
 -    }
 +    } }
  
++    // AURA: hands the ExoPlayer audio session to JS so the equalizer
++    // (AuraEqualizerModule) can attach its effects to THIS player's output.
      @ReactMethod
 -    fun getVolume(callback: Promise) = scope.launch {
++    fun getAudioSessionId(callback: Promise) { scope.launch {
++        if (verifyServiceBoundOrReject(callback)) return@launch
++
++        callback.resolve(musicService.getAudioSessionId())
++    } }
++
++    @ReactMethod
 +    fun getVolume(callback: Promise) { scope.launch {
          if (verifyServiceBoundOrReject(callback)) return@launch
  
@@ -347,7 +356,7 @@ index b2409a0..5d3d74b 100644
          if (verifyServiceBoundOrReject(callback)) return@launch
  
          try {
-@@ -569,61 +569,61 @@ class MusicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
+@@ -569,61 +578,61 @@ class MusicModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
          } catch (exception: Exception) {
              rejectWithException(callback, exception)
          }
@@ -428,7 +437,7 @@ index b2409a0..5d3d74b 100644
 +    } }
  }
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
-index afa6b0f..6d8ff99 100644
+index afa6b0f..c2c313c 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 @@ -120,9 +120,18 @@ class MusicService : HeadlessJsTaskService() {
@@ -481,7 +490,21 @@ index afa6b0f..6d8ff99 100644
  
          player.notificationManager.createNotification(notificationConfig)
  
-@@ -668,6 +689,10 @@ class MusicService : HeadlessJsTaskService() {
+@@ -386,6 +407,13 @@ class MusicService : HeadlessJsTaskService() {
+     @MainThread
+     fun getRate(): Float = player.playbackSpeed
+ 
++    // AURA: the ExoPlayer audio session the equalizer attaches to. 0 means the
++    // player isn't up yet — callers must treat that as "no equalizer", never as
++    // a cue to fall back to the global session-0 mix.
++    @MainThread
++    fun getAudioSessionId(): Int =
++        if (::player.isInitialized) player.audioSessionId else 0
++
+     @MainThread
+     fun setRate(value: Float) {
+         player.playbackSpeed = value
+@@ -668,6 +696,10 @@ class MusicService : HeadlessJsTaskService() {
                              emit(MusicEvents.BUTTON_JUMP_BACKWARD, this)
                          }
                      }
@@ -492,7 +515,7 @@ index afa6b0f..6d8ff99 100644
                  }
              }
          }
-@@ -739,9 +764,19 @@ class MusicService : HeadlessJsTaskService() {
+@@ -739,9 +771,19 @@ class MusicService : HeadlessJsTaskService() {
          return bundle
      }
  
@@ -513,7 +536,7 @@ index afa6b0f..6d8ff99 100644
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, data?.let { Arguments.fromBundle(it) })
      }
-@@ -751,7 +786,7 @@ class MusicService : HeadlessJsTaskService() {
+@@ -751,7 +793,7 @@ class MusicService : HeadlessJsTaskService() {
          val payload = Arguments.createArray()
          data.forEach { payload.pushMap(Arguments.fromBundle(it)) }
  
@@ -522,7 +545,7 @@ index afa6b0f..6d8ff99 100644
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, payload)
      }
-@@ -850,5 +885,8 @@ class MusicService : HeadlessJsTaskService() {
+@@ -850,5 +892,8 @@ class MusicService : HeadlessJsTaskService() {
  
          const val DEFAULT_JUMP_INTERVAL = 15.0
          const val DEFAULT_STOP_FOREGROUND_GRACE_PERIOD = 5

@@ -1125,6 +1125,32 @@ export default function YouScreen({ navigation }) {
                   );
                 })}
 
+                {/* The equalizer lives on its own screen — faders, presets and
+                    a separate profile per output (lib/equalizer). */}
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                  equalizer
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="equalizer"
+                  onPress={() => navigation.navigate('Equalizer')}
+                  style={({ pressed }) => [
+                    styles.qualityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.rowMeta}>
+                    <Text style={[styles.rowTitle, { color: t.ink }]}>
+                      equalizer
+                    </Text>
+                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
+                      shape the sound — separate settings for speaker and
+                      earphones.
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={t.inkFaint} />
+                </Pressable>
+
                 {/* Volume leveling — evens out loud masters toward the chosen
                     target (attenuate-only; see lib/leveling). */}
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>

@@ -33,6 +33,7 @@ const ICONS = {
   },
   'chevron-down': { d: 'M6 9 l6 6 6 -6' },
   'chevron-left': { d: 'M15 5 l-7 7 7 7' },
+  'chevron-right': { d: 'M9 5 l7 7 -7 7' },
   // Round line caps turn zero-length strokes into the ⋯ overflow dots.
   dots: { d: 'M12 5 v0.01 M12 12 v0.01 M12 19 v0.01', thick: true },
   // 6-dot drag grip (two columns of three).
@@ -78,6 +79,8 @@ const ICONS = {
   // Lines of verse — the lyrics entry on the player (a lyric sheet, not a mic).
   lyrics: { d: 'M5 6 h14 M5 10 h9 M5 14 h12 M5 18 h7' },
   wave: { d: 'M3 12 c1.5 -4.5 4.5 -4.5 6 0 s4.5 4.5 6 0 s4.5 -4.5 6 0' },
+  // Equalizer faders: three verticals, each with its own knob.
+  sliders: { d: 'M6 4 v6 M6 14 v6 M12 4 v10 M12 18 v2 M18 4 v2 M18 10 v10 M4 12 h4 M10 16 h4 M16 8 h4' },
   // Send arrow — the talk composer's submit.
   'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
   // Checkmark — "already in this playlist" on the add-to-playlist rows.
