@@ -89,25 +89,25 @@ export function buildSettingsTour({ admin = false } = {}) {
       body: 'pick the languages you want more of in your recommendations.',
     },
     {
-      target: 'shelves',
+      target: 'photo',
       open: 'settings',
       title: 'settings',
       body: 'your photo, the look, and everything below live here.',
     },
     {
-      target: 'shelves',
+      target: 'privateSession',
       open: 'settings',
       title: 'private session',
       body: 'listen without it shaping your recommendations or history.',
     },
     {
-      target: 'shelves',
+      target: 'familyMode',
       open: 'settings',
       title: 'family mode',
       body: 'keep it clean — filter explicit songs behind a PIN.',
     },
     {
-      target: 'shelves',
+      target: 'notifications',
       open: 'settings',
       title: 'notifications',
       body: 'choose what aura can nudge you about — mixes, activity, and more.',
@@ -115,7 +115,7 @@ export function buildSettingsTour({ admin = false } = {}) {
     ...(admin
       ? [
           {
-            target: 'shelves',
+            target: 'admin',
             open: 'settings',
             title: 'admin console',
             body: 'send a notification to yourself or everyone — your controls.',

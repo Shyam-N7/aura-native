@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -12,24 +12,31 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from './PressScale';
+import { Icon } from '../Icon';
 import {
   backStep,
   endTour,
   getTourState,
   nextStep,
+  stepDwell,
   subscribeTour,
+  toggleTourPause,
 } from '../../lib/spotlightTour';
 import { fonts, label } from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
-// The tap-through tour overlay: a spotlight cutout (four dim slabs leaving a
+// The self-driving tour overlay: a spotlight cutout (four dim slabs leaving a
 // bright window over the step's element + a breathing accent ring) and a
-// docked card with plain copy, progress dots, and back / next / skip. Tapping
-// the dimmed backdrop also advances (web SiteTour parity). Anchorless steps
-// (target null) dim the whole screen and center the card — the welcome and
-// send-off. All motion is mounted shared values, never entering/exiting (the
-// 4.2.3/Fabric abort class). Visual language is shared with the player's
-// GestureTourOverlay; this one advances on a tap instead of a gesture.
+// docked card with plain copy, a dwell bar counting down to the next step,
+// progress dots, and hold / back / next / skip. It advances ON ITS OWN — the
+// host screen opens and scrolls to whatever each step needs, so the whole
+// walkthrough plays without a finger. Tapping the dimmed backdrop HOLDS it
+// (tap again to resume) so anything interesting can be read at leisure.
+// Anchorless steps (target null) dim the whole screen and center the card —
+// the welcome and send-off. All motion is mounted shared values, never
+// entering/exiting (the 4.2.3/Fabric abort class). Visual language is shared
+// with the player's GestureTourOverlay; that one waits for a real gesture,
+// this one drives itself.
 
 const DIM = 0.5;
 const GAP = 14; // card distance from the spotlight
@@ -113,6 +120,48 @@ export function SpotlightTourOverlay({ targets }) {
     return () => clearTimeout(id);
   }, [tour.active, tour.step, targetKey, r]);
 
+  // ── the self-driving clock ────────────────────────────────────────────
+  // Each step holds for its dwell, then the tour moves on by itself. Holding
+  // banks the time left so resuming continues where it stopped rather than
+  // restarting the step. The bar below the copy shows the same countdown.
+  const dwell = stepDwell(step);
+  const paused = !!tour.paused;
+  const leftRef = useRef(dwell);
+  const fill = useSharedValue(0);
+  const stepKey = tour.active ? `${tour.id}:${tour.step}` : null;
+
+  useEffect(() => {
+    leftRef.current = dwell;
+    fill.value = 0;
+    // A step still hunting for its anchor shouldn't burn its dwell behind a
+    // hidden card — the measuring gate below holds the clock too.
+  }, [stepKey, dwell, fill]);
+
+  const holding = paused || (!!targetKey && !r && !graceOver);
+  useEffect(() => {
+    if (!tour.active || holding) {
+      return undefined;
+    }
+    const started = Date.now();
+    const remaining = Math.max(400, leftRef.current);
+    if (!reduced) {
+      fill.value = withTiming(1, {
+        duration: remaining,
+        easing: Easing.linear,
+      });
+    }
+    const id = setTimeout(nextStep, remaining);
+    return () => {
+      clearTimeout(id);
+      cancelAnimation(fill);
+      leftRef.current = Math.max(0, remaining - (Date.now() - started));
+    };
+  }, [tour.active, stepKey, holding, reduced, fill]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: fill.value }],
+  }));
+
   if (!tour.active) {
     return null;
   }
@@ -129,11 +178,12 @@ export function SpotlightTourOverlay({ targets }) {
       onLayout={e => setBox(e.nativeEvent.layout)}
       accessibilityViewIsModal
     >
-      {/* Tap anywhere on the dimming to advance (card taps are swallowed). */}
+      {/* The tour drives itself — tapping the dimming HOLDS it (and resumes),
+          so anything worth a longer look can be studied. */}
       <Pressable
         style={styles.fill}
-        accessibilityLabel="next"
-        onPress={nextStep}
+        accessibilityLabel={paused ? 'resume the tour' : 'hold the tour'}
+        onPress={toggleTourPause}
       >
         <Animated.View pointerEvents="none" style={[styles.fill, sceneStyle]}>
           {r ? (
@@ -198,6 +248,18 @@ export function SpotlightTourOverlay({ targets }) {
             <Text style={[styles.title, { color: t.ink }]}>{step.title}</Text>
             <Text style={[styles.body, { color: t.inkSoft }]}>{step.body}</Text>
 
+            {/* The countdown to the next step — the tour's own clock, visible
+                so nothing moves on unannounced. Frozen while held. */}
+            <View style={[styles.dwellTrack, { backgroundColor: t.line }]}>
+              <Animated.View
+                style={[
+                  styles.dwellFill,
+                  { backgroundColor: t.accent },
+                  fillStyle,
+                ]}
+              />
+            </View>
+
             <View style={styles.dots}>
               {tour.steps.map((s, i) => (
                 <View
@@ -230,6 +292,18 @@ export function SpotlightTourOverlay({ targets }) {
                     <Text style={[styles.btn, { color: t.inkSoft }]}>back</Text>
                   </PressScale>
                 )}
+                <PressScale
+                  accessibilityRole="button"
+                  accessibilityLabel={paused ? 'resume' : 'hold'}
+                  onPress={toggleTourPause}
+                  hitSlop={8}
+                >
+                  <Icon
+                    name={paused ? 'play' : 'pause'}
+                    size={17}
+                    color={t.inkSoft}
+                  />
+                </PressScale>
                 <PressScale
                   accessibilityRole="button"
                   accessibilityLabel={last ? 'done' : 'next'}
@@ -282,6 +356,19 @@ const styles = StyleSheet.create({
   },
   title: { fontFamily: fonts.semibold, fontSize: 17 },
   body: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19 },
+  dwellTrack: {
+    height: 2,
+    borderRadius: 2,
+    marginTop: 12,
+    overflow: 'hidden',
+  },
+  dwellFill: {
+    height: 2,
+    // Scaled from the left edge, so scaleX reads as "how much has elapsed".
+    width: '100%',
+    transform: [{ scaleX: 0 }],
+    transformOrigin: 'left',
+  },
   dots: {
     flexDirection: 'row',
     gap: 5,

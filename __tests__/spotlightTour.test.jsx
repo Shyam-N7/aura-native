@@ -8,6 +8,8 @@ import {
   getTourState,
   nextStep,
   startTour,
+  stepDwell,
+  toggleTourPause,
   tourSeen,
 } from '../src/lib/spotlightTour';
 import { storage } from '../src/storage/mmkv';
@@ -57,13 +59,34 @@ describe('spotlightTour engine', () => {
     expect(tourSeen('home')).toBe(true);
   });
 
-  test('back steps within bounds', () => {
+  test('back steps within bounds, and holds there', () => {
     startTour(DEF);
     nextStep();
     backStep();
     expect(getTourState().step).toBe(0);
+    // Going back is "show me that again" — the self-driving clock stops so the
+    // step can't slide away a beat later.
+    expect(getTourState().paused).toBe(true);
     backStep(); // already at 0 — no-op
     expect(getTourState().step).toBe(0);
+  });
+
+  test('hold pauses and resumes the self-driving clock', () => {
+    startTour(DEF);
+    expect(getTourState().paused).toBe(false);
+    toggleTourPause();
+    expect(getTourState().paused).toBe(true);
+    toggleTourPause();
+    expect(getTourState().paused).toBe(false);
+  });
+
+  test('dwell scales with the copy, within bounds, and honors an override', () => {
+    const short = stepDwell({ title: 'hi', body: '' });
+    const long = stepDwell({ title: 'a much longer heading', body: 'x'.repeat(400) });
+    expect(long).toBeGreaterThan(short);
+    expect(short).toBeGreaterThanOrEqual(2600); // floor — never flashes past
+    expect(long).toBeLessThanOrEqual(6400); // ceiling — never overstays
+    expect(stepDwell({ title: 'x', body: 'y', dwell: 1234 })).toBe(1234);
   });
 
   test('skipping the tour marks it seen', () => {
@@ -108,5 +131,45 @@ describe('SpotlightTourOverlay', () => {
     });
     expect(tree.toJSON()).toBeNull();
     await ReactTestRenderer.act(() => tree.unmount());
+  });
+
+  test('drives itself: a step advances on its own once its dwell elapses', async () => {
+    jest.useFakeTimers();
+    try {
+      let tree;
+      await ReactTestRenderer.act(async () => {
+        tree = ReactTestRenderer.create(
+          <ThemeProvider>
+            <SpotlightTourOverlay targets={{}} />
+          </ThemeProvider>,
+        );
+      });
+      await ReactTestRenderer.act(async () => {
+        startTour(DEF);
+      });
+      expect(getTourState().step).toBe(0);
+
+      // No tap, no press — just time passing.
+      await ReactTestRenderer.act(async () => {
+        jest.advanceTimersByTime(stepDwell(DEF.steps[0]) + 50);
+      });
+      expect(getTourState().step).toBe(1);
+
+      // Holding freezes it: the same wait no longer moves the tour on.
+      await ReactTestRenderer.act(async () => {
+        toggleTourPause();
+      });
+      await ReactTestRenderer.act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
+      expect(getTourState().step).toBe(1);
+
+      await ReactTestRenderer.act(async () => {
+        endTour();
+      });
+      await ReactTestRenderer.act(() => tree.unmount());
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

@@ -339,7 +339,7 @@ export default function YouScreen({ navigation }) {
   // host expands before measuring.
   const scrollRef = useRef(null);
   const focused = useIsFocused();
-  const { anchorRef, targets } = useTourHost({
+  const { anchorRef, rootRef, targets } = useTourHost({
     scrollRef,
     autoStartTour: buildSettingsTour({ admin: isAdmin }),
     focused,
@@ -533,7 +533,11 @@ export default function YouScreen({ navigation }) {
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: t.bg }]}>
+    <View
+      ref={rootRef}
+      collapsable={false}
+      style={[styles.root, { backgroundColor: t.bg }]}
+    >
       <TopBar navigation={navigation} />
       <ScreenFade>
         <BounceScrollView
@@ -831,7 +835,11 @@ export default function YouScreen({ navigation }) {
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   profile photo
                 </Text>
-                <View style={styles.photoRow}>
+                <View
+                  ref={anchorRef('photo')}
+                  collapsable={false}
+                  style={styles.photoRow}
+                >
                   <Avatar user={user} size={44} />
                   <Text
                     style={[styles.qualityCaption, styles.photoCaption, { color: t.inkSoft }]}
@@ -876,6 +884,8 @@ export default function YouScreen({ navigation }) {
                   privacy
                 </Text>
                 <Pressable
+                  ref={anchorRef('privateSession')}
+                  collapsable={false}
                   accessibilityRole="button"
                   accessibilityLabel="private session"
                   accessibilityState={priv ? { selected: true } : {}}
@@ -913,6 +923,8 @@ export default function YouScreen({ navigation }) {
                   family mode
                 </Text>
                 <Pressable
+                  ref={anchorRef('familyMode')}
+                  collapsable={false}
                   accessibilityRole="button"
                   accessibilityLabel="family mode"
                   accessibilityState={familyOn ? { selected: true } : {}}
@@ -1027,7 +1039,11 @@ export default function YouScreen({ navigation }) {
                   />
                 </Pressable>
 
-                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
+                <Text
+                  ref={anchorRef('notifications')}
+                  collapsable={false}
+                  style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
+                >
                   notifications
                 </Text>
                 {[
@@ -1096,6 +1112,8 @@ export default function YouScreen({ navigation }) {
                       admin
                     </Text>
                     <Pressable
+                      ref={anchorRef('admin')}
+                      collapsable={false}
                       accessibilityRole="button"
                       accessibilityLabel="send a notification"
                       onPress={() => navigation.navigate('AdminCompose')}

@@ -166,7 +166,7 @@ export default function HomeScreen({ navigation }) {
   // from Settings. anchorRef tags the elements; the overlay reads the rects.
   const scrollRef = useRef(null);
   const focused = useIsFocused();
-  const { anchorRef, targets } = useTourHost({
+  const { anchorRef, rootRef, targets } = useTourHost({
     scrollRef,
     autoStartTour: HOME_TOUR,
     focused,
@@ -419,7 +419,11 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: t.bg }]}>
+    <View
+      ref={rootRef}
+      collapsable={false}
+      style={[styles.root, { backgroundColor: t.bg }]}
+    >
       <View ref={anchorRef('search')} collapsable={false}>
         <TopBar navigation={navigation} />
       </View>
