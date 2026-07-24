@@ -129,7 +129,7 @@ describe('SpotlightTourOverlay', () => {
     await ReactTestRenderer.act(async () => {
       tree = ReactTestRenderer.create(
         <ThemeProvider>
-          <SpotlightTourOverlay targets={{}} />
+          <SpotlightTourOverlay tourId="home" targets={{}} />
         </ThemeProvider>,
       );
     });
@@ -161,7 +161,7 @@ describe('SpotlightTourOverlay', () => {
       await ReactTestRenderer.act(async () => {
         tree = ReactTestRenderer.create(
           <ThemeProvider>
-            <SpotlightTourOverlay targets={{}} />
+            <SpotlightTourOverlay tourId="home" targets={{}} />
           </ThemeProvider>,
         );
       });

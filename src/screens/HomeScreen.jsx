@@ -168,6 +168,7 @@ export default function HomeScreen({ navigation }) {
   const focused = useIsFocused();
   const { anchorRef, rootRef, targets } = useTourHost({
     scrollRef,
+    tourId: HOME_TOUR.id,
     autoStartTour: HOME_TOUR,
     focused,
   });
@@ -696,7 +697,9 @@ export default function HomeScreen({ navigation }) {
         dontAsk={bgDontAsk}
         onToggleDontAsk={() => setBgDontAsk(v => !v)}
       />
-      {focused && <SpotlightTourOverlay targets={targets} />}
+      {focused && (
+        <SpotlightTourOverlay tourId={HOME_TOUR.id} targets={targets} />
+      )}
     </View>
   );
 }

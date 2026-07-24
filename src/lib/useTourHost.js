@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  endTour,
   getTourState,
   startTour,
   subscribeTour,
@@ -28,6 +29,7 @@ import {
 // anchor never stalls the walkthrough.
 export function useTourHost({
   scrollRef,
+  tourId,
   onStep,
   autoStartTour,
   focused = true,
@@ -64,8 +66,18 @@ export function useTourHost({
     return () => clearTimeout(id);
   }, [focused]);
 
+  // Leaving the screen mid-tour ends it (the player's gesture tour does the
+  // same when the player closes) — a tour whose screen is gone has nothing to
+  // point at, and letting it run on would strand it over another tab.
+  const mine = tour.active && tour.id === tourId;
   useEffect(() => {
-    if (!focused || !tour.active) {
+    if (mine && !focused) {
+      endTour();
+    }
+  }, [mine, focused]);
+
+  useEffect(() => {
+    if (!focused || !mine) {
       return undefined;
     }
     const step = tour.steps[tour.step];
@@ -105,7 +117,7 @@ export function useTourHost({
       cancelled = true;
       timers.forEach(clearTimeout);
     };
-  }, [focused, tour.active, tour.step, tour.steps, scrollRef]);
+  }, [focused, mine, tour.step, tour.steps, scrollRef]);
 
   return { anchorRef, rootRef, targets };
 }

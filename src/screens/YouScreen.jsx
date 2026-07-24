@@ -341,6 +341,7 @@ export default function YouScreen({ navigation }) {
   const focused = useIsFocused();
   const { anchorRef, rootRef, targets } = useTourHost({
     scrollRef,
+    tourId: 'settings',
     autoStartTour: buildSettingsTour({ admin: isAdmin }),
     focused,
     onStep: step => {
@@ -1412,7 +1413,7 @@ export default function YouScreen({ navigation }) {
           </Animated.View>
         </BounceScrollView>
       </ScreenFade>
-      {focused && <SpotlightTourOverlay targets={targets} />}
+      {focused && <SpotlightTourOverlay tourId="settings" targets={targets} />}
     </View>
   );
 }

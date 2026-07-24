@@ -59,19 +59,24 @@ function cardTop(r, box) {
   return { top: above >= 40 ? above : centerTop };
 }
 
-export function SpotlightTourOverlay({ targets }) {
+// `tourId` is the tour THIS screen owns. Tour state is global (one engine, any
+// screen), and both tabs stay mounted — without this gate the home tour's
+// cards also drew over the You screen, anchorless and centered, while home sat
+// unlit behind it.
+export function SpotlightTourOverlay({ tourId, targets }) {
   const { t } = useTheme();
   const reduced = useReducedMotion();
   const [tour, setTour] = useState(getTourState);
   useEffect(() => subscribeTour(setTour), []);
   const [box, setBox] = useState(null);
+  const mine = tour.active && tour.id === tourId;
 
   // The card cross-fades on every step change; the spotlight itself GLIDES
   // (below) rather than cutting, so the eye is led from one control to the
   // next instead of having to re-find it.
   const scene = useSharedValue(0);
   useEffect(() => {
-    if (!tour.active) {
+    if (!mine) {
       return;
     }
     if (reduced) {
@@ -80,13 +85,13 @@ export function SpotlightTourOverlay({ targets }) {
     }
     scene.value = 0;
     scene.value = withTiming(1, { duration: DUR.screen, easing: EASE.enter });
-  }, [tour.active, tour.step, reduced, scene]);
+  }, [mine, tour.step, reduced, scene]);
   const sceneStyle = useAnimatedStyle(() => ({ opacity: scene.value }));
 
   // The ring breathes with the accent — alive, not a static border.
   const breathe = useSharedValue(0);
   useEffect(() => {
-    if (!tour.active || reduced) {
+    if (!mine || reduced) {
       return undefined;
     }
     breathe.value = withRepeat(
@@ -98,13 +103,13 @@ export function SpotlightTourOverlay({ targets }) {
       true,
     );
     return () => cancelAnimation(breathe);
-  }, [tour.active, reduced, breathe]);
+  }, [mine, reduced, breathe]);
   const ringStyle = useAnimatedStyle(() => ({
     opacity: 0.65 + 0.35 * breathe.value,
     transform: [{ scale: 1 + 0.012 * breathe.value }],
   }));
 
-  const step = tour.active ? tour.steps[tour.step] : null;
+  const step = mine ? tour.steps[tour.step] : null;
   const targetKey = step?.target ?? null;
   const r = targetKey ? (targets?.[targetKey] ?? null) : null;
 
@@ -115,12 +120,12 @@ export function SpotlightTourOverlay({ targets }) {
   const [graceOver, setGraceOver] = useState(false);
   useEffect(() => {
     setGraceOver(false);
-    if (!tour.active || !targetKey || r) {
+    if (!mine || !targetKey || r) {
       return undefined;
     }
     const id = setTimeout(() => setGraceOver(true), 900);
     return () => clearTimeout(id);
-  }, [tour.active, tour.step, targetKey, r]);
+  }, [mine, tour.step, targetKey, r]);
 
   // ── the self-driving clock ────────────────────────────────────────────
   // Each step holds for its dwell, then the tour moves on by itself. Holding
@@ -130,7 +135,7 @@ export function SpotlightTourOverlay({ targets }) {
   const paused = !!tour.paused;
   const leftRef = useRef(dwell);
   const fill = useSharedValue(0);
-  const stepKey = tour.active ? `${tour.id}:${tour.step}` : null;
+  const stepKey = mine ? `${tour.id}:${tour.step}` : null;
 
   useEffect(() => {
     leftRef.current = dwell;
@@ -141,7 +146,7 @@ export function SpotlightTourOverlay({ targets }) {
 
   const holding = paused || (!!targetKey && !r && !graceOver);
   useEffect(() => {
-    if (!tour.active || holding) {
+    if (!mine || holding) {
       return undefined;
     }
     const started = Date.now();
@@ -158,7 +163,7 @@ export function SpotlightTourOverlay({ targets }) {
       cancelAnimation(fill);
       leftRef.current = Math.max(0, remaining - (Date.now() - started));
     };
-  }, [tour.active, stepKey, holding, reduced, fill]);
+  }, [mine, stepKey, holding, reduced, fill]);
 
   const fillStyle = useAnimatedStyle(() => ({
     transform: [{ scaleX: fill.value }],
@@ -209,7 +214,7 @@ export function SpotlightTourOverlay({ targets }) {
     height: sh.value + 10,
   }));
 
-  if (!tour.active) {
+  if (!mine) {
     return null;
   }
 
