@@ -12,6 +12,7 @@ import {
   toggleTourPause,
   tourSeen,
 } from '../src/lib/spotlightTour';
+import { buildSettingsTour } from '../src/lib/tourSteps';
 import { storage } from '../src/storage/mmkv';
 
 const DEF = {
@@ -78,6 +79,26 @@ describe('spotlightTour engine', () => {
     expect(getTourState().paused).toBe(true);
     toggleTourPause();
     expect(getTourState().paused).toBe(false);
+  });
+
+  test('the settings tour walks the shelf: tap-to-expand, then the rows it opens', () => {
+    const { steps } = buildSettingsTour({ admin: true });
+    const expand = steps.findIndex(s => s.title === 'tap to expand');
+    expect(expand).toBeGreaterThan(-1);
+    // It shows the shelf CLOSED, and the very next step opens it — the tour
+    // acting out the tap rather than describing it.
+    expect(steps[expand].collapse).toBe(true);
+    expect(steps[expand + 1].open).toBe('settings');
+    // Each in-settings step points at its own control, never the whole block
+    // (a spotlight over everything highlights nothing).
+    for (const title of ['private session', 'family mode', 'notifications']) {
+      const s = steps.find(x => x.title === title);
+      expect(s.target).toBeTruthy();
+      expect(s.target).not.toBe('shelves');
+    }
+    // Targets are distinct, so consecutive steps actually move the spotlight.
+    const inSettings = steps.filter(s => s.open === 'settings').map(s => s.target);
+    expect(new Set(inSettings).size).toBe(inSettings.length);
   });
 
   test('dwell scales with the copy, within bounds, and honors an override', () => {

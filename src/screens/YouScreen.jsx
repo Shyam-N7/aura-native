@@ -344,7 +344,12 @@ export default function YouScreen({ navigation }) {
     autoStartTour: buildSettingsTour({ admin: isAdmin }),
     focused,
     onStep: step => {
-      if (step?.open) {
+      // The tour opens and closes the shelves itself — `collapse` shuts them
+      // so the "tap to expand" step can show the closed row, and the step
+      // after it opens the shelf, acting the tap out.
+      if (step?.collapse) {
+        setOpenShelf(null);
+      } else if (step?.open) {
         setOpenShelf(step.open);
       }
     },
@@ -826,6 +831,7 @@ export default function YouScreen({ navigation }) {
                 </View>
               </Shelf>
 
+              <View ref={anchorRef('settingsShelf')} collapsable={false}>
               <Shelf
                 title="settings"
                 open={openShelf === 'settings'}
@@ -1386,6 +1392,7 @@ export default function YouScreen({ navigation }) {
                   aura · phase 2
                 </Text>
               </Shelf>
+              </View>
             </View>
             </Arrive>
           )}

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { findNodeHandle } from 'react-native';
 import {
   getTourState,
   startTour,
@@ -78,12 +77,17 @@ export function useTourHost({
     let cancelled = false;
     const measure = () => {
       const node = anchors.current[key]?.current;
-      const rootNode = findNodeHandle(rootRef.current);
-      if (cancelled || !node?.measureLayout || rootNode == null) {
+      const root = rootRef.current;
+      if (cancelled || !node?.measureLayout || !root) {
         return;
       }
+      // The INSTANCE, never findNodeHandle(): on the new architecture
+      // measureLayout rejects a numeric handle outright and returns without
+      // calling either callback — which is exactly how every spotlight went
+      // missing (nothing highlighted, nothing scrolled, no error to show for
+      // it). Both are host components, so this resolves cleanly.
       node.measureLayout(
-        rootNode,
+        root,
         (x, y, width, height) => {
           if (!cancelled && width > 0 && height > 0) {
             setTargets(prev => ({ ...prev, [key]: { x, y, width, height } }));
@@ -106,23 +110,24 @@ export function useTourHost({
   return { anchorRef, rootRef, targets };
 }
 
-// Best-effort: bring the anchor into view before the spotlight lands. Any
+// Bring the anchor into view before the spotlight lands — the tour walks the
+// whole screen, so most steps live off-screen when their turn comes. Measured
+// against the scroller's INNER content view (getInnerViewRef), whose instance
+// measureLayout accepts; y then IS the content offset to scroll to. Any
 // failure is swallowed — the overlay falls back to a centered card.
 function scrollIntoView(scroller, node) {
   if (!scroller?.scrollTo || !node?.measureLayout) {
     return;
   }
   try {
-    const inner = scroller.getScrollableNode
-      ? findNodeHandle(scroller.getScrollableNode())
-      : findNodeHandle(scroller);
-    if (inner == null) {
+    const inner = scroller.getInnerViewRef?.();
+    if (!inner) {
       return;
     }
     node.measureLayout(
       inner,
       (_x, y) => {
-        scroller.scrollTo({ y: Math.max(0, y - 140), animated: true });
+        scroller.scrollTo({ y: Math.max(0, y - 190), animated: true });
       },
       () => {},
     );

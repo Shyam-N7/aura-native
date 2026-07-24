@@ -66,7 +66,9 @@ export function SpotlightTourOverlay({ targets }) {
   useEffect(() => subscribeTour(setTour), []);
   const [box, setBox] = useState(null);
 
-  // Through-fade on every step change (rects reposition while invisible).
+  // The card cross-fades on every step change; the spotlight itself GLIDES
+  // (below) rather than cutting, so the eye is led from one control to the
+  // next instead of having to re-find it.
   const scene = useSharedValue(0);
   useEffect(() => {
     if (!tour.active) {
@@ -162,6 +164,51 @@ export function SpotlightTourOverlay({ targets }) {
     transform: [{ scaleX: fill.value }],
   }));
 
+  // ── the gliding spotlight ─────────────────────────────────────────────
+  // The window travels to each new element instead of cutting: the four dim
+  // slabs and the ring all read from one animated rect, so the bright area
+  // slides and resizes as one piece and the eye is led to the next control.
+  // The first landing snaps (nothing to travel from); every later step eases.
+  const sx = useSharedValue(0);
+  const sy = useSharedValue(0);
+  const sw = useSharedValue(0);
+  const sh = useSharedValue(0);
+  const litRef = useRef(false);
+  useEffect(() => {
+    if (!r) {
+      litRef.current = false;
+      return;
+    }
+    const glide = v =>
+      litRef.current && !reduced
+        ? withTiming(v, { duration: 460, easing: EASE.settle })
+        : v;
+    sx.value = glide(r.x);
+    sy.value = glide(r.y);
+    sw.value = glide(r.width);
+    sh.value = glide(r.height);
+    litRef.current = true;
+  }, [r, reduced, sx, sy, sw, sh]);
+
+  const topSlab = useAnimatedStyle(() => ({ height: Math.max(0, sy.value) }));
+  const bottomSlab = useAnimatedStyle(() => ({ top: sy.value + sh.value }));
+  const leftSlab = useAnimatedStyle(() => ({
+    top: sy.value,
+    height: sh.value,
+    width: Math.max(0, sx.value),
+  }));
+  const rightSlab = useAnimatedStyle(() => ({
+    top: sy.value,
+    height: sh.value,
+    left: sx.value + sw.value,
+  }));
+  const ringBox = useAnimatedStyle(() => ({
+    left: sx.value - 5,
+    top: sy.value - 5,
+    width: sw.value + 10,
+    height: sh.value + 10,
+  }));
+
   if (!tour.active) {
     return null;
   }
@@ -188,35 +235,23 @@ export function SpotlightTourOverlay({ targets }) {
         <Animated.View pointerEvents="none" style={[styles.fill, sceneStyle]}>
           {r ? (
             <>
-              {/* Four dim slabs leave a bright window over the element. */}
-              <View style={[styles.slab, styles.hEdge, { height: r.y }]} />
-              <View
-                style={[styles.slab, styles.hEdge, styles.bottom, { top: r.y + r.height }]}
+              {/* Four dim slabs leave a bright window over the element —
+                  animated as one piece so the window glides between steps. */}
+              <Animated.View style={[styles.slab, styles.hEdge, topSlab]} />
+              <Animated.View
+                style={[styles.slab, styles.hEdge, styles.bottom, bottomSlab]}
               />
-              <View
-                style={[
-                  styles.slab,
-                  styles.edgeLeft,
-                  { top: r.y, height: r.height, width: r.x },
-                ]}
+              <Animated.View
+                style={[styles.slab, styles.edgeLeft, leftSlab]}
               />
-              <View
-                style={[
-                  styles.slab,
-                  styles.edgeRight,
-                  { top: r.y, height: r.height, left: r.x + r.width },
-                ]}
+              <Animated.View
+                style={[styles.slab, styles.edgeRight, rightSlab]}
               />
               <Animated.View
                 style={[
                   styles.ring,
-                  {
-                    left: r.x - 5,
-                    top: r.y - 5,
-                    width: r.width + 10,
-                    height: r.height + 10,
-                    borderColor: t.accent,
-                  },
+                  { borderColor: t.accent },
+                  ringBox,
                   ringStyle,
                 ]}
               />

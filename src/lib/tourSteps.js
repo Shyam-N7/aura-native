@@ -89,6 +89,12 @@ export function buildSettingsTour({ admin = false } = {}) {
       body: 'pick the languages you want more of in your recommendations.',
     },
     {
+      target: 'settingsShelf',
+      collapse: true,
+      title: 'tap to expand',
+      body: 'every shelf opens like this — settings is the big one.',
+    },
+    {
       target: 'photo',
       open: 'settings',
       title: 'settings',
