@@ -16,7 +16,6 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { useIsFocused } from '@react-navigation/native';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -35,10 +34,6 @@ import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
 import { getPushPrefs, setPushPrefs } from '../lib/push';
 import { confirm } from '../lib/confirm';
-import { SpotlightTourOverlay } from '../components/ui/SpotlightTourOverlay';
-import { useTourHost } from '../lib/useTourHost';
-import { startTour } from '../lib/spotlightTour';
-import { HOME_TOUR, buildSettingsTour } from '../lib/tourSteps';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
 import { openWhatsNew } from '../lib/whatsNew';
@@ -334,28 +329,6 @@ export default function YouScreen({ navigation }) {
   // the allowlist server-side regardless.
   const isAdmin = !!user?.admin;
 
-  // First-visit guided tour — spotlights the you-screen sections once,
-  // replayable from the guides rows below. Steps carry an `open` shelf the
-  // host expands before measuring.
-  const scrollRef = useRef(null);
-  const focused = useIsFocused();
-  const { anchorRef, rootRef, targets } = useTourHost({
-    scrollRef,
-    tourId: 'settings',
-    autoStartTour: buildSettingsTour({ admin: isAdmin }),
-    focused,
-    onStep: step => {
-      // The tour opens and closes the shelves itself — `collapse` shuts them
-      // so the "tap to expand" step can show the closed row, and the step
-      // after it opens the shelf, acting the tap out.
-      if (step?.collapse) {
-        setOpenShelf(null);
-      } else if (step?.open) {
-        setOpenShelf(step.open);
-      }
-    },
-  });
-
   // Profile photo — upload (picker delivers it pre-resized) or remove; the
   // cached user updates via persistUser so every avatar on screen refreshes.
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -539,15 +512,10 @@ export default function YouScreen({ navigation }) {
   );
 
   return (
-    <View
-      ref={rootRef}
-      collapsable={false}
-      style={[styles.root, { backgroundColor: t.bg }]}
-    >
+    <View style={[styles.root, { backgroundColor: t.bg }]}>
       <TopBar navigation={navigation} />
       <ScreenFade>
         <BounceScrollView
-          ref={scrollRef}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
@@ -586,11 +554,7 @@ export default function YouScreen({ navigation }) {
 
           {/* The written-about-you pair: journal + sonic dna. */}
           <Arrive i={1}>
-          <View
-            ref={anchorRef('duo')}
-            collapsable={false}
-            style={styles.duoRow}
-          >
+          <View style={styles.duoRow}>
             <PressScale
               accessibilityRole="button"
               accessibilityLabel="your journal"
@@ -626,7 +590,6 @@ export default function YouScreen({ navigation }) {
 
           {/* Mood bridges — gradual paths between feelings. */}
           <Arrive i={2}>
-          <View ref={anchorRef('bridges')} collapsable={false}>
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="mood bridges"
@@ -645,7 +608,6 @@ export default function YouScreen({ navigation }) {
               read you.
             </Text>
           </PressScale>
-          </View>
           </Arrive>
 
           {!loaded ? (
@@ -654,11 +616,7 @@ export default function YouScreen({ navigation }) {
             </View>
           ) : (
             <Arrive i={3}>
-            <View
-              ref={anchorRef('shelves')}
-              collapsable={false}
-              style={styles.shelves}
-            >
+            <View style={styles.shelves}>
               <Shelf
                 title="liked songs"
                 open={openShelf === 'liked'}
@@ -832,7 +790,6 @@ export default function YouScreen({ navigation }) {
                 </View>
               </Shelf>
 
-              <View ref={anchorRef('settingsShelf')} collapsable={false}>
               <Shelf
                 title="settings"
                 open={openShelf === 'settings'}
@@ -842,11 +799,7 @@ export default function YouScreen({ navigation }) {
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   profile photo
                 </Text>
-                <View
-                  ref={anchorRef('photo')}
-                  collapsable={false}
-                  style={styles.photoRow}
-                >
+                <View style={styles.photoRow}>
                   <Avatar user={user} size={44} />
                   <Text
                     style={[styles.qualityCaption, styles.photoCaption, { color: t.inkSoft }]}
@@ -891,8 +844,6 @@ export default function YouScreen({ navigation }) {
                   privacy
                 </Text>
                 <Pressable
-                  ref={anchorRef('privateSession')}
-                  collapsable={false}
                   accessibilityRole="button"
                   accessibilityLabel="private session"
                   accessibilityState={priv ? { selected: true } : {}}
@@ -930,8 +881,6 @@ export default function YouScreen({ navigation }) {
                   family mode
                 </Text>
                 <Pressable
-                  ref={anchorRef('familyMode')}
-                  collapsable={false}
                   accessibilityRole="button"
                   accessibilityLabel="family mode"
                   accessibilityState={familyOn ? { selected: true } : {}}
@@ -1046,11 +995,7 @@ export default function YouScreen({ navigation }) {
                   />
                 </Pressable>
 
-                <Text
-                  ref={anchorRef('notifications')}
-                  collapsable={false}
-                  style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
-                >
+                <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   notifications
                 </Text>
                 {[
@@ -1119,8 +1064,6 @@ export default function YouScreen({ navigation }) {
                       admin
                     </Text>
                     <Pressable
-                      ref={anchorRef('admin')}
-                      collapsable={false}
                       accessibilityRole="button"
                       accessibilityLabel="send a notification"
                       onPress={() => navigation.navigate('AdminCompose')}
@@ -1245,52 +1188,6 @@ export default function YouScreen({ navigation }) {
                   </View>
                 </Pressable>
 
-                {/* Replay the guided tours (they auto-show once on first visit). */}
-                <Text
-                  style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
-                >
-                  guides
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="home tour"
-                  onPress={() => {
-                    navigation.navigate('Home');
-                    setTimeout(() => startTour(HOME_TOUR), 450);
-                  }}
-                  style={({ pressed }) => [
-                    styles.qualityRow,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.rowMeta}>
-                    <Text style={[styles.rowTitle, { color: t.ink }]}>
-                      home tour
-                    </Text>
-                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                      a quick spotlight walk through the home screen.
-                    </Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="settings tour"
-                  onPress={() => startTour(buildSettingsTour({ admin: isAdmin }))}
-                  style={({ pressed }) => [
-                    styles.qualityRow,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.rowMeta}>
-                    <Text style={[styles.rowTitle, { color: t.ink }]}>
-                      settings tour
-                    </Text>
-                    <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                      walk through everything on this screen again.
-                    </Text>
-                  </View>
-                </Pressable>
-
                 <Text
                   style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
                 >
@@ -1393,7 +1290,6 @@ export default function YouScreen({ navigation }) {
                   aura · phase 2
                 </Text>
               </Shelf>
-              </View>
             </View>
             </Arrive>
           )}
@@ -1413,7 +1309,6 @@ export default function YouScreen({ navigation }) {
           </Animated.View>
         </BounceScrollView>
       </ScreenFade>
-      {focused && <SpotlightTourOverlay tourId="settings" targets={targets} />}
     </View>
   );
 }
