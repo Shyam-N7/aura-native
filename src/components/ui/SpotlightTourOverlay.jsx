@@ -40,23 +40,54 @@ import { DUR, EASE } from '../../theme/motion';
 
 const DIM = 0.5;
 const GAP = 14; // card distance from the spotlight
-const CARD_EST = 172; // rough card height for below/above placement
-const SAFE_BOTTOM = 96; // keep the card clear of the dock area
+const CARD_EST = 200; // first-frame guess, replaced by the measured height
+const SAFE_TOP = 44;
+const SAFE_BOTTOM = 104; // keep the card clear of the dock area
 
-function cardTop(r, box) {
+// Trim the element's rect to what's actually ON SCREEN. A tall section (the
+// quick-picks wheel, tonight's set) can run past the viewport, and an outline
+// drawn around the whole thing spills off the display and reads as broken —
+// the ring should mark the visible part and nothing more.
+function visibleRect(r, box) {
+  if (!r || !box) {
+    return r ?? null;
+  }
+  const top = Math.max(0, r.y);
+  const left = Math.max(0, r.x);
+  const bottom = Math.min(box.height, r.y + r.height);
+  const right = Math.min(box.width, r.x + r.width);
+  if (bottom - top < 8 || right - left < 8) {
+    return null; // off-screen — the step falls back to a centered card
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+// Place the card with its REAL height (measured), never a guess, and always
+// fully on screen: below the spotlight when it fits, above when it doesn't,
+// and clamped into the safe band either way. A card pushed under the dock —
+// or past the bottom edge — takes skip/next with it (field report: the middle
+// steps "disappeared fully").
+function cardPlace(r, box, h) {
   if (!box) {
     return { bottom: 140 };
   }
-  const centerTop = Math.max(40, box.height / 2 - CARD_EST / 2);
+  const maxTop = Math.max(SAFE_TOP, box.height - SAFE_BOTTOM - h);
+  const clamp = v => Math.max(SAFE_TOP, Math.min(maxTop, v));
   if (!r) {
-    return { top: centerTop };
+    return { top: clamp(box.height / 2 - h / 2) };
   }
   const below = r.y + r.height + GAP;
-  if (below + CARD_EST <= box.height - SAFE_BOTTOM) {
+  if (below <= maxTop) {
     return { top: below };
   }
-  const above = r.y - GAP - CARD_EST;
-  return { top: above >= 40 ? above : centerTop };
+  const above = r.y - GAP - h;
+  if (above >= SAFE_TOP) {
+    return { top: above };
+  }
+  // The lit area leaves no room on either side — take the roomier side.
+  const roomAbove = r.y;
+  const roomBelow = box.height - (r.y + r.height);
+  return { top: roomAbove > roomBelow ? SAFE_TOP : maxTop };
 }
 
 // `tourId` is the tour THIS screen owns. Tour state is global (one engine, any
@@ -111,7 +142,13 @@ export function SpotlightTourOverlay({ tourId, targets }) {
 
   const step = mine ? tour.steps[tour.step] : null;
   const targetKey = step?.target ?? null;
-  const r = targetKey ? (targets?.[targetKey] ?? null) : null;
+  // Clamped to the viewport: the outline marks the VISIBLE part of a tall
+  // section, never a box running off the display.
+  const rawRect = targetKey ? (targets?.[targetKey] ?? null) : null;
+  const r = visibleRect(rawRect, box);
+
+  // The card's real height, measured — placement never trusts a guess.
+  const [cardH, setCardH] = useState(CARD_EST);
 
   // A step that wants an anchor but hasn't measured it yet gets a short grace
   // window to appear (scroll-into-view, shelf opening). If it still hasn't
@@ -179,8 +216,15 @@ export function SpotlightTourOverlay({ tourId, targets }) {
   const sw = useSharedValue(0);
   const sh = useSharedValue(0);
   const litRef = useRef(false);
+  const rRef = useRef(r);
+  rRef.current = r;
+  // Keyed by the rect's VALUES, not its identity — re-measures land a fresh
+  // (but equal) object every pass, and restarting the glide on each would
+  // stutter the travel mid-flight.
+  const rectKey = r ? `${r.x},${r.y},${r.width},${r.height}` : null;
   useEffect(() => {
-    if (!r) {
+    const rect = rRef.current;
+    if (!rect) {
       litRef.current = false;
       return;
     }
@@ -188,12 +232,12 @@ export function SpotlightTourOverlay({ tourId, targets }) {
       litRef.current && !reduced
         ? withTiming(v, { duration: 460, easing: EASE.settle })
         : v;
-    sx.value = glide(r.x);
-    sy.value = glide(r.y);
-    sw.value = glide(r.width);
-    sh.value = glide(r.height);
+    sx.value = glide(rect.x);
+    sy.value = glide(rect.y);
+    sw.value = glide(rect.width);
+    sh.value = glide(rect.height);
     litRef.current = true;
-  }, [r, reduced, sx, sy, sw, sh]);
+  }, [rectKey, reduced, sx, sy, sw, sh]);
 
   const topSlab = useAnimatedStyle(() => ({ height: Math.max(0, sy.value) }));
   const bottomSlab = useAnimatedStyle(() => ({ top: sy.value + sh.value }));
@@ -222,7 +266,7 @@ export function SpotlightTourOverlay({ tourId, targets }) {
   const last = tour.step >= total - 1;
   // Still trying to measure the anchor — hold the card back a beat.
   const measuring = !!targetKey && !r && !graceOver;
-  const pos = cardTop(r, box);
+  const pos = cardPlace(r, box, cardH);
 
   return (
     <View
@@ -271,6 +315,7 @@ export function SpotlightTourOverlay({ tourId, targets }) {
         <Animated.View
           accessible
           accessibilityLabel={`${step.title}. ${step.body}`}
+          onLayout={e => setCardH(e.nativeEvent.layout.height)}
           style={[styles.cardWrap, pos, sceneStyle]}
           pointerEvents="box-none"
         >
