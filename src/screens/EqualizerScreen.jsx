@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  Vibration,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { PressScale } from '../components/ui/PressScale';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
+import { PickerPopup } from '../components/ui/PickerPopup';
 import { EqFader } from '../components/ui/EqFader';
 import { Icon } from '../components/Icon';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -72,14 +80,25 @@ export default function EqualizerScreen({ navigation }) {
     setEnabled(true);
   };
 
-  // Tapping the "applies to" line cycles which profile is being edited, and
-  // pins it — routing on OEM ROMs isn't perfectly reportable, so there's
-  // always a manual lever.
-  const cycleOutput = () => {
-    const i = OUTPUTS.indexOf(eq.output);
-    const next = OUTPUTS[(i + 1) % OUTPUTS.length];
-    pinOutput(next === eq.detectedOutput ? null : next);
-  };
+  // Which profile is being edited. "automatic" follows the live route (the
+  // point of per-output profiles); the three explicit choices pin one, because
+  // routing on OEM ROMs isn't perfectly reportable and there has to be a lever
+  // when the phone gets it wrong.
+  const [pickOutput, setPickOutput] = useState(false);
+  const outputOptions = [
+    {
+      id: null,
+      label: 'automatic',
+      caption: `follows what you're listening on — ${
+        OUT_LABEL[eq.detectedOutput] ?? eq.detectedOutput
+      } right now`,
+    },
+    ...OUTPUTS.map(id => ({
+      id,
+      label: OUT_LABEL[id] ?? id,
+      caption: id === eq.detectedOutput ? 'in use now' : undefined,
+    })),
+  ];
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
@@ -168,7 +187,10 @@ export default function EqualizerScreen({ navigation }) {
                       key={p.id}
                       accessibilityRole="button"
                       accessibilityLabel={`preset ${p.name}`}
-                      onPress={() => applyPreset(p.id)}
+                      onPress={() => {
+                        Vibration.vibrate(8);
+                        applyPreset(p.id);
+                      }}
                       disabled={!on}
                     >
                       <View
@@ -204,7 +226,10 @@ export default function EqualizerScreen({ navigation }) {
                       key={v}
                       accessibilityRole="button"
                       accessibilityLabel={`bass boost ${v / 10} percent`}
-                      onPress={() => setBassBoost(v)}
+                      onPress={() => {
+                        Vibration.vibrate(8);
+                        setBassBoost(v);
+                      }}
                       disabled={!on}
                     >
                       <View
@@ -236,7 +261,7 @@ export default function EqualizerScreen({ navigation }) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="which output this profile applies to"
-                onPress={cycleOutput}
+                onPress={() => setPickOutput(true)}
                 style={styles.row}
               >
                 <View style={styles.rowMeta}>
@@ -245,8 +270,8 @@ export default function EqualizerScreen({ navigation }) {
                     {eq.pinned ? ' (pinned)' : ''}
                   </Text>
                   <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
-                    speaker and earphones remember separate settings. tap to
-                    switch.
+                    speaker, earphones and bluetooth each remember their own
+                    settings. tap to choose.
                   </Text>
                 </View>
                 <Icon name="chevron-right" size={18} color={t.inkFaint} />
@@ -255,6 +280,15 @@ export default function EqualizerScreen({ navigation }) {
           )}
         </ScrollView>
       </ScreenFade>
+
+      <PickerPopup
+        visible={pickOutput}
+        title="tune for"
+        options={outputOptions}
+        selected={eq.pinned ? eq.output : null}
+        onSelect={pinOutput}
+        onClose={() => setPickOutput(false)}
+      />
 
       <ConfirmPopup
         visible={ask}

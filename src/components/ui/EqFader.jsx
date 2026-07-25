@@ -1,8 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -48,6 +49,34 @@ export function EqFader({
 
   const commit = mb => onChange?.(mb);
 
+  // The number follows the finger, and each whole decibel ticks. Both are
+  // driven off ONE reaction that only fires when the DISPLAYED dB changes —
+  // not per frame — so a drag never floods JS (the same trick the player's
+  // scrub timer uses) and the haptics land one per step instead of a buzz.
+  const [liveDb, setLiveDb] = React.useState(null);
+  const step = db => {
+    setLiveDb(db);
+    Vibration.vibrate(4);
+  };
+  const endLive = () => setLiveDb(null);
+  useAnimatedReaction(
+    () =>
+      dragging.value
+        ? Math.round((max - (y.value / (TRACK_H - KNOB)) * span) / 100)
+        : null,
+    (db, prev) => {
+      if (db === prev) {
+        return;
+      }
+      if (db == null) {
+        runOnJS(endLive)();
+      } else {
+        runOnJS(step)(db);
+      }
+    },
+    [min, max],
+  );
+
   const pan = Gesture.Pan()
     .enabled(!disabled)
     .minDistance(0)
@@ -77,6 +106,8 @@ export function EqFader({
       'worklet';
       y.value = withTiming(toY(0), { duration: 200, easing: EASE.settle });
       runOnJS(commit)(0);
+      // A firmer tick than a drag step — the band snapped back to flat.
+      runOnJS(Vibration.vibrate)(12);
     });
 
   const knobStyle = useAnimatedStyle(() => ({
@@ -90,13 +121,16 @@ export function EqFader({
     return { top, height: Math.abs(y.value - mid) };
   });
 
-  const db = Math.round(value / 100);
+  // While dragging, the live value wins — the label is the readout.
+  const db = liveDb ?? Math.round(value / 100);
+  const live = liveDb != null;
   return (
     <View style={styles.wrap}>
       <Text
         style={[
           styles.db,
-          { color: db === 0 ? t.inkFaint : t.accent },
+          { color: db === 0 && !live ? t.inkFaint : t.accent },
+          live && styles.dbLive,
           disabled && styles.dim,
         ]}
       >
@@ -157,6 +191,9 @@ const styles = StyleSheet.create({
     borderWidth: 3,
   },
   db: { fontFamily: fonts.medium, fontSize: 11.5 },
+  // The readout grows a touch under the finger so the number you're setting
+  // stands out from its four neighbours.
+  dbLive: { fontFamily: fonts.semibold, fontSize: 13.5 },
   label: { fontFamily: fonts.regular, fontSize: 11 },
   dim: { opacity: 0.4 },
 });
