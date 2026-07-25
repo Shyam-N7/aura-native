@@ -42,6 +42,10 @@ const ICONS = {
     thick: true,
   },
   plus: { d: 'M12 5 v14 M5 12 h14' },
+  // share (tray with the arrow leaving it) — track/moment/lyric share rows.
+  share: {
+    d: 'M4 12 v7 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 v-7 M16 6 l-4 -4 -4 4 M12 2 v13',
+  },
   'queue-add': { d: 'M4 6 h16 M4 12 h16 M4 18 h7 M17.5 15 v6 M14.5 18 h6' },
   heart: { d: HEART_D },
   'heart-filled': { d: HEART_D, fill: true },

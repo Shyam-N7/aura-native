@@ -563,6 +563,10 @@ export function PlayerProvider({ children }) {
     [enqueueOp],
   );
 
+  // The live position, on demand — for flows that need "where am I right now"
+  // once (share-this-moment), not a stream of progress events.
+  const getPositionSec = useCallback(() => engine.getPosition(), []);
+
   const jumpTo = useCallback(
     i => {
       userActedRef.current = true;
@@ -1127,6 +1131,7 @@ export function PlayerProvider({ children }) {
       next,
       prev,
       seekTo,
+      getPositionSec,
       jumpTo,
       removeAt,
       reorder,
@@ -1158,6 +1163,7 @@ export function PlayerProvider({ children }) {
       next,
       prev,
       seekTo,
+      getPositionSec,
       jumpTo,
       removeAt,
       reorder,

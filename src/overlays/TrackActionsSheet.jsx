@@ -10,6 +10,7 @@ import {
 } from '../lib/trackActionsSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { openWhy } from '../lib/whySheet';
+import { shareTrack } from '../lib/share';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
 import { Sheet } from '../components/ui/Sheet';
@@ -99,6 +100,14 @@ export function TrackActionsSheet() {
           showToast("couldn't like — try again.");
         });
       },
+    });
+  }
+  if (!omit.includes('share')) {
+    items.push({
+      id: 'share',
+      icon: 'share',
+      label: 'share song',
+      run: () => shareTrack(track),
     });
   }
   if (!omit.includes('why')) {

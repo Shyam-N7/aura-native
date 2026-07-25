@@ -10,7 +10,8 @@ import {
   useNavigationContainerRef,
 } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
-import { PlayerProvider } from './src/playback/PlayerContext';
+import { PlayerProvider, usePlayer } from './src/playback/PlayerContext';
+import { getTrack } from './src/api/catalog';
 import { acceptPlaylistInvite } from './src/api/playlists';
 import { showToast } from './src/lib/toast';
 import { PlayerSheet } from './src/overlays/PlayerSheet';
@@ -67,6 +68,12 @@ function Shell() {
   const [flow, setFlow] = useState(() => computeFlow(getUser()));
   const lastUid = useRef(getUser()?.id ?? null);
   const navRef = useNavigationContainerRef();
+  // handleLink must stay referentially stable (the push effect tears down and
+  // re-inits FCM when it changes), so the player is reached through a ref
+  // rather than a dependency.
+  const player = usePlayer();
+  const playerRef = useRef(player);
+  playerRef.current = player;
   useEffect(
     () =>
       subscribeAuth(() => {
@@ -131,6 +138,27 @@ function Shell() {
         if (publicId) {
           navRef.navigate('Playlist', { publicId });
         }
+        return;
+      }
+      // Shared song links: /t/<id>, optionally ?at=<sec> for a moment. Fetch,
+      // play, seek — the seek rides the player's op queue, so it lands after
+      // the load it belongs to.
+      if (parsed.pathname.startsWith('/t/')) {
+        const trackId = parsed.pathname.slice(3).split('/')[0];
+        if (!trackId) {
+          return;
+        }
+        const at = Number(parsed.searchParams.get('at'));
+        getTrack(trackId)
+          .then(track => {
+            const p = playerRef.current;
+            p.playTrack(track, { source: 'shared with you' });
+            if (Number.isFinite(at) && at > 0) {
+              p.seekTo(at);
+            }
+            p.ui?.openPlayer?.();
+          })
+          .catch(() => showToast("couldn't open that song."));
       }
     },
     [navRef],

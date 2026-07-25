@@ -45,6 +45,7 @@ import {
 import { HINT_KARAOKE, HINT_STAGE_TAP, markHintDone } from '../lib/hints';
 import { useHintActive } from '../hooks/useHintActive';
 import { cleanLyric, cleanTitle } from '../utils/title';
+import { shareLyric } from '../lib/share';
 import { HeartButton } from '../components/player/HeartButton';
 import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
@@ -140,6 +141,7 @@ const LyricLine = memo(function LyricLine({
   inkSoft,
   inkFaint,
   onPressLine,
+  onLongPressLine,
   onLayoutLine,
 }) {
   const ty = useSharedValue(state === 'past' ? -2 : state === 'active' ? 0 : 6);
@@ -191,6 +193,8 @@ const LyricLine = memo(function LyricLine({
       accessibilityRole="button"
       accessibilityLabel={text}
       onPress={() => onPressLine(line)}
+      onLongPress={() => onLongPressLine?.(line)}
+      delayLongPress={350}
       onLayout={e => onLayoutLine(realIdx, e.nativeEvent.layout.y)}
     >
       <Animated.Text
@@ -221,8 +225,16 @@ function SyncedView({
   inkSoft,
   inkFaint,
   onSeekLine,
+  onShareLine,
   onWakeScroll,
 }) {
+  // Stable per view-toggle, so the LyricLine memo keeps holding under the
+  // 4Hz position ticker.
+  const onLongPressLine = useCallback(
+    l =>
+      onShareLine?.(cleanLyric(view === 'en' && l.line_en ? l.line_en : l.line)),
+    [onShareLine, view],
+  );
   const activeIdx = useMemo(
     () => activeIndexFor(lines, seconds),
     [lines, seconds],
@@ -314,6 +326,7 @@ function SyncedView({
               inkSoft={inkSoft}
               inkFaint={inkFaint}
               onPressLine={onSeekLine}
+              onLongPressLine={onLongPressLine}
               onLayoutLine={onLayoutLine}
             />
             {showMarkAfter && <GapMark accent={accent} reduced={reduced} />}
@@ -327,7 +340,7 @@ function SyncedView({
 
 // Plain (untimed) lyrics — no active highlight, tap-to-seek, or gap marks:
 // just a readable column that still honours the english ⇄ original toggle.
-function PlainView({ lines, view, inkSoft, inkFaint, onWakeScroll }) {
+function PlainView({ lines, view, inkSoft, inkFaint, onShareLine, onWakeScroll }) {
   const lineFor = l => cleanLyric(view === 'en' && l.line_en ? l.line_en : l.line);
   return (
     <ScrollView
@@ -339,9 +352,15 @@ function PlainView({ lines, view, inkSoft, inkFaint, onWakeScroll }) {
       {lines
         .filter(l => l.line)
         .map((l, i) => (
-          <Text key={i} style={[styles.plainLine, { color: inkSoft }]}>
-            {lineFor(l)}
-          </Text>
+          <Pressable
+            key={i}
+            onLongPress={() => onShareLine?.(lineFor(l))}
+            delayLongPress={350}
+          >
+            <Text style={[styles.plainLine, { color: inkSoft }]}>
+              {lineFor(l)}
+            </Text>
+          </Pressable>
         ))}
       <Text style={[styles.plainCaption, { color: inkFaint }]}>
         these lyrics aren't synced to the music.
@@ -968,6 +987,8 @@ export function LyricsOverlay() {
     },
     [seekTo],
   );
+  // Hold a line to send it on — quoted, credited, linked (lib/share).
+  const shareLine = useCallback(text => shareLyric(track, text), [track]);
   // The karaoke stage's tap-to-play/pause, behind the same wake guard.
   // Actually toggling is the moment the gesture counts as learned.
   const togglePlay = player.togglePlay;
@@ -1373,6 +1394,7 @@ export function LyricsOverlay() {
                 inkSoft={t.inkSoft}
                 inkFaint={t.inkFaint}
                 onSeekLine={onSeekLine}
+                onShareLine={shareLine}
                 onWakeScroll={wake}
               />
             ))}
@@ -1383,6 +1405,7 @@ export function LyricsOverlay() {
               view={effectiveView}
               inkSoft={t.inkSoft}
               inkFaint={t.inkFaint}
+              onShareLine={shareLine}
               onWakeScroll={wake}
             />
           )}

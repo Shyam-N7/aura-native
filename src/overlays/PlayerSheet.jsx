@@ -40,6 +40,7 @@ import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { openQualitySheet } from '../lib/qualitySheet';
+import { shareMoment, shareTrack } from '../lib/share';
 import {
   HINT_LIKE,
   HINT_NEXT,
@@ -150,6 +151,20 @@ function PlayerMenuSheet({
         icon="grip"
         label="open queue"
         onPress={act(() => player.ui?.openQueue?.())}
+      />
+      <SheetRow
+        icon="share"
+        label="share song"
+        onPress={act(() => shareTrack(player.current))}
+      />
+      <SheetRow
+        icon="share"
+        label="share from here"
+        onPress={act(async () => {
+          const track = player.current;
+          const sec = await player.getPositionSec().catch(() => 0);
+          shareMoment(track, sec);
+        })}
       />
       <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
       <SheetRow

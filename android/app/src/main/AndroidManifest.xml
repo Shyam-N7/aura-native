@@ -57,6 +57,7 @@
             <data android:scheme="https" />
             <data android:host="www.aurafm.live" />
             <data android:pathPrefix="/p/" />
+            <data android:pathPrefix="/t/" />
             <data android:path="/playlists" />
         </intent-filter>
         <!-- Bare apex 308-redirects to www, and Digital Asset Links
@@ -70,6 +71,7 @@
             <data android:scheme="https" />
             <data android:host="aurafm.live" />
             <data android:pathPrefix="/p/" />
+            <data android:pathPrefix="/t/" />
             <data android:path="/playlists" />
         </intent-filter>
       </activity>
