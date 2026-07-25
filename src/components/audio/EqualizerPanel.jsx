@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -15,7 +16,6 @@ import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts, label } from '../../theme/tokens';
 import { storage } from '../../storage/mmkv';
-import { showToast } from '../../lib/toast';
 import {
   OUTPUTS,
   PRESETS,
@@ -39,13 +39,21 @@ import {
 } from '../../lib/eqPresets';
 
 // The equalizer's whole control surface, container-agnostic: the settings
-// SCREEN wraps it in a scroller with a header, and the player opens it as a
-// POPUP over the music so a tweak mid-song never navigates away. Everything
-// here is built from what the DEVICE reported (band count, frequencies, dB
-// range), so it's correct on any phone.
+// SCREEN wraps it with a header, and the player opens it as a POPUP over the
+// music so a tweak mid-song never navigates away.
+//
+// Nothing here scrolls. The faders are the page; presets, bass boost and the
+// output profile are one button each, opening a popup — so every option is a
+// single tap away and a swipe anywhere is always a fader drag, never a fight
+// with a scroller.
 
 const WARN_KEY = 'aura.eqWarnOff'; // "don't ask again" for the warn popup
 const OUT_LABEL = { speaker: 'speaker', wired: 'earphones', bluetooth: 'bluetooth' };
+
+const BASS_LEVELS = [0, 250, 500, 750, 1000].map(v => ({
+  id: v,
+  label: v === 0 ? 'off' : `${v / 10}%`,
+}));
 
 function hzLabel(hz) {
   return hz >= 1000 ? `${Math.round(hz / 100) / 10}k` : `${hz}`;
@@ -66,9 +74,13 @@ export function EqualizerPanel() {
 
   const [ask, setAsk] = useState(false);
   const [dontAsk, setDontAsk] = useState(false);
-  const [pickOutput, setPickOutput] = useState(false);
+  // Which picker is open — 'presets' | 'bass' | 'output' | null. One value,
+  // so two popups can never fight over the screen.
+  const [open, setOpen] = useState(null);
   const [naming, setNaming] = useState(false);
   const [newName, setNewName] = useState('');
+  // Save problems surface INLINE: a toast would render behind the open Modal.
+  const [saveError, setSaveError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   const on = eq.enabled;
@@ -99,27 +111,35 @@ export function EqualizerPanel() {
     setEnabled(true);
   };
 
+  const closePresets = () => {
+    setOpen(null);
+    setNaming(false);
+    setNewName('');
+    setSaveError(null);
+  };
+
   const saveCurrent = () => {
     const name = newName.trim();
     if (!name) {
       return;
     }
     if (usable.length >= MAX_PRESETS) {
-      showToast(`that's the limit — ${MAX_PRESETS} saved settings.`);
+      setSaveError(`that's the limit — ${MAX_PRESETS} saved settings.`);
       return;
     }
     if (mine.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      showToast('you already have one by that name.');
+      setSaveError('you already have one by that name.');
       return;
     }
     if (!saveEqUserPreset(name, eq.gains)) {
-      showToast("couldn't save that one.");
+      setSaveError("couldn't save that one.");
       return;
     }
+    // Feedback is the chip appearing right above, plus a tick.
     Vibration.vibrate(8);
-    showToast(`saved "${name}".`, { tick: true });
     setNewName('');
     setNaming(false);
+    setSaveError(null);
   };
 
   const outputOptions = [
@@ -133,7 +153,10 @@ export function EqualizerPanel() {
     ...OUTPUTS.map(id => ({
       id,
       label: OUT_LABEL[id] ?? id,
-      caption: id === eq.detectedOutput ? 'in use now' : undefined,
+      caption:
+        id === eq.detectedOutput
+          ? 'in use now'
+          : 'keeps its own settings',
     })),
   ];
 
@@ -169,6 +192,39 @@ export function EqualizerPanel() {
       </View>
     </PressScale>
   );
+
+  // The three options as full-width buttons: name on the left, the current
+  // value on the right, a tap opens the matching popup.
+  const pickBtn = (key, title, value, popup) => (
+    <PressScale
+      key={key}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}: ${value}`}
+      onPress={() => setOpen(popup)}
+      disabled={!on}
+    >
+      <View style={[styles.btn, { borderColor: t.line }, !on && styles.dim]}>
+        <Text style={[styles.btnTitle, { color: t.inkSoft }]}>{title}</Text>
+        <View style={styles.btnValue}>
+          <Text
+            numberOfLines={1}
+            style={[styles.btnValueText, { color: t.ink }]}
+          >
+            {value}
+          </Text>
+          <Icon name="chevron-right" size={16} color={t.inkFaint} />
+        </View>
+      </View>
+    </PressScale>
+  );
+
+  const presetName =
+    activeMine?.name ??
+    PRESETS.find(p => p.id === activePreset)?.name ??
+    'custom';
+  const bassLabel = eq.bassBoost === 0 ? 'off' : `${eq.bassBoost / 10}%`;
+  const outputLabel =
+    (OUT_LABEL[eq.output] ?? eq.output) + (eq.pinned ? ' · pinned' : '');
 
   return (
     <View>
@@ -214,140 +270,168 @@ export function EqualizerPanel() {
         drag a fader to shape it · hold one to reset it
       </Text>
 
-      <Text style={[label(9.5), styles.head, { color: t.inkFaint }]}>presets</Text>
-      <View style={styles.chips}>
-        {PRESETS.map(p =>
-          chip(p.id, p.name, activePreset === p.id && !activeMine, () => {
-            Vibration.vibrate(8);
-            applyPreset(p.id);
-          }),
-        )}
+      <View style={styles.btns}>
+        {pickBtn('presets', 'presets', presetName, 'presets')}
+        {pickBtn('bass', 'bass boost', bassLabel, 'bass')}
+        {pickBtn('output', 'applies to', outputLabel, 'output')}
       </View>
 
-      {/* the user's own curves */}
-      <Text style={[label(9.5), styles.head, { color: t.inkFaint }]}>
-        your settings
-      </Text>
-      {usable.length > 0 && (
-        <View style={styles.chips}>
-          {usable.map(p =>
-            chip(
-              p.id,
-              p.name,
-              activeMine?.id === p.id,
-              () => {
-                Vibration.vibrate(8);
-                applyGains(p.gains);
-              },
-              () => setConfirmDelete(p),
-            ),
-          )}
-        </View>
-      )}
-      {naming ? (
-        <View style={styles.save}>
-          <TextInput
-            autoFocus
-            value={newName}
-            onChangeText={setNewName}
-            onSubmitEditing={saveCurrent}
-            placeholder="name these settings"
-            placeholderTextColor={t.inkFaint}
-            cursorColor={t.accent}
-            selectionColor={t.accent}
-            maxLength={MAX_NAME}
-            accessibilityLabel="name these settings"
-            style={[
-              styles.input,
-              { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
-            ]}
-          />
-          <View style={styles.saveActions}>
-            <PressScale
-              accessibilityRole="button"
-              accessibilityLabel="cancel"
-              onPress={() => {
-                setNaming(false);
-                setNewName('');
-              }}
-              hitSlop={8}
-            >
-              <Text style={[styles.saveBtn, { color: t.inkSoft }]}>cancel</Text>
-            </PressScale>
-            <PressScale
-              accessibilityRole="button"
-              accessibilityLabel="save these settings"
-              onPress={saveCurrent}
-              hitSlop={8}
-            >
-              <Text style={[styles.saveBtn, { color: t.accent }]}>save</Text>
-            </PressScale>
-          </View>
-        </View>
-      ) : (
-        <PressScale
-          accessibilityRole="button"
-          accessibilityLabel="save these settings"
-          onPress={() => setNaming(true)}
-          disabled={!on}
-        >
-          <View
-            style={[styles.addRow, { borderColor: t.line }, !on && styles.dim]}
-          >
-            <Icon name="plus" size={15} color={t.inkSoft} />
-            <Text style={[styles.chipText, { color: t.inkSoft }]}>
-              {usable.length
-                ? 'save these settings'
-                : 'save these settings to reuse later'}
-            </Text>
-          </View>
-        </PressScale>
-      )}
-      {usable.length > 0 && (
-        <Text style={[styles.hint, styles.hintLeft, { color: t.inkFaint }]}>
-          hold one of yours to delete it
-        </Text>
-      )}
-
-      <Text style={[label(9.5), styles.head, { color: t.inkFaint }]}>
-        bass boost
-      </Text>
-      <View style={styles.chips}>
-        {[0, 250, 500, 750, 1000].map(v =>
-          chip(`bb${v}`, v === 0 ? 'off' : `${v / 10}%`, eq.bassBoost === v, () => {
-            Vibration.vibrate(8);
-            setBassBoost(v);
-          }),
-        )}
-      </View>
-
-      <Text style={[label(9.5), styles.head, { color: t.inkFaint }]}>profile</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="which output this profile applies to"
-        onPress={() => setPickOutput(true)}
-        style={styles.row}
+      {/* presets: the mood presets and the user's own saved curves. Applying
+          one keeps the popup open so different presets can be compared by ear
+          without reopening; the scrim (or back) closes it. */}
+      <Modal
+        transparent
+        statusBarTranslucent
+        visible={open === 'presets'}
+        animationType="fade"
+        onRequestClose={closePresets}
       >
-        <View style={styles.rowMeta}>
-          <Text style={[styles.rowTitle, { color: t.ink }]}>
-            applies to: {OUT_LABEL[eq.output] ?? eq.output}
-            {eq.pinned ? ' (pinned)' : ''}
-          </Text>
-          <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
-            speaker, earphones and bluetooth each remember their own settings.
-            tap to choose.
-          </Text>
-        </View>
-        <Icon name="chevron-right" size={18} color={t.inkFaint} />
-      </Pressable>
+        {/* While naming, the card rides near the top: a translucent-status-bar
+            Modal never resizes for the keyboard on Android, so a centered card
+            would put the input right under it. */}
+        <Pressable
+          style={[styles.popScrim, naming && styles.popScrimTop]}
+          onPress={closePresets}
+          accessibilityLabel="dismiss"
+        >
+          <Pressable
+            style={[
+              styles.popCard,
+              { backgroundColor: t.surface, borderColor: t.line },
+            ]}
+            // Swallow taps on the card so only the scrim closes. Everything in
+            // here is TAPPED (chips are RN Pressables, which work fine inside
+            // a parent Pressable) — no drags, so nothing gets swallowed.
+            onPress={() => {}}
+          >
+            <Text style={[label(9.5), styles.popLabel, { color: t.inkFaint }]}>
+              presets
+            </Text>
+            <View style={styles.chips}>
+              {PRESETS.map(p =>
+                chip(p.id, p.name, activePreset === p.id && !activeMine, () => {
+                  Vibration.vibrate(8);
+                  applyPreset(p.id);
+                }),
+              )}
+            </View>
+
+            <Text style={[label(9.5), styles.popHead, { color: t.inkFaint }]}>
+              your settings
+            </Text>
+            {usable.length > 0 && (
+              <View style={styles.chips}>
+                {usable.map(p =>
+                  chip(
+                    p.id,
+                    p.name,
+                    activeMine?.id === p.id,
+                    () => {
+                      Vibration.vibrate(8);
+                      applyGains(p.gains);
+                    },
+                    () => setConfirmDelete(p),
+                  ),
+                )}
+              </View>
+            )}
+            {naming ? (
+              <View style={styles.save}>
+                <TextInput
+                  autoFocus
+                  value={newName}
+                  onChangeText={text => {
+                    setNewName(text);
+                    if (saveError) {
+                      setSaveError(null);
+                    }
+                  }}
+                  onSubmitEditing={saveCurrent}
+                  placeholder="name these settings"
+                  placeholderTextColor={t.inkFaint}
+                  cursorColor={t.accent}
+                  selectionColor={t.accent}
+                  maxLength={MAX_NAME}
+                  accessibilityLabel="name these settings"
+                  style={[
+                    styles.input,
+                    { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
+                  ]}
+                />
+                {!!saveError && (
+                  <Text style={[styles.error, { color: t.accent }]}>
+                    {saveError}
+                  </Text>
+                )}
+                <View style={styles.saveActions}>
+                  <PressScale
+                    accessibilityRole="button"
+                    accessibilityLabel="cancel"
+                    onPress={() => {
+                      setNaming(false);
+                      setNewName('');
+                      setSaveError(null);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.saveBtn, { color: t.inkSoft }]}>
+                      cancel
+                    </Text>
+                  </PressScale>
+                  <PressScale
+                    accessibilityRole="button"
+                    accessibilityLabel="save these settings"
+                    onPress={saveCurrent}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.saveBtn, { color: t.accent }]}>save</Text>
+                  </PressScale>
+                </View>
+              </View>
+            ) : (
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel="save these settings"
+                onPress={() => setNaming(true)}
+              >
+                <View style={[styles.addRow, { borderColor: t.line }]}>
+                  <Icon name="plus" size={15} color={t.inkSoft} />
+                  <Text style={[styles.chipText, { color: t.inkSoft }]}>
+                    {usable.length
+                      ? 'save these settings'
+                      : 'save these settings to reuse later'}
+                  </Text>
+                </View>
+              </PressScale>
+            )}
+            {usable.length > 0 && (
+              <Text style={[styles.hint, styles.hintLeft, { color: t.inkFaint }]}>
+                hold one of yours to delete it
+              </Text>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <PickerPopup
-        visible={pickOutput}
+        visible={open === 'bass'}
+        title="bass boost"
+        options={BASS_LEVELS}
+        selected={eq.bassBoost}
+        onSelect={v => {
+          Vibration.vibrate(8);
+          setBassBoost(v);
+        }}
+        onClose={() => setOpen(null)}
+      />
+
+      <PickerPopup
+        visible={open === 'output'}
         title="tune for"
         options={outputOptions}
         selected={eq.pinned ? eq.output : null}
         onSelect={pinOutput}
-        onClose={() => setPickOutput(false)}
+        onClose={() => setOpen(null)}
       />
 
       <ConfirmPopup
@@ -368,7 +452,7 @@ export function EqualizerPanel() {
         action="delete"
         onConfirm={() => {
           deleteEqUserPreset(confirmDelete.id);
-          showToast('deleted.');
+          Vibration.vibrate(8);
           setConfirmDelete(null);
         }}
         onCancel={() => setConfirmDelete(null)}
@@ -392,7 +476,42 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   hintLeft: { textAlign: 'left', marginTop: 8 },
-  head: { marginTop: 22, marginBottom: 8 },
+  btns: { marginTop: 14, gap: 8 },
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+  },
+  btnTitle: { fontFamily: fonts.medium, fontSize: 13.5 },
+  btnValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 1,
+  },
+  btnValueText: { fontFamily: fonts.medium, fontSize: 13.5, flexShrink: 1 },
+  popScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 8, 6, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 28,
+  },
+  popScrimTop: { justifyContent: 'flex-start', paddingTop: 72 },
+  popCard: {
+    alignSelf: 'stretch',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 18,
+  },
+  popLabel: { marginBottom: 8 },
+  popHead: { marginTop: 18, marginBottom: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1,
@@ -422,6 +541,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 14.5,
   },
+  error: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17 },
   saveActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 22 },
   saveBtn: { fontFamily: fonts.medium, fontSize: 14 },
   dim: { opacity: 0.45 },
