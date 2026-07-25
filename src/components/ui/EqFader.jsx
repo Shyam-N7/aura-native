@@ -99,15 +99,23 @@ export function EqFader({
       dragging.value = 0;
     });
 
+  // Pre-computed on the JS thread: a worklet may only call other worklets, so
+  // toY() cannot be invoked from inside one — but a captured NUMBER is fine.
+  // (Calling it in the worklet is what crashed the app on long-press.)
+  const zeroY = toY(0);
+  // Likewise Vibration.vibrate is a native-module method and loses its binding
+  // through runOnJS; it has to be wrapped in a plain function.
+  const tickReset = () => Vibration.vibrate(12);
+
   const reset = Gesture.LongPress()
     .enabled(!disabled)
     .minDuration(380)
     .onStart(() => {
       'worklet';
-      y.value = withTiming(toY(0), { duration: 200, easing: EASE.settle });
+      y.value = withTiming(zeroY, { duration: 200, easing: EASE.settle });
       runOnJS(commit)(0);
       // A firmer tick than a drag step — the band snapped back to flat.
-      runOnJS(Vibration.vibrate)(12);
+      runOnJS(tickReset)();
     });
 
   const knobStyle = useAnimatedStyle(() => ({

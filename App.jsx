@@ -193,9 +193,7 @@ function Shell() {
         {/* The dock floats above every screen, detail pages included (web
             parity); the player and sheets still stack over it. */}
         <Dock navRef={navRef} />
-        {/* navRef, not useNavigation: the player is a sibling of the navigator,
-            not a screen inside it (same reason the Dock takes one). */}
-        <PlayerSheet navRef={navRef} />
+        <PlayerSheet />
         {/* Lyrics ride above the player; closing them lands back there. */}
         <LyricsOverlay />
         {/* The queue rides above the player; closing it lands back there. */}

@@ -67,6 +67,7 @@ import { GradientBg } from '../components/ui/GradientBg';
 import { PressScale } from '../components/ui/PressScale';
 import { Sheet } from '../components/ui/Sheet';
 import { SheetRow } from '../components/ui/SheetRow';
+import { EqualizerPopup } from './EqualizerPopup';
 import { Skeleton } from '../components/ui/Skeleton';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
@@ -350,7 +351,7 @@ function HintFloatUp({ reduced, children }) {
 // bottom sheet (the backdrop art develops in once the slide lands), closes by
 // the reverse or by a drag-follow pull down. Mount inside NavigationContainer
 // (sibling of RootTabs).
-export function PlayerSheet({ navRef }) {
+export function PlayerSheet() {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -379,6 +380,10 @@ export function PlayerSheet({ navRef }) {
   const [burst, setBurst] = useState(null);
   // Player ⋯ menu + the art-gesture kill switch it hosts (persisted).
   const [menuOpen, setMenuOpen] = useState(false);
+  // Opened from the player, the equalizer floats OVER the music — tweaking the
+  // sound mid-song shouldn't send you off to a settings screen and lose your
+  // place. (Settings still opens the full screen; both share EqualizerPanel.)
+  const [eqOpen, setEqOpen] = useState(false);
   const [gesturesOff, setGesturesOff] = useState(
     () => storage.getItem(GESTURES_KEY) === '1',
   );
@@ -762,13 +767,6 @@ export function PlayerSheet({ navRef }) {
     }
     startTour();
   };
-  // The equalizer is a screen, and the player covers the whole display — so
-  // close the player first, then navigate, or the screen would open behind it.
-  const openEqualizer = () => {
-    close();
-    setTimeout(() => navRef?.current?.navigate?.('Equalizer'), 60);
-  };
-
   const toggleRibbonStyle = () => {
     const next = ribbonStyle === 'wave' ? 'line' : 'wave';
     storage.setItem(RIBBON_KEY, next);
@@ -1247,12 +1245,13 @@ export function PlayerSheet({ navRef }) {
           gesturesOff={gesturesOff}
           ribbonStyle={ribbonStyle}
           onToggleRibbon={toggleRibbonStyle}
-          onOpenEqualizer={openEqualizer}
+          onOpenEqualizer={() => setEqOpen(true)}
           onToggleGestures={toggleGestures}
           onReplayTour={replayTour}
           onClose={() => setMenuOpen(false)}
         />
       )}
+      <EqualizerPopup visible={eqOpen} onClose={() => setEqOpen(false)} />
     </>
   );
 }

@@ -91,3 +91,52 @@ describe('resample — a web preset onto the device bands', () => {
     expect(out[1]).toBeGreaterThan(out[0]);
   });
 });
+
+// ── user-saved presets ───────────────────────────────────────────────────
+import {
+  MAX_NAME,
+  deleteEqUserPreset,
+  getEqUserPresets,
+  saveEqUserPreset,
+} from '../src/lib/eqPresets';
+import { storage } from '../src/storage/mmkv';
+
+describe('eqPresets — your own saved curves', () => {
+  beforeEach(() => storage.removeItem('aura.eq.userPresets'));
+
+  it('saves a curve and reads it back', () => {
+    saveEqUserPreset('my bass', [500, -300, 0, 400, 200]);
+    const list = getEqUserPresets();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('my bass');
+    expect(list[0].gains).toEqual([500, -300, 0, 400, 200]);
+  });
+
+  it('refuses blanks and case-insensitive duplicates', () => {
+    saveEqUserPreset('Night', [0, 0, 0, 0, 0]);
+    expect(saveEqUserPreset('   ', [0, 0, 0, 0, 0])).toBeNull();
+    expect(saveEqUserPreset('night', [1, 1, 1, 1, 1])).toBeNull();
+    expect(getEqUserPresets()).toHaveLength(1);
+  });
+
+  it('trims names to the cap', () => {
+    saveEqUserPreset('x'.repeat(80), [0, 0, 0, 0, 0]);
+    expect(getEqUserPresets()[0].name).toHaveLength(MAX_NAME);
+  });
+
+  it('hides curves that do not fit the device band count', () => {
+    saveEqUserPreset('five', [0, 0, 0, 0, 0]);
+    saveEqUserPreset('three', [0, 0, 0]);
+    // A curve saved for other hardware must never be applied to these bands.
+    expect(getEqUserPresets(5).map(p => p.name)).toEqual(['five']);
+    expect(getEqUserPresets(3).map(p => p.name)).toEqual(['three']);
+  });
+
+  it('deletes by id and survives a corrupt store', () => {
+    saveEqUserPreset('gone', [0, 0, 0, 0, 0]);
+    deleteEqUserPreset(getEqUserPresets()[0].id);
+    expect(getEqUserPresets()).toEqual([]);
+    storage.setItem('aura.eq.userPresets', '{not json');
+    expect(getEqUserPresets()).toEqual([]);
+  });
+});

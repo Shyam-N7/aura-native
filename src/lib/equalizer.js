@@ -1,4 +1,9 @@
-import { NativeEventEmitter, NativeModules, TurboModuleRegistry } from 'react-native';
+import {
+  AppState,
+  NativeEventEmitter,
+  NativeModules,
+  TurboModuleRegistry,
+} from 'react-native';
 import { storage } from '../storage/mmkv';
 
 // The equalizer's JS half — house singleton (get / set / subscribe, MMKV
@@ -240,6 +245,14 @@ export async function initEqualizer() {
     } catch {
       // route watching is a nicety — the equalizer still works without it
     }
+    // The service can recreate the player (and with it the audio session)
+    // while we're in the background, which silently detaches the effect.
+    // Coming back to the foreground re-establishes it.
+    AppState.addEventListener('change', s => {
+      if (s === 'active' && state.enabled && !attached) {
+        applyAll();
+      }
+    });
     if (state.enabled) {
       await applyAll();
     }
@@ -276,13 +289,39 @@ export async function setBand(index, millibels) {
   state = { ...state, profiles: { ...state.profiles, [name]: next } };
   persist();
   emit();
-  if (native && attached && state.enabled) {
-    try {
-      await native.setBandLevel(index, next[index]);
-    } catch {
-      // ignored — the value is stored and re-applied on the next attach
-    }
+  if (!state.enabled || !native) {
+    return;
   }
+  // Not attached yet — the usual reason is that the equalizer was already ON
+  // from a previous run, so init() tried to attach before the player had an
+  // audio session. Attach now and push the whole curve, instead of dropping
+  // the change on the floor and waiting for an off/on cycle to fix it.
+  if (!attached) {
+    await applyAll();
+    return;
+  }
+  try {
+    await native.setBandLevel(index, next[index]);
+  } catch {
+    // ignored — the value is stored and re-applied on the next attach
+  }
+}
+
+// Drop a whole curve onto the active profile — how a saved user preset is
+// applied (lib/eqPresets). Values are clamped per band, so a curve saved on
+// hardware with a wider range can't push this one past what it accepts.
+export async function applyGains(gains) {
+  if (!Array.isArray(gains) || gains.length !== bands.length || !bands.length) {
+    return;
+  }
+  const name = activeOutput();
+  const safe = gains.map((mb, i) =>
+    Math.max(bands[i].minMb, Math.min(bands[i].maxMb, Math.round(mb))),
+  );
+  state = { ...state, profiles: { ...state.profiles, [name]: safe } };
+  persist();
+  emit();
+  await applyAll();
 }
 
 export async function applyPreset(id) {
@@ -304,12 +343,17 @@ export async function setBassBoost(strength) {
   state = { ...state, bassBoost: Math.max(0, Math.min(1000, Math.round(strength))) };
   persist();
   emit();
-  if (native && attached && state.enabled) {
-    try {
-      await native.setBassBoost(state.bassBoost);
-    } catch {
-      // stored; re-applied on the next attach
-    }
+  if (!state.enabled || !native) {
+    return;
+  }
+  if (!attached) {
+    await applyAll(); // same lazy attach as setBand
+    return;
+  }
+  try {
+    await native.setBassBoost(state.bassBoost);
+  } catch {
+    // stored; re-applied on the next attach
   }
 }
 
