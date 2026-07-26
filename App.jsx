@@ -74,6 +74,7 @@ function Shell() {
   const player = usePlayer();
   const playerRef = useRef(player);
   playerRef.current = player;
+  const pendingLinkRef = useRef(null);
   useEffect(
     () =>
       subscribeAuth(() => {
@@ -108,7 +109,14 @@ function Shell() {
 
   const handleLink = useCallback(
     url => {
-      if (!url || !getUser() || !navRef.isReady()) {
+      if (!url) {
+        return;
+      }
+      // A link that arrives before sign-in/nav is HELD, not dropped — the
+      // person who tapped a shared song and then had to sign up must still
+      // land on that song. Replayed from NavigationContainer's onReady.
+      if (!getUser() || !navRef.isReady()) {
+        pendingLinkRef.current = url;
         return;
       }
       let parsed;
@@ -155,6 +163,10 @@ function Shell() {
             p.playTrack(track, { source: 'shared with you' });
             if (Number.isFinite(at) && at > 0) {
               p.seekTo(at);
+              // Starting mid-song should read as intended, not broken.
+              const m = Math.floor(at / 60);
+              const s = String(Math.floor(at % 60)).padStart(2, '0');
+              showToast(`starting from ${m}:${s} — a shared moment.`);
             }
             p.ui?.openPlayer?.();
           })
@@ -215,7 +227,15 @@ function Shell() {
     content = (
       <NavigationContainer
         ref={navRef}
-        onReady={() => Linking.getInitialURL().then(handleLink)}
+        onReady={() =>
+          Linking.getInitialURL().then(u => {
+            // The launch intent survives the auth/onboarding gates on its own;
+            // the pending ref covers a link that ARRIVED while gated.
+            const link = u ?? pendingLinkRef.current;
+            pendingLinkRef.current = null;
+            handleLink(link);
+          })
+        }
       >
         <RootTabs />
         {/* The dock floats above every screen, detail pages included (web

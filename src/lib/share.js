@@ -9,9 +9,13 @@ import { cleanTitle } from '../utils/title';
 // copy/save actions, so there's nothing to build around it.
 
 export function trackLink(id, atSec) {
-  const at =
-    Number.isFinite(atSec) && atSec > 0 ? `?at=${Math.floor(atSec)}` : '';
-  return `${API_BASE}/t/${encodeURIComponent(id)}${at}`;
+  // src=share marks link-driven opens apart from typed URLs — the seed of
+  // install/open attribution (AURA Command) without any tracker.
+  const p = new URLSearchParams({ src: 'share' });
+  if (Number.isFinite(atSec) && atSec > 0) {
+    p.set('at', String(Math.floor(atSec)));
+  }
+  return `${API_BASE}/t/${encodeURIComponent(id)}?${p.toString()}`;
 }
 
 function stamp(sec) {

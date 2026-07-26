@@ -13,6 +13,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  Vibration,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -987,8 +988,15 @@ export function LyricsOverlay() {
     },
     [seekTo],
   );
-  // Hold a line to send it on — quoted, credited, linked (lib/share).
-  const shareLine = useCallback(text => shareLyric(track, text), [track]);
+  // Hold a line to send it on — quoted, credited, linked (lib/share). The
+  // tick acknowledges the hold before the share sheet takes its beat to open.
+  const shareLine = useCallback(
+    text => {
+      Vibration.vibrate(8);
+      shareLyric(track, text);
+    },
+    [track],
+  );
   // The karaoke stage's tap-to-play/pause, behind the same wake guard.
   // Actually toggling is the moment the gesture counts as learned.
   const togglePlay = player.togglePlay;
