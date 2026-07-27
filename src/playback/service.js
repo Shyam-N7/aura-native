@@ -13,6 +13,7 @@ const { Image } = require('react-native');
 const engine = require('./engine');
 const likes = require('../hooks/useLikes');
 const { crumb } = require('../lib/crumbs');
+const { mark } = require('../lib/perfMarks');
 
 const handlers = {};
 
@@ -80,6 +81,15 @@ module.exports = async function service() {
     engine.setLikeButton(likes.isLikedId(id)).catch(() => {});
   });
 
+  // Boot-timing tail (docs/perf/01 §6): when the player first becomes ready /
+  // audible. mark() self-dedupes, so only the first of each lands.
+  TrackPlayer.addEventListener(Event.PlaybackState, e => {
+    if (e?.state === 'ready') {
+      mark('first-ready');
+    } else if (e?.state === 'playing') {
+      mark('first-playing');
+    }
+  });
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, e => {
     if (handlers.onQueueEnded) {
       handlers.onQueueEnded(e);

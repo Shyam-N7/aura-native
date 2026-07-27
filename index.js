@@ -12,6 +12,7 @@ import {
 import App from './App';
 import { name as appName } from './app.json';
 import { installCrashLogger } from './src/lib/crashLog';
+import { mark, shipBootTiming } from './src/lib/perfMarks';
 
 // First thing, before any app code can throw: persist fatal JS errors so a
 // field crash (screen off, away from adb) can be diagnosed on next launch.
@@ -42,3 +43,8 @@ setBackgroundMessageHandler(getMessaging(), async () => {});
 // Sentry.wrap adds the React error boundary + touch/context enrichment
 // around the root — crashes carry what the user was doing, not just a stack.
 AppRegistry.registerComponent(appName, () => Sentry.wrap(App));
+
+// Cold-open baseline (docs/perf/01 §6): stamp the entry, then ship the whole
+// stage table once the boot settles.
+mark('js-entry');
+shipBootTiming();

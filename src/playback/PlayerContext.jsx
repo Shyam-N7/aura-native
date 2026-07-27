@@ -24,6 +24,7 @@ import {
   gainFor,
 } from '../lib/leveling';
 import { getTrack } from '../api/catalog';
+import { mark } from '../lib/perfMarks';
 import { getLoudness, requestMeasure } from '../api/loudness';
 import { prefetchLyrics } from '../api/lyrics';
 import { useLikes } from '../hooks/useLikes';
@@ -873,6 +874,7 @@ export function PlayerProvider({ children }) {
       if (cancelled) {
         return;
       }
+      mark('setup-player');
       if (setupErr) {
         if (setupErr.code === 'android_cannot_setup_player_in_background') {
           // Android refuses to create the player while the app is backgrounded
@@ -928,6 +930,7 @@ export function PlayerProvider({ children }) {
           bootedRef.current = true;
           return;
         }
+        mark('restore-fetch');
         const byId = new Map(fresh.filter(Boolean).map(t => [t.id, t]));
         if (byId.size) {
           restored = {
@@ -949,6 +952,7 @@ export function PlayerProvider({ children }) {
           positionSec,
         });
       }).then(() => {
+        mark('restore-synced');
         bootedRef.current = true;
       });
     };

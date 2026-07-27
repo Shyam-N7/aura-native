@@ -12,6 +12,7 @@ import {
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { PlayerProvider, usePlayer } from './src/playback/PlayerContext';
 import { getTrack } from './src/api/catalog';
+import { mark } from './src/lib/perfMarks';
 import { acceptPlaylistInvite } from './src/api/playlists';
 import { showToast } from './src/lib/toast';
 import { PlayerSheet } from './src/overlays/PlayerSheet';
@@ -101,6 +102,12 @@ function Shell() {
       }),
     [],
   );
+  // Boot-timing: the shell's first commit — everything before this is JS
+  // module init + Sentry + providers.
+  useEffect(() => {
+    mark('first-render');
+  }, []);
+
   const finishSensing = useCallback(() => {
     markSensingShown();
     setFlow(hasOnboarded() ? 'main' : 'onboarding');
