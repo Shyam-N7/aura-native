@@ -12,6 +12,7 @@ const { Event } = require('react-native-track-player');
 const { Image } = require('react-native');
 const engine = require('./engine');
 const likes = require('../hooks/useLikes');
+const { crumb } = require('../lib/crumbs');
 
 const handlers = {};
 
@@ -93,17 +94,22 @@ module.exports = async function service() {
     if (typeof art === 'string') {
       Image.prefetch(art.replace(/\d+x\d+/, '150x150')).catch(() => {});
     }
+    crumb('playback', 'track-change', { id: e?.track?.id, index: e?.index });
     if (handlers.onActiveTrackChanged) {
       handlers.onActiveTrackChanged(e);
     }
   });
   TrackPlayer.addEventListener(Event.PlaybackError, e => {
+    crumb('playback', 'error', { code: e?.code, message: e?.message });
     // Both branches are (or may be) the async engine recovery — its awaited
     // load/skip calls can reject mid-recovery; never leave that unhandled.
     const handle = handlers.onPlaybackError ?? engine.handlePlaybackError;
     Promise.resolve(handle(e)).catch(() => {});
   });
   TrackPlayer.addEventListener(Event.PlaybackPlayWhenReadyChanged, e => {
+    // Also breadcrumbs a native focus pause/resume — ExoPlayer owns focus
+    // (docs/perf/01 §1c), and this event is where its decisions surface.
+    crumb('playback', 'play-when-ready', { playWhenReady: e?.playWhenReady });
     if (handlers.onPlayWhenReadyChanged) {
       handlers.onPlayWhenReadyChanged(e);
     }

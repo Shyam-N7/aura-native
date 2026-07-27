@@ -5,6 +5,7 @@ import {
   TurboModuleRegistry,
 } from 'react-native';
 import { storage } from '../storage/mmkv';
+import { crumb } from './crumbs';
 
 // The equalizer's JS half — house singleton (get / set / subscribe, MMKV
 // persisted), same shape as lib/audioQuality.js and lib/leveling.js.
@@ -178,6 +179,7 @@ async function attachToSession() {
       return false; // no real session — stay off, never touch session 0
     }
     attached = await native.attach(session);
+    crumb('eq', 'attach', { session, ok: attached });
     return attached;
   } catch {
     attached = false;
