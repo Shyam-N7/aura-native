@@ -62,3 +62,15 @@ offline. Acceptance: zero hard-clipped samples at any setting; THD rise < 1% at 
 **Effort:** module methods (attach/gain/limiter config) S; settings UI + warning S;
 capture-verify harness M. **Risk:** OEM DynamicsProcessing quirks (ColorOS) — mitigated
 by the probe-first pattern used for the EQ (describe → gate UI on availability).
+
+### Status (2026-07-28, shipped 9b6f9fa)
+Built as designed: DynamicsProcessing gain→limiter (28+), LoudnessEnhancer fallback with
+a native ≤+6 dB cap (so even a UI/mode mismatch cannot exceed it), stacking cap pinned
+by 5 tests, warning gate on >+6 dB stops. **Verified:** compile, full jest (233), APK on
+device, effect libraries present in audio_flinger. **Deliberately not verified yet:**
+attached-chain inspection needs the EQ enabled, which is the user's persisted choice
+(currently off) — flipping it during an unattended test session was out of bounds. First
+real enable verifies it; the eq-attach breadcrumb reports it fleet-wide.
+**Named deferred:** AudioPlaybackCapture THD harness (needs a bundled sine asset);
+500-item drag `gfxinfo` pass (needs a dev hook to inject a synthetic queue); true-gapless
+(<100 ms) Media3 depth — only if the measured ≤650 ms boundary still feels wrong.
