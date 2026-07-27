@@ -140,6 +140,7 @@ const Row = React.memo(function Row({
   jumpTo,
   reorder,
   onRemove,
+  onMoveTop,
   onGone,
   dragFrom,
   dragTo,
@@ -417,7 +418,14 @@ const Row = React.memo(function Row({
           openTrackActions({
             track: item,
             // Queue rows: play/queue actions are redundant here (web parity).
-            menu: { omit: ['play', 'playNext', 'addToQueue'] },
+            // "move to top" = next-in-line, one press instead of a long drag
+            // (docs/perf/04 4a); the current row has nowhere to move.
+            menu: {
+              omit: ['play', 'playNext', 'addToQueue'],
+              extras: isCurrent
+                ? []
+                : [{ label: 'move to top', onPress: () => onMoveTop(index) }],
+            },
           })
         }
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}
@@ -766,6 +774,18 @@ export function QueueSheet() {
     },
     [reduced, removeAt],
   );
+  // "move to top" = next in line, right after the playing track. Splice
+  // semantics shift the current index down by one when the row comes from
+  // above it, so the insert target differs by side (docs/perf/04 4a).
+  const moveToTop = useCallback(
+    i => {
+      if (i === idx) {
+        return;
+      }
+      reorder(i, i > idx ? idx + 1 : idx);
+    },
+    [reorder, idx],
+  );
   const onGone = useCallback(
     key => {
       setLeaving(prev => {
@@ -1014,6 +1034,7 @@ export function QueueSheet() {
         rowKey={key}
         leaving={leaving.has(key)}
         jumpTo={jumpTo}
+        onMoveTop={moveToTop}
         reorder={reorder}
         onRemove={removeRow}
         onGone={onGone}
