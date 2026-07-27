@@ -135,7 +135,20 @@ export async function setupPlayer() {
     return;
   }
   try {
-    await TrackPlayer.setupPlayer({ autoHandleInterruptions: true });
+    await TrackPlayer.setupPlayer({
+      autoHandleInterruptions: true,
+      // docs/perf/02 layers 3-4. 256MB ExoPlayer disk cache (KB units): repeat
+      // plays start from disk and mid-track network flaps resume from what's
+      // cached (kotlin-audio already sets FLAG_IGNORE_CACHE_ON_ERROR).
+      maxCacheSize: 262144,
+      // Start audible at 2.5s buffered instead of the default 5s window, and
+      // hold a 120s forward window so ExoPlayer finishes the current item
+      // early and prebuffers the NEXT one well before the boundary — the
+      // other half of the transition-gap fix. Seconds, per RNTP.
+      playBuffer: 2.5,
+      minBuffer: 30,
+      maxBuffer: 120,
+    });
   } catch (err) {
     // Backgrounded during boot — the caller retries on foreground. Any other
     // failure here means the player is already initialized (fast reload):
