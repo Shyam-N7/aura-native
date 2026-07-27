@@ -117,6 +117,15 @@ the fidelity plan; deferred per earlier decision).
 
 ## 6. Opening a song takes seconds to reach playing
 
+**Field reports (2026-07-28, user device, post-f344252):** (1) saved position now
+renders instantly (fix confirmed); (2) tapping play after a cold open still takes
+**2–3 s to audio** — consistent with the uncached catalog round-trip + prepare;
+(3) **track transitions gap for seconds** instead of flowing — new symptom, prime
+suspects: the next track's short-lived CDN URL expiring between hydration and the
+transition (recovery refetch fires mid-gap), and/or prebuffering losing its work when
+hydrateAround's replaceTrack swaps the upcoming item. Both feed the Phase-2/3 designs
+directly.
+
 **Instrumentation first** (per brief): timestamped stages behind a dev flag —
 `app open → JS boot → setupPlayer → restore/getTrack round-trip → syncQueue →
 prepare → first STATE_READY → first audio`. Expected dominator (code evidence): the
