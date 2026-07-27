@@ -31,6 +31,14 @@ data class PlayerConfig(
 
     /**
      * The audio usage.
+     *
+     * AURA: NETWORK, not NONE. MusicService constructs PlayerConfig without a
+     * wakeMode argument, so this default is the live value — and with NONE,
+     * ExoPlayer streams with no wake/wifi lock: Doze can sleep the radio
+     * mid-buffer with the screen off and playback dies where it stands (the
+     * fleet "stops mid-song" reports; docs/perf/01 §1a). NETWORK holds the
+     * partial wake + wifi locks only while playWhenReady is true — released on
+     * pause/idle, so the battery cost is bounded to actual listening.
      */
-    val wakeMode: WakeMode = WakeMode.NONE,
+    val wakeMode: WakeMode = WakeMode.NETWORK,
 )
