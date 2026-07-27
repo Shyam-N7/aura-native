@@ -27,14 +27,17 @@ battery-optimization exemption prompt (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` in
 OEM-specific guidance screen; cannot be fully engineered away. *Risk:* prompt fatigue —
 show once, from settings.
 
-**(c) Audio focus is entirely unhandled — CONFIRMED GAP.** `MusicService.kt:655-663` only
-emits `remote-duck` to JS; `src/playback/` has zero handlers for it. AURA never pauses for
-calls/alarms and never resumes after; on some ROMs, ignoring focus marks the app for
-killing. Also a plain correctness bug (plays over phone calls).
-*Disproved if:* users report stops with no other audio event — (a)/(b) then dominate.
-*Confirm:* trigger a WhatsApp voice note / alarm during playback and watch behavior +
-event log. *Fix:* handle `Event.RemoteDuck` in `service.js`: permanent → pause; transient
-→ pause + flag; gain + flag → resume. *Risk:* low — additive handler, mirrors RNTP docs.
+**(c) Audio focus — CORRECTED during implementation: handled natively, not a gap.**
+Initial recon flagged that `MusicService.kt:655-663` only emits `remote-duck` to JS and
+`src/playback/` has no handler. Deeper trace: `engine.js:138` passes
+`autoHandleInterruptions: true` → `handleAudioFocus = true` (`MusicService.kt:154`) →
+`exoPlayer.setAudioAttributes(attrs, /* handleAudioFocus */ true)`
+(`BaseAudioPlayer.kt:274`) — **ExoPlayer's built-in focus manager is active**: pause on
+permanent loss, pause+auto-resume on transient, duck on can-duck. UI state stays in sync
+because the native pause fires `PlaybackPlayWhenReadyChanged`, which PlayerContext
+already consumes. The JS `remote-duck` event is informational only in this config.
+*Residual check (device):* one manual pass — alarm + voice note during playback —
+to confirm the ExoPlayer path behaves on ColorOS. No code change planned.
 
 **(d) Expired stream URL mid-play.** Recovery EXISTS (`engine.js:549-566`, single-shot
 URL refetch). *Confirm:* verify it resumes at the failed position, not zero, and count
@@ -132,7 +135,7 @@ brief's table, measured via `am start -W`, stage timestamps, and RNTP events.
 |---|------|--------|------|-----------|
 | P1 | Crash/ANR + breadcrumbs (Sentry, pending approval) | S | low | — |
 | P2 | Stage instrumentation + baseline numbers for all budget metrics | S | none | — |
-| P3a | RemoteDuck focus handling in service.js | S | low | P1 (verify via breadcrumbs) |
+| P3a | ~~RemoteDuck handling~~ — corrected: ExoPlayer handles focus natively (see §1c); device-verify only | — | — | — |
 | P3b | WakeMode.NETWORK (kotlin-audio + RNTP patch) | S | low | — |
 | P3c | EQ re-attach on session-change event (service-side) | M | med (patch) | P3b pattern |
 | P3d | Restore race: instant UI position + play-tap carries positionSec | M | med | P2 numbers |

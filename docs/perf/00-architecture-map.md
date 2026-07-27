@@ -40,11 +40,14 @@ UI (React screens/overlays)
 
 - `BaseAudioPlayer` requests focus on READY, abandons on ERROR
   (`BaseAudioPlayer.kt:114-118`); request/abandon logic at `:560-598` is correct.
-- `onAudioFocusChange` (`:601-624`) computes `{isPaused, isPermanent}` and only
-  **forwards** it. `MusicService.kt:655-663` turns that into a JS event
-  (`remote-duck`) — **no native pause/resume happens**.
-- **`src/playback/` has no `RemoteDuck` handler at all** (grep: zero hits). Focus
-  changes are dropped on the floor. See diagnosis §1c.
+- Focus is handled by **ExoPlayer's built-in focus manager**: `engine.js:138` sets
+  `autoHandleInterruptions: true` → `handleAudioFocus = true` (`MusicService.kt:154`)
+  → `exoPlayer.setAudioAttributes(attrs, true)` (`BaseAudioPlayer.kt:274`). Pause on
+  permanent loss, pause+resume on transient, duck on can-duck — all native. The
+  `remote-duck` JS event (`MusicService.kt:655-663`) is informational in this config,
+  which is why `src/playback/` legitimately has no handler for it. UI stays in sync
+  via `PlaybackPlayWhenReadyChanged`. (Corrected during implementation — see
+  diagnosis §1c.)
 
 ## State persistence & restore
 
