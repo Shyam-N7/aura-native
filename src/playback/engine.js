@@ -12,6 +12,14 @@ import {
 } from '../lib/audioQuality';
 import { autoTier, noteAutoSample, resetAuto } from '../lib/autoQuality';
 import { getTrack as fetchTrack } from '../api/catalog';
+import { API_BASE } from '../lib/auth';
+import { crumb } from '../lib/crumbs';
+import {
+  MAX_ATTEMPTS,
+  MAX_RECOVERY_MS,
+  classifyPlaybackError,
+  retryDelayMs,
+} from '../lib/retryPolicy';
 import { showToast } from '../lib/toast';
 import { storage } from '../storage/mmkv';
 
@@ -576,7 +584,24 @@ async function loadAndResume(track, position) {
   await TrackPlayer.play();
 }
 
-export async function handlePlaybackError() {
+// Probe our own origin — any response (even an error status) proves routing;
+// only a thrown fetch means offline. 5s cadence per docs/perf/03.
+async function waitForConnectivity(maxMs) {
+  const deadline = Date.now() + maxMs;
+  for (;;) {
+    try {
+      await fetch(`${API_BASE}/manifest.webmanifest`, { method: 'HEAD' });
+      return true;
+    } catch {
+      if (Date.now() > deadline) {
+        return false;
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+}
+
+export async function handlePlaybackError(err) {
   const [rQueue, active] = await Promise.all([
     TrackPlayer.getQueue(),
     TrackPlayer.getActiveTrackIndex(),
@@ -604,11 +629,55 @@ export async function handlePlaybackError() {
     altClearedListener?.();
   }
   if (recovery.id !== cur.id) {
-    recovery = { id: cur.id, ladderPos: 0, refetched: false };
+    recovery = {
+      id: cur.id,
+      ladderPos: 0,
+      refetched: false,
+      attempt: 0,
+      startedAt: Date.now(),
+    };
   }
   const { position } = await TrackPlayer.getProgress().catch(() => ({
     position: 0,
   }));
+
+  // ── policy layer (docs/perf/03) ─────────────────────────────────────────
+  recovery.attempt = (recovery.attempt ?? 0) + 1;
+  const klass = classifyPlaybackError(err);
+  crumb('recovery', klass, { attempt: recovery.attempt, code: err?.code });
+  if (
+    recovery.attempt > MAX_ATTEMPTS ||
+    Date.now() - (recovery.startedAt ?? 0) > MAX_RECOVERY_MS
+  ) {
+    // Ceiling hit — fall through to the give-up path below, but if the whole
+    // DEVICE is offline, skipping would silently chew through the queue and
+    // strand the session at its end. Paused-with-position is the honest state;
+    // the user's next play (or the connectivity wait) resumes right here.
+    if (klass === 'network' && !(await waitForConnectivity(60000))) {
+      showToast("you're offline — music will wait for you.");
+      await TrackPlayer.pause();
+      recovery = { id: null, ladderPos: 0, refetched: false };
+      return;
+    }
+  } else {
+    // Transient network wobbles retry the SAME url on the jittered schedule —
+    // laddering down quality for a blip both sounds worse and masks the class.
+    if (klass === 'network') {
+      const wait = retryDelayMs(recovery.attempt - 1);
+      if (wait) {
+        await new Promise(r => setTimeout(r, wait));
+      }
+      if (recovery.attempt <= 2) {
+        await loadAndResume(cur, position);
+        return;
+      }
+    }
+    // An expired/forbidden link fails ALL rungs of the same base URL — walking
+    // them is seconds of guaranteed 403s. Jump straight to the re-resolve.
+    if (klass === 'expired' || klass === 'gone') {
+      recovery.ladderPos = Number.MAX_SAFE_INTEGER - 1;
+    }
+  }
 
   const quality = effectiveBitrate(getAudioQuality());
   const ladder = cur.streamUrl ? qualityLadder(cur.streamUrl, quality) : [];
@@ -634,6 +703,7 @@ export async function handlePlaybackError() {
     }
   }
 
+  crumb('recovery', 'give-up', { id: cur.id, attempts: recovery.attempt });
   showToast("couldn't play this track — skipping.");
   if (active + 1 < rQueue.length) {
     await TrackPlayer.skipToNext();
