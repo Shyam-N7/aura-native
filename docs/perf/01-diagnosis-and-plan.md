@@ -62,12 +62,12 @@ the tap plays from index 0 position 0. Users who open the app and immediately hi
 lose their spot deterministically. *Disproved if:* users report loss WITHOUT touching
 play — then look at write-side (5s debounce losing the last write on kill,
 `PlayerContext.jsx:179-215`).
-*Confirm:* cold open → tap play within ~1s → position resets (repro); breadcrumbs around
-restore/user-act ordering. *Fix (two independent commits):* (1) UI renders position/track
-from the MMKV snapshot immediately at first frame (no engine wait); (2) the
-play-during-restore path carries `positionSec` into its own syncQueue instead of
-discarding it. *Risk:* (2) touches the restore race — needs the existing gapless-boundary
-guard pattern (`:628-637`) and regression tests.
+*RESOLVED (f344252):* deeper verification **disproved half of this** — `togglePlay`
+already rebuilds with the saved position (`PlayerContext.jsx:496-503`), and error
+recovery re-seeks `getProgress()` (`engine.js:558-598`), so (b) was downgraded to
+display-only. The shipped fix: `usePlaybackProgress` seeds its first frames from the
+MMKV snapshot (same guards as `storedPositionSec`) and retires the seed permanently
+once the engine reports, so a genuine fresh start at 0:00 is never shadowed.
 
 ## 3. Crashes
 
