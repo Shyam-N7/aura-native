@@ -4,6 +4,13 @@ apply plugin: "com.facebook.react"
 // FCM: binds this build to the Firebase Android app (live.aurafm.app) declared
 // in google-services.json.
 apply plugin: "com.google.gms.google-services"
+// Sentry: hooks the react bundling task to upload JS source maps per release,
+// so field crash stacks show real files/lines instead of minified noise.
+// Auth comes from SENTRY_AUTH_TOKEN in the build environment — the token
+// lives OUTSIDE the repo (D:\Brave Downloads\aura-sentry-token.txt), never in
+// sentry.properties. Without the env var the upload step no-ops via
+// SENTRY_DISABLE_AUTO_UPLOAD, keeping tokenless builds green.
+apply from: new File(["node", "--print", "require.resolve('@sentry/react-native/package.json')"].execute(null, rootDir).text.trim(), "../sentry.gradle")
 
 /**
  * This is the configuration block to customize your React Native Android app.
