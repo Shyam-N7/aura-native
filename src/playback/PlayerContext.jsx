@@ -23,7 +23,7 @@ import {
   setLeveling as storeLeveling,
   gainFor,
 } from '../lib/leveling';
-import { getTrack } from '../api/catalog';
+import { getTrack, trackCacheAge } from '../api/catalog';
 import { mark } from '../lib/perfMarks';
 import { getLoudness, requestMeasure } from '../api/loudness';
 import { prefetchLyrics } from '../api/lyrics';
@@ -180,6 +180,9 @@ export function PlayerProvider({ children }) {
   // ── position persistence ({ trackId, progress } fraction, 5s debounce) ──
   const posPending = useRef(null);
   const posTimer = useRef(null);
+  // Which next-track id the near-end freshness check already handled — one
+  // refresh per upcoming track, not one per progress tick.
+  const freshenedRef = useRef(null);
   const flushPosition = useCallback(() => {
     if (posTimer.current) {
       clearTimeout(posTimer.current);
@@ -217,8 +220,41 @@ export function PlayerProvider({ children }) {
       if (!posTimer.current) {
         posTimer.current = setTimeout(flushPosition, 5000);
       }
+      // Transition-gap guard (docs/perf/02 layer 2): the next track's URL was
+      // resolved when it BECAME next — up to a whole song ago — and a stale
+      // link erroring at the boundary is seconds of silence while recovery
+      // refetches. In the last ~25s, if next's URL has aged past the cache
+      // TTL, re-resolve and swap it in now: early enough for ExoPlayer to
+      // redo its prebuffer, late enough to be at most one refresh per song.
+      if (e.duration - e.position < 25) {
+        const nxt = q.tracks[q.idx + 1];
+        if (
+          nxt?.id &&
+          freshenedRef.current !== nxt.id &&
+          (trackCacheAge(nxt.id) > 14 * 60 * 1000 || !nxt.streamUrl)
+        ) {
+          freshenedRef.current = nxt.id;
+          const at = q.idx + 1;
+          getTrack(nxt.id, { fresh: true })
+            .then(fresh => {
+              const live = queueRef.current;
+              if (!fresh?.streamUrl || live.tracks[at]?.id !== fresh.id) {
+                return;
+              }
+              const tracks = live.tracks.map(x =>
+                x.id === fresh.id ? { ...x, ...fresh } : x,
+              );
+              applyQueue({ ...live, tracks });
+              enqueueOp(() => engine.replaceTrack(at, tracks[at]));
+            })
+            .catch(() => {
+              // next tick retries; worst case the boundary pays the old cost
+              freshenedRef.current = null;
+            });
+        }
+      }
     },
-    [flushPosition],
+    [flushPosition, applyQueue, enqueueOp],
   );
 
   // ── lazy stream-URL hydration ────────────────────────────────────────────
