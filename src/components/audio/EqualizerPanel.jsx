@@ -26,6 +26,7 @@ import {
   pinOutput,
   setBand,
   setBassBoost,
+  setBoost,
   setEnabled,
   subscribeEqualizer,
 } from '../../lib/equalizer';
@@ -55,6 +56,15 @@ const BASS_LEVELS = [0, 250, 500, 750, 1000].map(v => ({
   label: v === 0 ? 'off' : `${v / 10}%`,
 }));
 
+// Volume boost stops (millibels). Above +6 dB a warning stands between the
+// tap and the ears (docs/perf/04 4b); the plain (LoudnessEnhancer) fallback
+// never offers those stops at all.
+const BOOST_LEVELS = [0, 300, 600, 900, 1200].map(v => ({
+  id: v,
+  label: v === 0 ? 'off' : `+${v / 100} dB`,
+  caption: v > 600 ? 'strong — watch your ears' : undefined,
+}));
+
 function hzLabel(hz) {
   return hz >= 1000 ? `${Math.round(hz / 100) / 10}k` : `${hz}`;
 }
@@ -73,6 +83,8 @@ export function EqualizerPanel() {
   const usable = mine.filter(p => p.gains.length === eq.bands.length);
 
   const [ask, setAsk] = useState(false);
+  // A >+6dB boost pick waits here until the warning is answered.
+  const [warnBoost, setWarnBoost] = useState(null);
   const [dontAsk, setDontAsk] = useState(false);
   // Which picker is open — 'presets' | 'bass' | 'output' | null. One value,
   // so two popups can never fight over the screen.
@@ -223,6 +235,7 @@ export function EqualizerPanel() {
     PRESETS.find(p => p.id === activePreset)?.name ??
     'custom';
   const bassLabel = eq.bassBoost === 0 ? 'off' : `${eq.bassBoost / 10}%`;
+  const boostLabel = eq.boostMb === 0 ? 'off' : `+${eq.boostMb / 100} dB`;
   const outputLabel =
     (OUT_LABEL[eq.output] ?? eq.output) + (eq.pinned ? ' · pinned' : '');
 
@@ -273,6 +286,8 @@ export function EqualizerPanel() {
       <View style={styles.btns}>
         {pickBtn('presets', 'presets', presetName, 'presets')}
         {pickBtn('bass', 'bass boost', bassLabel, 'bass')}
+        {eq.boostMode !== 'none' &&
+          pickBtn('boost', 'volume boost', boostLabel, 'boost')}
         {pickBtn('output', 'applies to', outputLabel, 'output')}
       </View>
 
@@ -423,6 +438,40 @@ export function EqualizerPanel() {
           setBassBoost(v);
         }}
         onClose={() => setOpen(null)}
+      />
+
+      {/* volume boost: gain into a limiter, never bare gain. The plain
+          (LoudnessEnhancer) fallback only ever sees the ≤+6 dB stops. */}
+      <PickerPopup
+        visible={open === 'boost'}
+        title="volume boost"
+        options={
+          eq.boostMode === 'plain'
+            ? BOOST_LEVELS.filter(o => o.id <= 600)
+            : BOOST_LEVELS
+        }
+        selected={eq.boostMb}
+        onSelect={v => {
+          Vibration.vibrate(8);
+          if (v > 600 && v > eq.boostMb) {
+            setWarnBoost(v);
+            return;
+          }
+          setBoost(v);
+        }}
+        onClose={() => setOpen(null)}
+      />
+
+      <ConfirmPopup
+        visible={warnBoost != null}
+        title="boost this much?"
+        body="above +6 dB some songs can sound strained, and it gets loud fast in earphones. take care of your ears."
+        action="boost it"
+        onConfirm={() => {
+          setBoost(warnBoost);
+          setWarnBoost(null);
+        }}
+        onCancel={() => setWarnBoost(null)}
       />
 
       <PickerPopup

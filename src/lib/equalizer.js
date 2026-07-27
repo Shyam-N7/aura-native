@@ -90,11 +90,24 @@ export function resample(gains, bands) {
 const blank = () => ({
   enabled: false,
   bassBoost: 0,
+  // Volume boost in millibels (docs/perf/04 4b). Rides the equalizer's
+  // enabled switch like bass boost does.
+  boostMb: 0,
   // null = follow the detected route; a value pins the profile by hand
   // (routing on OEM ROMs is never perfectly reportable).
   override: null,
   profiles: {},
 });
+
+// Boost + EQ must never stack past what the limiter absorbs: total added
+// gain (boost + the hottest positive band) caps at +12 dB, and the
+// LoudnessEnhancer fallback ("plain") caps at +6 dB outright — OEM behavior
+// above that clips, which is the one thing this feature must never do.
+export function cappedBoostMb(boostMb, gains, mode) {
+  const ceiling = mode === 'plain' ? 600 : 1200;
+  const hottest = Math.max(0, ...(gains ?? []).map(g => g || 0));
+  return Math.max(0, Math.min(boostMb, ceiling - Math.min(hottest, ceiling)));
+}
 
 function read() {
   try {
@@ -112,6 +125,7 @@ let state = read();
 let bands = []; // from describe() — empty until the device answers
 let available = false;
 let unavailableReason = null;
+let boostMode = 'none'; // 'limiter' (DynamicsProcessing) | 'plain' | 'none'
 let output = 'speaker';
 let attached = false;
 const subs = new Set();
@@ -158,6 +172,8 @@ export function getEqualizer() {
     unavailableReason,
     enabled: state.enabled,
     bassBoost: state.bassBoost,
+    boostMb: state.boostMb,
+    boostMode,
     bands,
     output: activeOutput(),
     detectedOutput: output,
@@ -204,6 +220,11 @@ async function applyAll() {
       await native.setBandLevel(i, gains[i]);
     }
     await native.setBassBoost(state.bassBoost);
+    // The stacking cap re-derives from the LIVE curve, so a hotter preset
+    // automatically pulls the boost down instead of clipping.
+    await native.setBoost(
+      state.enabled ? cappedBoostMb(state.boostMb, gains, boostMode) : 0,
+    );
     await native.setEnabled(state.enabled);
   } catch {
     // A mid-flight failure (session died) just leaves the effect off; the
@@ -225,6 +246,7 @@ export async function initEqualizer() {
     available = !!d.available;
     unavailableReason = d.reason ?? null;
     bands = Array.isArray(d.bands) ? d.bands : [];
+    boostMode = d.boost ?? 'none';
     output = d.output ?? 'speaker';
   } catch (e) {
     available = false;
@@ -354,6 +376,26 @@ export async function setBassBoost(strength) {
   }
   try {
     await native.setBassBoost(state.bassBoost);
+  } catch {
+    // stored; re-applied on the next attach
+  }
+}
+
+export async function setBoost(mb) {
+  state = { ...state, boostMb: Math.max(0, Math.min(1200, Math.round(mb))) };
+  persist();
+  emit();
+  if (!state.enabled || !native) {
+    return;
+  }
+  if (!attached) {
+    await applyAll(); // same lazy attach as setBand
+    return;
+  }
+  try {
+    await native.setBoost(
+      cappedBoostMb(state.boostMb, profileFor(activeOutput()), boostMode),
+    );
   } catch {
     // stored; re-applied on the next attach
   }

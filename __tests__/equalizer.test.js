@@ -1,4 +1,4 @@
-import { curveAt, resample, PRESETS } from '../src/lib/equalizer';
+import { cappedBoostMb, curveAt, resample, PRESETS } from '../src/lib/equalizer';
 
 // The device's own bands (read off the phone by the phase-0 probe: 5 bands,
 // ±15 dB). The web equalizer has 8 fixed bands at different frequencies, so
@@ -89,6 +89,30 @@ describe('resample — a web preset onto the device bands', () => {
     expect(out).toHaveLength(3);
     // clarity lifts the 1k presence band and leaves the extremes alone.
     expect(out[1]).toBeGreaterThan(out[0]);
+  });
+});
+
+describe('cappedBoostMb — boost + EQ must never stack past the limiter', () => {
+  it('passes boost through when the curve is flat', () => {
+    expect(cappedBoostMb(1200, [0, 0, 0, 0, 0], 'limiter')).toBe(1200);
+  });
+
+  it('pulls boost down by the hottest positive band', () => {
+    // +4 dB hottest band → only +8 dB of boost fits under the +12 ceiling.
+    expect(cappedBoostMb(1200, [400, -300, 0, 200, 0], 'limiter')).toBe(800);
+  });
+
+  it('ignores cuts — negative bands add no energy', () => {
+    expect(cappedBoostMb(600, [-1500, -200, 0, 0, 0], 'limiter')).toBe(600);
+  });
+
+  it('caps the plain fallback at +6 dB outright', () => {
+    expect(cappedBoostMb(1200, [0, 0, 0, 0, 0], 'plain')).toBe(600);
+    expect(cappedBoostMb(600, [300, 0, 0, 0, 0], 'plain')).toBe(300);
+  });
+
+  it('never goes negative even when the curve alone exceeds the ceiling', () => {
+    expect(cappedBoostMb(300, [1500, 0, 0, 0, 0], 'limiter')).toBe(0);
   });
 });
 

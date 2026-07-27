@@ -9,6 +9,9 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.audiofx.BassBoost
+import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.LoudnessEnhancer
+import android.os.Build
 import android.media.audiofx.Equalizer
 import android.os.Build
 import android.os.Handler
@@ -50,8 +53,16 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
   private val main = Handler(Looper.getMainLooper())
   private var equalizer: Equalizer? = null
   private var bassBoost: BassBoost? = null
+  // Volume boost (docs/perf/04 4b): gain INTO a limiter, never bare gain.
+  // API 28+ gets DynamicsProcessing (real limiter stage); 26-27 fall back to
+  // LoudnessEnhancer, which JS caps at +6 dB — OEM behavior above that clips.
+  private var boostDp: DynamicsProcessing? = null
+  private var boostLe: LoudnessEnhancer? = null
   private var sessionId = 0
   private var routeWatching = false
+
+  private val boostMode: String
+    get() = if (Build.VERSION.SDK_INT >= 28) "limiter" else "plain"
 
   private val audio: AudioManager?
     get() = reactCtx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -84,6 +95,10 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
       out.putBoolean("available", true)
       out.putArray("bands", bands)
       out.putString("output", detectOutput())
+      // "limiter" = DynamicsProcessing (safe to +12 dB), "plain" =
+      // LoudnessEnhancer (JS caps at +6 dB). Availability is only truly known
+      // at attach; this names the CLASS of booster the UI may offer.
+      out.putString("boost", boostMode)
       promise.resolve(out)
     } catch (e: Throwable) {
       // Refused (OEM DSP, policy, missing permission) — report it honestly so
@@ -120,6 +135,7 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
         } catch (_: Throwable) {
           null // optional extra — its absence never blocks the equalizer
         }
+        attachBooster(session)
         promise.resolve(true)
       } catch (e: Throwable) {
         releaseEffects()
@@ -136,6 +152,39 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
     }
   }
 
+  // Gain into a limiter (never bare gain). All-channel limiter: attack 1ms,
+  // release 60ms, ratio 10:1, threshold −1 dBFS — boosted peaks compress
+  // instead of hard-clipping (docs/perf/04 4b). Failure leaves boost null:
+  // optional, never blocks the equalizer.
+  private fun attachBooster(session: Int) {
+    if (Build.VERSION.SDK_INT >= 28) {
+      boostDp = try {
+        val cfg = DynamicsProcessing.Config.Builder(
+          DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
+          2, // stereo
+          false, 0, // no pre-EQ stage
+          false, 0, // no multi-band compressor stage
+          false, 0, // no post-EQ stage
+          true, // limiter stage
+        ).build()
+        val dp = DynamicsProcessing(EFFECT_PRIORITY, session, cfg)
+        dp.setLimiterAllChannelsTo(
+          DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -1f, 0f),
+        )
+        dp
+      } catch (_: Throwable) {
+        null
+      }
+    }
+    if (boostDp == null) {
+      boostLe = try {
+        LoudnessEnhancer(session)
+      } catch (_: Throwable) {
+        null
+      }
+    }
+  }
+
   private fun releaseEffects() {
     try {
       equalizer?.enabled = false
@@ -147,8 +196,20 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
       bassBoost?.release()
     } catch (_: Throwable) {
     }
+    try {
+      boostDp?.enabled = false
+      boostDp?.release()
+    } catch (_: Throwable) {
+    }
+    try {
+      boostLe?.enabled = false
+      boostLe?.release()
+    } catch (_: Throwable) {
+    }
     equalizer = null
     bassBoost = null
+    boostDp = null
+    boostLe = null
     sessionId = 0
   }
 
@@ -201,6 +262,37 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
         promise.resolve(true)
       } catch (e: Throwable) {
         promise.reject("bass_failed", e.message ?: "could not set bass boost", e)
+      }
+    }
+  }
+
+  // Volume boost in millibels (0..1200). The DynamicsProcessing path feeds
+  // input gain into the limiter configured at attach; the LoudnessEnhancer
+  // fallback applies target gain directly — JS never sends it more than 600.
+  @ReactMethod
+  fun setBoost(millibels: Int, promise: Promise) {
+    main.post {
+      try {
+        val mb = millibels.coerceIn(0, 1200)
+        val dp = boostDp
+        val le = boostLe
+        when {
+          dp != null -> {
+            dp.setInputGainAllChannelsTo(mb / 100f)
+            dp.enabled = mb > 0
+          }
+          le != null -> {
+            le.setTargetGain(mb.coerceAtMost(600))
+            le.enabled = mb > 0
+          }
+          else -> {
+            promise.resolve(false)
+            return@post
+          }
+        }
+        promise.resolve(true)
+      } catch (e: Throwable) {
+        promise.reject("boost_failed", e.message ?: "could not set boost", e)
       }
     }
   }
