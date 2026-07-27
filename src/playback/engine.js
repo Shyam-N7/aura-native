@@ -607,7 +607,9 @@ export async function handlePlaybackError() {
 
   if (!recovery.refetched) {
     recovery.refetched = true;
-    const fresh = await fetchTrack(cur.id).catch(() => null);
+    // fresh:true — this rung exists BECAUSE the cached URL may be the expired
+    // one; serving it back from cache would loop the failure.
+    const fresh = await fetchTrack(cur.id, { fresh: true }).catch(() => null);
     if (fresh?.streamUrl && fresh.streamUrl !== cur.streamUrl) {
       recovery.ladderPos = 0;
       const freshLadder = qualityLadder(fresh.streamUrl, quality);
