@@ -779,8 +779,15 @@ export function QueueSheet() {
         }
         return;
       }
-      if (to >= qt.length) {
-        autoRadio.moveCandidate(from.j, to - qt.length);
+      // The BORDER is the header row, and landing ON it has not crossed it:
+      // the tile is still inside up next, so it just becomes the first
+      // suggestion — it must not enter the queue (field report: dragging a
+      // pick up one slot appended it after the last queued song). Only a
+      // drop strictly above the header — genuinely among queue rows — is a
+      // crossing. In queue-space that border sits at qt.length - 1, because
+      // the header owns a visual slot but no queue index.
+      if (to >= qt.length - 1) {
+        autoRadio.moveCandidate(from.j, Math.max(0, to - qt.length));
       } else {
         // +1: the header row consumed one visual slot on the way up (it owns
         // no queue index), so the raw target would land one position too high
