@@ -606,12 +606,40 @@ function ensureAutoSampler() {
 // session (the reason this app exists) would just fall silent forever.
 let recovery = { id: null, ladderPos: 0, refetched: false };
 
-async function loadAndResume(track, position) {
-  await TrackPlayer.load(track);
-  if (position > 0) {
-    await TrackPlayer.seekTo(position);
-  }
-  await TrackPlayer.play();
+// Is the slot we started recovering still the one playing? By identity
+// (id + url), not index: the waits below are long enough for a queue edit to
+// shift the same playing track sideways, and that must not cost it its
+// recovery — while a music-only swap or a quality remap of the slot means the
+// url under us is no longer ours to overwrite.
+async function stillOnSlot(id, url) {
+  const [activeNow, queueNow] = await Promise.all([
+    TrackPlayer.getActiveTrackIndex(),
+    TrackPlayer.getQueue(),
+  ]);
+  const slot = activeNow == null ? undefined : queueNow[activeNow];
+  return slot?.id === id && slot?.url === url;
+}
+
+// load() replaces whatever is CURRENT AT CALL TIME, and every rung into here
+// has first awaited something slow — the backoff sleep, the offline wait, the
+// refetch. Press next during that window and the dead track's url and metadata
+// land on the song now playing, which then seeks and plays. So re-check the
+// slot first: loadOntoActive's discipline, applied to recovery. The check and
+// the load ride the queue lock together so a syncQueue/remapQueue rebuild can't
+// land between them; the waits above them stay outside it — holding the lock
+// across a 60s offline wait would freeze every queue edit and the sampler.
+function loadAndResume(expectId, expectUrl, track, position) {
+  return withQueueLock(async () => {
+    if (!(await stillOnSlot(expectId, expectUrl))) {
+      return false;
+    }
+    await TrackPlayer.load(track);
+    if (position > 0) {
+      await TrackPlayer.seekTo(position);
+    }
+    await TrackPlayer.play();
+    return true;
+  });
 }
 
 // Probe our own origin — any response (even an error status) proves routing;
@@ -677,7 +705,7 @@ export async function handlePlaybackError(err) {
       const { position: at } = await TrackPlayer.getProgress().catch(() => ({
         position: 0,
       }));
-      await loadAndResume({ ...cur, url: fallback }, at);
+      await loadAndResume(cur.id, cur.url, { ...cur, url: fallback }, at);
       altClearedListener?.();
       return;
     }
@@ -709,9 +737,14 @@ export async function handlePlaybackError(err) {
     // strand the session at its end. Paused-with-position is the honest state;
     // the user's next play (or the connectivity wait) resumes right here.
     if (klass === 'network' && !(await waitForConnectivity(60000))) {
-      showToast("you're offline — music will wait for you.");
-      await TrackPlayer.pause();
-      recovery = { id: null, ladderPos: 0, refetched: false };
+      // Only if this is still the song in front of the user — a minute is
+      // plenty of time to press next onto something the disk cache plays fine,
+      // and pausing THAT with an offline toast would be a lie.
+      if (await stillOnSlot(cur.id, cur.url)) {
+        showToast("you're offline — music will wait for you.");
+        await TrackPlayer.pause();
+        recovery = { id: null, ladderPos: 0, refetched: false };
+      }
       return;
     }
   } else {
@@ -723,7 +756,7 @@ export async function handlePlaybackError(err) {
         await new Promise(r => setTimeout(r, wait));
       }
       if (recovery.attempt <= 2) {
-        await loadAndResume(cur, position);
+        await loadAndResume(cur.id, cur.url, cur, position);
         return;
       }
     }
@@ -738,7 +771,12 @@ export async function handlePlaybackError(err) {
   const ladder = cur.streamUrl ? qualityLadder(cur.streamUrl, quality) : [];
   recovery.ladderPos += 1;
   if (recovery.ladderPos < ladder.length) {
-    await loadAndResume({ ...cur, url: ladder[recovery.ladderPos] }, position);
+    await loadAndResume(
+      cur.id,
+      cur.url,
+      { ...cur, url: ladder[recovery.ladderPos] },
+      position,
+    );
     return;
   }
 
@@ -751,6 +789,8 @@ export async function handlePlaybackError(err) {
       recovery.ladderPos = 0;
       const freshLadder = qualityLadder(fresh.streamUrl, quality);
       await loadAndResume(
+        cur.id,
+        cur.url,
         { ...cur, streamUrl: fresh.streamUrl, url: freshLadder[0] },
         position,
       );
@@ -758,6 +798,11 @@ export async function handlePlaybackError(err) {
     }
   }
 
+  // The refetch above is a round trip; if the user moved on during it, this
+  // toast-and-skip would punish the song that IS playing.
+  if (!(await stillOnSlot(cur.id, cur.url))) {
+    return;
+  }
   crumb('recovery', 'give-up', { id: cur.id, attempts: recovery.attempt });
   showToast("couldn't play this track — skipping.");
   if (active + 1 < rQueue.length) {
