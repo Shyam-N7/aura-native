@@ -522,6 +522,51 @@ const Row = React.memo(function Row({
 // Sheet chassis (zIndex 50) stacks it over the queue (40). "save queue as
 // playlist" swaps the menu for an inline name step (the AddToPlaylistSheet
 // new-playlist pattern — native has no prompt dialog).
+// The divider between the queue and AURA's picks. It lives INSIDE the list,
+// so when a drag opens a gap across the boundary it has to shift exactly like
+// a row does — a static divider is what let picks slide underneath it and
+// collide with the rows above (field report: overlapping tiles). Its virtual
+// position is half a slot above the first pick, so the same band test that
+// moves the rows moves it too.
+const RadioHead = React.memo(function RadioHead({
+  boundary,
+  dragFrom,
+  dragTo,
+  inkFaint,
+  accent,
+  onAdopt,
+}) {
+  const style = useAnimatedStyle(() => {
+    if (dragFrom.value < 0) {
+      return { transform: [{ translateY: 0 }] };
+    }
+    let shift = 0;
+    if (dragFrom.value < boundary && boundary <= dragTo.value) {
+      shift = -ROW_HEIGHT;
+    } else if (dragTo.value <= boundary && boundary < dragFrom.value) {
+      shift = ROW_HEIGHT;
+    }
+    return {
+      transform: [{ translateY: withTiming(shift, { duration: SHIFT_MS }) }],
+    };
+  });
+  return (
+    <Animated.View style={[styles.radioHeadRow, style]}>
+      <Text style={[label(9), { color: inkFaint }]}>
+        up next · picked by aura
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="add these songs to your queue"
+        onPress={onAdopt}
+        hitSlop={8}
+      >
+        <Text style={[label(9), { color: accent }]}>add to queue</Text>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
 function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
   const { t } = useTheme();
   const [naming, setNaming] = useState(false);
@@ -818,6 +863,10 @@ export function QueueSheet() {
      
     [reorder, insertTrackAt],
   );
+  const onAdoptPicks = useCallback(() => {
+    Vibration.vibrate(8);
+    adoptAutoNext();
+  }, [adoptAutoNext]);
   const reduced = useReducedMotion();
   const open = player.ui?.queueOpen ?? false;
   const { tracks, idx, source } = player.queue ?? {
@@ -1200,22 +1249,14 @@ export function QueueSheet() {
   const renderItem = ({ item, index }) => {
     if (item.__radioHead) {
       return (
-        <View style={styles.radioHeadRow}>
-          <Text style={[label(9), { color: t.inkFaint }]}>
-            up next · picked by aura
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="add these songs to your queue"
-            onPress={() => {
-              Vibration.vibrate(8);
-              adoptAutoNext();
-            }}
-            hitSlop={8}
-          >
-            <Text style={[label(9), { color: t.accent }]}>add to queue</Text>
-          </Pressable>
-        </View>
+        <RadioHead
+          boundary={tracks.length - 0.5}
+          dragFrom={dragFrom}
+          dragTo={dragTo}
+          inkFaint={t.inkFaint}
+          accent={t.accent}
+          onAdopt={onAdoptPicks}
+        />
       );
     }
     // Picks sit one list slot below their queue-space index (the header row).
