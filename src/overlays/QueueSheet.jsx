@@ -739,7 +739,12 @@ export function QueueSheet() {
       if (to >= qt.length) {
         autoRadio.moveCandidate(from.j, to - qt.length);
       } else {
-        insertTrackAt(from.track, to);
+        // +1: the header row consumed one visual slot on the way up (it owns
+        // no queue index), so the raw target lands one position too high —
+        // field report: "it is going to past songs". And a suggestion never
+        // belongs in history: clamp to after the playing track.
+        const at = Math.max(to + 1, commitRef.current.idx + 1);
+        insertTrackAt(from.track, at);
         autoRadio.dropCandidate(from.track.id);
       }
     },
@@ -829,6 +834,7 @@ export function QueueSheet() {
   const commitRef = useRef({ tracks: [], base: 0, radio: [] });
   commitRef.current = {
     tracks,
+    idx,
     base: hidePast ? Math.max(0, idx) : 0,
     radio: radioBatch ?? [],
   };
