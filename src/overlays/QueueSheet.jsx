@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  AccessibilityInfo,
   BackHandler,
   Pressable,
   StyleSheet,
@@ -59,6 +60,9 @@ const ROW_HEIGHT = 62;
 // between the real queue and the suggestion rows. Rendered at ROW_HEIGHT so
 // the fixed-height drag math stays uniform around it.
 const RADIO_HEAD = { id: '__aura-up-next', __radioHead: true };
+// Dropping a song above the playing track is allowed — it just isn't what
+// "next" means any more, and that is invisible unless we say it.
+const BEHIND_MSG = "that sits behind what's playing — it won't play next.";
 const SHIFT_MS = 160;
 // Auto-scroll while dragging: a continuous per-frame loop (not per-move-event),
 // so it keeps scrolling when the finger holds still at the edge and its speed
@@ -148,6 +152,7 @@ const Row = React.memo(function Row({
   onRemove,
   onMoveTop,
   onGone,
+  isPick,
   dragFrom,
   dragTo,
   dragShift,
@@ -172,6 +177,32 @@ const Row = React.memo(function Row({
   const pickup = useCallback(() => {
     Vibration.vibrate(10);
   }, []);
+
+  const a11yActions = useMemo(
+    () => [
+      { name: 'moveUp', label: 'move up' },
+      { name: 'moveDown', label: 'move down' },
+      ...(isPick ? [{ name: 'moveToQueue', label: 'move to queue' }] : []),
+    ],
+    [isPick],
+  );
+  const onA11yAction = e => {
+    const action = e.nativeEvent.actionName;
+    if (action === 'moveToQueue') {
+      onMoveTop(index);
+      AccessibilityInfo.announceForAccessibility(`${title} moved to the queue`);
+      return;
+    }
+    const to = action === 'moveUp' ? index - 1 : index + 1;
+    if (to < 0 || to > count - 1) {
+      AccessibilityInfo.announceForAccessibility(`${title} is already there`);
+      return;
+    }
+    reorder(index, to);
+    AccessibilityInfo.announceForAccessibility(
+      `${title} moved ${action === 'moveUp' ? 'up' : 'down'}`,
+    );
+  };
 
   const commit = (from, to) => {
     if (from !== to) {
@@ -418,6 +449,11 @@ const Row = React.memo(function Row({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`play ${title}`}
+        // A drag is unusable with a screen reader on, so the same three moves
+        // are offered as assistive actions. Exposed ONLY to assistive tech —
+        // touch users still have exactly one way in, the drag.
+        accessibilityActions={a11yActions}
+        onAccessibilityAction={onA11yAction}
         disabled={leaving}
         onPress={() => jumpTo(index)}
         onLongPress={() =>
@@ -731,21 +767,32 @@ export function QueueSheet() {
   const reorderRow = useCallback(
     (f, to) => {
       const { tracks: qt } = commitRef.current;
+      const cur = commitRef.current.idx;
       const from = pickAt(f);
       if (!from) {
-        reorder(f, Math.min(to, qt.length - 1));
+        const dest = Math.min(to, qt.length - 1);
+        reorder(f, dest);
+        // Dragged from ahead of the playhead to behind it — allowed, but it
+        // has quietly stopped being something that will play.
+        if (f > cur && dest <= cur) {
+          showToast(BEHIND_MSG);
+        }
         return;
       }
       if (to >= qt.length) {
         autoRadio.moveCandidate(from.j, to - qt.length);
       } else {
         // +1: the header row consumed one visual slot on the way up (it owns
-        // no queue index), so the raw target lands one position too high —
-        // field report: "it is going to past songs". And a suggestion never
-        // belongs in history: clamp to after the playing track.
-        const at = Math.max(to + 1, commitRef.current.idx + 1);
+        // no queue index), so the raw target would land one position too high
+        // (field report: "it is going to past songs"). Where it lands from
+        // there is the user's call — above the playhead is legal, it just
+        // won't play next, so say so.
+        const at = to + 1;
         insertTrackAt(from.track, at);
         autoRadio.dropCandidate(from.track.id);
+        if (at <= cur) {
+          showToast(BEHIND_MSG);
+        }
       }
     },
      
@@ -1177,7 +1224,13 @@ export function QueueSheet() {
         scrollCmd={scrollCmd}
         dragDir={dragDir}
         dirPivot={dirPivot}
-        base={pastHidden}
+        isPick={at >= tracks.length}
+        // A pick sits one VISUAL slot below its queue index (the header row
+        // between the sections owns no index), so its base carries that
+        // offset: it keeps the pickup geometry honest, and it lets the drop
+        // target reach -1 — which is +1'd back to 0, the slot above the first
+        // track. Without it the very top of the queue is unreachable.
+        base={pastHidden - (at >= tracks.length ? 1 : 0)}
         count={at >= tracks.length ? dragCount : tracks.length}
         listGesture={listGesture}
         onDrag={onDrag}
