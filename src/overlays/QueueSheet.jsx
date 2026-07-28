@@ -687,7 +687,33 @@ export function QueueSheet() {
   // Stable context callbacks (useCallback in the provider) — handed to the
   // memoized Row directly; passing `player` itself would defeat the memo,
   // since the context value is a fresh object every provider render.
-  const { jumpTo, reorder, removeAt } = player;
+  const { jumpTo, reorder, removeAt, adoptAutoNext } = player;
+  // AURA's picks render as ORDINARY rows at the queue's tail (in-place grip —
+  // field ask). Any mutating touch adopts the batch into the real queue first
+  // (adoptAutoNext is synchronous on the model), and because indices and row
+  // keys are minted over the combined list, everything — including a drag
+  // already under the finger — continues seamlessly across the swap.
+  const radioBatch = player.autoNextTracks;
+  const radioLive = (radioBatch?.length ?? 0) > 0;
+  const adoptIfNeeded = useCallback(() => {
+    if (radioLive) {
+      adoptAutoNext();
+    }
+  }, [radioLive, adoptAutoNext]);
+  const jumpToRow = useCallback(
+    i => {
+      adoptIfNeeded();
+      jumpTo(i);
+    },
+    [adoptIfNeeded, jumpTo],
+  );
+  const reorderRow = useCallback(
+    (f, to) => {
+      adoptIfNeeded();
+      reorder(f, to);
+    },
+    [adoptIfNeeded, reorder],
+  );
   const reduced = useReducedMotion();
   const open = player.ui?.queueOpen ?? false;
   const { tracks, idx, source } = player.queue ?? {
@@ -746,11 +772,15 @@ export function QueueSheet() {
     const ph = hidePast ? Math.max(0, idx) : 0;
     const rows = ph ? tracks.slice(ph) : tracks;
     const seen = Object.create(null);
-    return rows.map(item => {
+    // Suggested rows mint keys from the SAME sequence: after adoption the
+    // combined content is identical, so every key — and therefore every Row
+    // instance and any in-flight drag gesture — survives the data swap.
+    const all = radioBatch?.length ? [...rows, ...radioBatch] : rows;
+    return all.map(item => {
       const n = (seen[item.id] = (seen[item.id] ?? 0) + 1);
       return `${item.id}#${n}`;
     });
-  }, [tracks, idx, hidePast]);
+  }, [tracks, idx, hidePast, radioBatch]);
 
   // Row removal, animate-then-commit: the tapped row joins `leaving` and plays
   // its storm-off in place (Row.gone); only when it has fully left does onGone
@@ -766,13 +796,17 @@ export function QueueSheet() {
   commitRef.current = { tracks, base: hidePast ? Math.max(0, idx) : 0 };
   const removeRow = useCallback(
     (key, index) => {
+      // Adopt BEFORE the exit animation starts: the leaving row must already
+      // be a real queue row, or the batch recompute would re-render it away
+      // mid-storm-off and the deferred removeAt would miss.
+      adoptIfNeeded();
       if (reduced) {
         removeAt(index);
         return;
       }
       setLeaving(prev => (prev.has(key) ? prev : new Set(prev).add(key)));
     },
-    [reduced, removeAt],
+    [reduced, removeAt, adoptIfNeeded],
   );
   // "move to top" = next in line, right after the playing track. Splice
   // semantics shift the current index down by one when the row comes from
@@ -782,9 +816,9 @@ export function QueueSheet() {
       if (i === idx) {
         return;
       }
-      reorder(i, i > idx ? idx + 1 : idx);
+      reorderRow(i, i > idx ? idx + 1 : idx);
     },
-    [reorder, idx],
+    [reorderRow, idx],
   );
   const onGone = useCallback(
     key => {
@@ -1021,6 +1055,11 @@ export function QueueSheet() {
   // the native player never see a different numbering.
   const pastHidden = hidePast ? Math.max(0, idx) : 0;
   const visible = pastHidden ? tracks.slice(pastHidden) : tracks;
+  // The picks join the SAME list the drag math runs on: a suggested row's
+  // queue-space index (pastHidden + list index) equals exactly where adoption
+  // puts it, so gestures and drops need no special casing.
+  const listData = radioLive ? [...visible, ...radioBatch] : visible;
+  const dragCount = tracks.length + (radioLive ? radioBatch.length : 0);
 
   const renderItem = ({ item, index }) => {
     const at = index + pastHidden;
@@ -1033,9 +1072,9 @@ export function QueueSheet() {
         isPast={at < idx}
         rowKey={key}
         leaving={leaving.has(key)}
-        jumpTo={jumpTo}
+        jumpTo={jumpToRow}
         onMoveTop={moveToTop}
-        reorder={reorder}
+        reorder={reorderRow}
         onRemove={removeRow}
         onGone={onGone}
         dragFrom={dragFrom}
@@ -1048,7 +1087,7 @@ export function QueueSheet() {
         dragDir={dragDir}
         dirPivot={dirPivot}
         base={pastHidden}
-        count={tracks.length}
+        count={dragCount}
         listGesture={listGesture}
         onDrag={onDrag}
         fingerY={fingerY}
@@ -1058,62 +1097,31 @@ export function QueueSheet() {
     );
   };
 
-  // AURA's prefetched continuation, listed under the last track as what's
-  // coming. The context hands this over already deduped against the live queue
-  // and only while it's actually reachable, so row i is queue position idx+1+i
-  // and tapping one fills the whole batch in and plays from there.
-  const radioBatch = player.autoNextTracks;
+  // AURA's picks now render as ordinary rows at the tail (see radioBatch
+  // above) — this footer only names them and offers the bulk adopt.
   const renderRadio = () => {
-    if (!radioBatch?.length) {
+    if (!radioLive) {
       return null;
     }
     return (
       <View style={[styles.radio, { borderTopColor: t.line }]}>
         <View style={styles.radioHead}>
           <Text style={[label(9), { color: t.inkFaint }, styles.radioLabel]}>
-            up next · picked by aura
+            the last {radioBatch.length} are picked by aura — drag, remove, or
+            keep them
           </Text>
-          {/* One tap makes the picks REAL queue rows — grip, drag, remove,
-              move to top — while the music plays on (adoptAutoNext). */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="add these songs to your queue"
             onPress={() => {
               Vibration.vibrate(8);
-              player.adoptAutoNext();
+              adoptAutoNext();
             }}
             hitSlop={8}
           >
             <Text style={[label(9), { color: t.accent }]}>add to queue</Text>
           </Pressable>
         </View>
-        {radioBatch.map((rt, i) => (
-          <Pressable
-            key={`${rt.id}-${i}`}
-            accessibilityRole="button"
-            accessibilityLabel={`play next: ${cleanTitle(rt.title)}`}
-            onPress={() => player.playAutoNext(i)}
-            onLongPress={() => openTrackActions({ track: rt })}
-            style={({ pressed }) => [
-              styles.radioRow,
-              pressed && styles.pressed,
-            ]}
-          >
-            <TrackArt track={rt} size={40} radius={4} />
-            <View style={styles.meta}>
-              <Text numberOfLines={1} style={[styles.title, { color: t.ink }]}>
-                {cleanTitle(rt.title)}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={[styles.artist, { color: t.inkSoft }]}
-              >
-                {rt.artist ?? ''}
-              </Text>
-            </View>
-            <Text style={[label(9), { color: t.accent }]}>play</Text>
-          </Pressable>
-        ))}
       </View>
     );
   };
@@ -1202,7 +1210,7 @@ export function QueueSheet() {
           <GestureDetector gesture={listGesture}>
             <Animated.FlatList
               ref={listRef}
-              data={visible}
+              data={listData}
               renderItem={renderItem}
               keyExtractor={(_item, index) => rowKeys[index]}
               // Mounted at REST so reanimated is already tracking each cell's
