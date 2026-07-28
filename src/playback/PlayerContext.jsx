@@ -177,6 +177,46 @@ export function PlayerProvider({ children }) {
     setQueueState(nextQueue);
   }, []);
 
+  // The one shape every queue edit goes through: mutate the model, paint it,
+  // then push it to the engine behind the gapless-boundary guard.
+  //
+  // `mutate` must be PURE — it runs once for the optimistic paint, and again
+  // inside the op if the guard fires.
+  //
+  // The guard: a mutation is computed against the model's idea of what is
+  // playing, but by the time its op reaches the front of the chain the native
+  // player may have moved on — its event lands a beat later, and with the
+  // screen off that backlog can run to whole tracks (see the wake resync).
+  // Push the stale index and syncQueue rebuilds around a song that already
+  // finished, so the audio jumps backwards: remove a row in the last second
+  // of a track and the next one restarts as the previous one. Re-read the
+  // active index, and if it moved, recompute the SAME mutation from the track
+  // that is actually playing. clearQueue carried this guard alone while six
+  // siblings went without; having exactly one copy is the point.
+  //
+  // Returns whether anything changed, so callers can gate their own side
+  // effects (toasts, shuffle bookkeeping) on a real edit.
+  const applyAndSync = useCallback(
+    (before, mutate) => {
+      const nq = mutate(before);
+      if (nq === before) {
+        return false;
+      }
+      applyQueue(nq);
+      enqueueOp(async () => {
+        const active = await engine.getActiveIndex();
+        if (active != null && active !== before.idx && before.tracks[active]) {
+          const fixed = mutate({ ...before, idx: active });
+          applyQueue(fixed);
+          return engine.syncQueue(fixed, { startIndex: fixed.idx });
+        }
+        return engine.syncQueue(nq, { startIndex: nq.idx });
+      });
+      return true;
+    },
+    [applyQueue, enqueueOp],
+  );
+
   // ── position persistence ({ trackId, progress } fraction, 5s debounce) ──
   const posPending = useRef(null);
   const posTimer = useRef(null);
@@ -358,14 +398,18 @@ export function PlayerProvider({ children }) {
       if (q.tracks.some(x => x.id === track.id)) {
         return; // already queued — dedupe rule, same as dedupeAppend's
       }
-      const pos = Math.max(0, Math.min(at, q.tracks.length));
-      const tracks = [...q.tracks];
-      tracks.splice(pos, 0, track);
-      const nq = { ...q, tracks, idx: pos <= q.idx ? q.idx + 1 : q.idx };
-      applyQueue(nq);
-      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+      applyAndSync(q, base => {
+        const pos = Math.max(0, Math.min(at, base.tracks.length));
+        const tracks = [...base.tracks];
+        tracks.splice(pos, 0, track);
+        return {
+          ...base,
+          tracks,
+          idx: pos <= base.idx ? base.idx + 1 : base.idx,
+        };
+      });
     },
-    [applyQueue, enqueueOp],
+    [applyAndSync],
   );
 
   // Keep the batch, keep listening: AURA's picks become REAL queue rows — so
@@ -376,14 +420,13 @@ export function PlayerProvider({ children }) {
   const adoptAutoNext = useCallback(() => {
     userActedRef.current = true;
     const q = queueRef.current;
-    const extended = model.dedupeAppend(q, autoNextRef.current?.candidates);
-    if (extended === q) {
+    const candidates = autoNextRef.current?.candidates;
+    if (model.dedupeAppend(q, candidates) === q) {
       return;
     }
     autoRadio.reset();
-    applyQueue(extended);
-    enqueueOp(() => engine.syncQueue(extended, { startIndex: extended.idx }));
-  }, [applyQueue, enqueueOp]);
+    applyAndSync(q, base => model.dedupeAppend(base, candidates));
+  }, [applyAndSync]);
 
   const playAutoNext = useCallback(
     (offset = 0) => {
@@ -662,29 +705,17 @@ export function PlayerProvider({ children }) {
   const removeAt = useCallback(
     i => {
       userActedRef.current = true;
-      const q = queueRef.current;
-      const nq = model.removeAt(q, i);
-      if (nq === q) {
-        return;
-      }
-      applyQueue(nq);
-      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+      applyAndSync(queueRef.current, base => model.removeAt(base, i));
     },
-    [applyQueue, enqueueOp],
+    [applyAndSync],
   );
 
   const reorder = useCallback(
     (from, to) => {
       userActedRef.current = true;
-      const q = queueRef.current;
-      const nq = model.reorder(q, from, to);
-      if (nq === q) {
-        return;
-      }
-      applyQueue(nq);
-      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+      applyAndSync(queueRef.current, base => model.reorder(base, from, to));
     },
-    [applyQueue, enqueueOp],
+    [applyAndSync],
   );
 
   // Web clearQueue (App.jsx): keep ONLY the currently playing track — the
@@ -693,29 +724,15 @@ export function PlayerProvider({ children }) {
   // the unchanged current track, so playback is never interrupted.
   const clearQueue = useCallback(() => {
     userActedRef.current = true;
-    const q = queueRef.current;
-    const nq = model.clear(q);
-    if (nq === q) {
+    // The gapless-boundary guard this used to carry alone now lives in
+    // applyAndSync, where every sibling mutation gets it too.
+    if (!applyAndSync(queueRef.current, base => model.clear(base))) {
       return;
     }
-    applyQueue(nq);
     setShuffleActive(false);
     preShuffleRef.current = null;
-    enqueueOp(async () => {
-      // Gapless-boundary guard: while the clear confirm sat open, the native
-      // player may have advanced past the track the JS model believed was
-      // current (its event lands a beat later). Keep the track that is
-      // ACTUALLY playing — not a finished one restarted from 0:00.
-      const active = await engine.getActiveIndex();
-      if (active != null && active !== q.idx && q.tracks[active]) {
-        const fixed = model.clear({ ...q, idx: active });
-        applyQueue(fixed);
-        return engine.syncQueue(fixed, { startIndex: fixed.idx });
-      }
-      return engine.syncQueue(nq, { startIndex: nq.idx });
-    });
     showToast('queue cleared.');
-  }, [applyQueue, enqueueOp]);
+  }, [applyAndSync]);
 
   // Context-menu "play next" / "add to queue" (web enqueueNext/enqueueLast).
   // First insertion flips "tonight's set" → 'your set' inside the model so
@@ -729,11 +746,9 @@ export function PlayerProvider({ children }) {
         playTrack(track);
         return;
       }
-      const nq = model.addNext(q, track);
-      applyQueue(nq);
-      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+      applyAndSync(q, base => model.addNext(base, track));
     },
-    [applyQueue, enqueueOp, playTrack],
+    [applyAndSync, playTrack],
   );
 
   const enqueueLast = useCallback(
@@ -744,11 +759,9 @@ export function PlayerProvider({ children }) {
         playTrack(track);
         return;
       }
-      const nq = model.addToEnd(q, track);
-      applyQueue(nq);
-      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+      applyAndSync(q, base => model.addToEnd(base, track));
     },
-    [applyQueue, enqueueOp, playTrack],
+    [applyAndSync, playTrack],
   );
 
   const cycleRepeat = useCallback(() => {
@@ -772,27 +785,37 @@ export function PlayerProvider({ children }) {
     if (shuffleActive) {
       // Off restores the pre-shuffle order — minus tracks removed since,
       // plus tracks added since — with the playing track kept playing.
-      const q = queueRef.current;
-      const nq = model.restoreOrder(q, preShuffleRef.current);
+      const original = preShuffleRef.current;
       preShuffleRef.current = null;
       setShuffleActive(false);
-      if (nq !== q) {
-        applyQueue(nq);
-        enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+      if (
+        applyAndSync(queueRef.current, base =>
+          model.restoreOrder(base, original),
+        )
+      ) {
         showToast('back in order.');
       }
       return;
     }
     const q = queueRef.current;
-    const nq = model.shuffleUpcoming(q);
-    if (nq !== q) {
+    // shuffleUpcoming draws from an rng, and applyAndSync may run a mutation
+    // twice — once for the optimistic paint, once from the corrected base if
+    // the boundary guard fires. Seed it so both runs deal the same hand and
+    // the list can never visibly re-roll under the user.
+    const seed = Math.floor(Math.random() * 233280);
+    const deal = () => {
+      let n = seed;
+      return () => {
+        n = (n * 9301 + 49297) % 233280;
+        return n / 233280;
+      };
+    };
+    if (applyAndSync(q, base => model.shuffleUpcoming(base, deal()))) {
       preShuffleRef.current = q.tracks;
-      applyQueue(nq);
-      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
     }
     setShuffleActive(true);
     showToast('shuffled.');
-  }, [applyQueue, enqueueOp, shuffleActive]);
+  }, [applyAndSync, shuffleActive]);
 
   const setQuality = useCallback(
     id => {
