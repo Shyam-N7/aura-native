@@ -127,12 +127,19 @@ function Shell() {
         return;
       }
       let parsed;
+      let params;
       try {
         parsed = new URL(url);
+        // RN's URLSearchParams decodes every pair in its constructor, so a
+        // truncated % escape throws URIError here, not in new URL — and this
+        // runs synchronously inside the native 'url' callback and push's
+        // linkHandler (data.link is free text typed in the admin console),
+        // where a throw kills the app. A malformed link is dropped instead.
+        params = parsed.searchParams;
       } catch {
         return;
       }
-      const join = parsed.searchParams.get('join');
+      const join = params.get('join');
       if (join && !handledTokens.has(join)) {
         handledTokens.add(join);
         acceptPlaylistInvite(join)
@@ -163,7 +170,7 @@ function Shell() {
         if (!trackId) {
           return;
         }
-        const at = Number(parsed.searchParams.get('at'));
+        const at = Number(params.get('at'));
         getTrack(trackId)
           .then(track => {
             const p = playerRef.current;
@@ -235,13 +242,17 @@ function Shell() {
       <NavigationContainer
         ref={navRef}
         onReady={() =>
-          Linking.getInitialURL().then(u => {
-            // The launch intent survives the auth/onboarding gates on its own;
-            // the pending ref covers a link that ARRIVED while gated.
-            const link = u ?? pendingLinkRef.current;
-            pendingLinkRef.current = null;
-            handleLink(link);
-          })
+          Linking.getInitialURL()
+            .then(u => {
+              // The launch intent survives the auth/onboarding gates on its
+              // own; the pending ref covers a link that ARRIVED while gated.
+              const link = u ?? pendingLinkRef.current;
+              pendingLinkRef.current = null;
+              handleLink(link);
+            })
+            // Nobody is waiting on this promise, so a native getInitialURL
+            // failure would land as a silent unhandled rejection.
+            .catch(() => {})
         }
       >
         <RootTabs />
