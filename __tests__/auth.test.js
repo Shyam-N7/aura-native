@@ -1,6 +1,7 @@
 import {
   API_BASE,
   fetchAuthed,
+  fetchMe,
   login,
   getUser,
   isSignedIn,
@@ -118,6 +119,33 @@ test('a 401 revalidates via /api/auth/me and clears a dead session', async () =>
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock.mock.calls[1][0]).toBe(`${API_BASE}/api/auth/me`);
+  expect(getUser()).toBe(null);
+  expect(isSignedIn()).toBe(false);
+});
+
+// Pins the permanent silent sign-out: /me answered 200 with no `user`, so
+// persistUser stored the string "undefined" and threw — every later getUser()
+// parse failed and the session was gone across restarts.
+test('a 200 from /me with no user keeps the cached session', async () => {
+  const user = { id: 7, name: 'asha', hasOnboarded: true };
+  storage.setItem('aura.authToken', 'jwt-123');
+  storage.setItem('aura.authUser', JSON.stringify(user));
+  fetchMock.mockResolvedValueOnce(jsonRes(200, { ok: true }));
+
+  await expect(fetchMe()).resolves.toEqual(user);
+
+  expect(getUser()).toEqual(user);
+  expect(isSignedIn()).toBe(true);
+});
+
+// Same class, at the login call site: a malformed payload must not leave a
+// half-written identity behind for the next getUser() to choke on.
+test('a login response with no user leaves no broken identity behind', async () => {
+  fetchMock.mockResolvedValueOnce(jsonRes(200, { token: 'jwt-abc' }));
+
+  await login('a@b.c', 'pw');
+
+  expect(storage.getItem('aura.authUser')).toBe(null);
   expect(getUser()).toBe(null);
   expect(isSignedIn()).toBe(false);
 });

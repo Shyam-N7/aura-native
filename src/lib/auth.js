@@ -62,6 +62,15 @@ export function subscribeAuth(fn) {
 // normal refresh reconciles ALL cached bits — server-side changes (e.g. fields
 // added by a migration) show up WITHOUT a logout/login.
 function persistUser(user) {
+  // Validate BEFORE the first write. Field symptom: a 200 with no `user` in
+  // the body wrote JSON.stringify(undefined) — storage String()s it, so the
+  // literal "undefined" landed in aura.authUser — and then threw on the next
+  // line. Every later getUser() failed to parse it, so the app read as signed
+  // out, permanently, across restarts, with nothing surfaced. A bad payload
+  // must be a no-op, never a half-write.
+  if (!user || typeof user !== 'object') {
+    return;
+  }
   storage.setItem(USER_KEY, JSON.stringify(user));
   if (user.hasOnboarded !== undefined) {
     storage.setItem('aura.hasOnboarded', user.hasOnboarded ? '1' : '');
@@ -283,7 +292,13 @@ export async function fetchMe() {
   if (!res.ok) {
     return getUser();
   }
-  const data = await res.json();
+  // A 200 that carries no user (server regression, edge-cached wrong body, a
+  // gateway 200ing an error envelope) is the same class as the blip above —
+  // keep the cached identity rather than reconciling against nothing.
+  const data = await res.json().catch(() => ({}));
+  if (!data.user) {
+    return getUser();
+  }
   persistUser(data.user);
   return data.user;
 }
