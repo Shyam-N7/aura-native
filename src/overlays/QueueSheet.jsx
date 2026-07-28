@@ -735,7 +735,6 @@ export function QueueSheet() {
     removeAt,
     adoptAutoNext,
     insertTrackAt,
-    playAutoNext,
   } = player;
   // AURA's picks render as ORDINARY rows under their own header (in-place
   // grip — field ask), but they stay SUGGESTIONS: touching one affects only
@@ -755,14 +754,21 @@ export function QueueSheet() {
   const jumpToRow = useCallback(
     v => {
       const p = pickAt(v);
-      if (p) {
-        playAutoNext(p.j); // original tap semantics: batch in, play from here
-      } else {
+      if (!p) {
         jumpTo(v);
+        return;
       }
+      // A pick behaves like any queue row: tapping it plays THAT song. It
+      // alone joins the queue, right after what's playing — tapping used to
+      // haul the whole batch in, which is what made a mis-grabbed drag feel
+      // like up next was rewriting the queue.
+      const at = commitRef.current.idx + 1;
+      insertTrackAt(p.track, at);
+      autoRadio.dropCandidate(p.track.id);
+      jumpTo(at);
     },
-     
-    [jumpTo, playAutoNext],
+
+    [jumpTo, insertTrackAt],
   );
   const reorderRow = useCallback(
     (f, to) => {
@@ -787,7 +793,14 @@ export function QueueSheet() {
       // crossing. In queue-space that border sits at qt.length - 1, because
       // the header owns a visual slot but no queue index.
       if (to >= qt.length - 1) {
-        autoRadio.moveCandidate(from.j, Math.max(0, to - qt.length));
+        // Reorder within up next, exactly like a queue reorder: the dragged
+        // pick takes the slot of whichever pick is displayed there.
+        const radio = commitRef.current.radio ?? [];
+        const k = Math.min(Math.max(0, to - qt.length), radio.length - 1);
+        const target = radio[k];
+        if (target) {
+          autoRadio.moveCandidate(from.track.id, target.id);
+        }
       } else {
         // +1: the header row consumed one visual slot on the way up (it owns
         // no queue index), so the raw target would land one position too high

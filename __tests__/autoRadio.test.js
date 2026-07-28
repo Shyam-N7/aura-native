@@ -35,7 +35,8 @@ test('single-pick edits: dismiss one, reorder within, cache follows', async () =
   getRelated.mockResolvedValue([t('a'), t('b'), t('c')]);
   autoRadio.noteQueueState(radioQueue());
   await new Promise(r => setTimeout(r, 0));
-  autoRadio.moveCandidate(2, 0);
+  // by identity: put 'c' where 'a' sits
+  autoRadio.moveCandidate('c', 'a');
   expect(autoRadio.getAutoNext().candidates.map(x => x.id)).toEqual([
     'c',
     'a',

@@ -105,14 +105,23 @@ export function dropCandidate(id) {
   }
 }
 
-export function moveCandidate(from, to) {
+// Put `id` where `targetId` currently sits. BY IDENTITY, not by position:
+// the displayed list is this array minus whatever is already queued, so a
+// displayed index does not address this array — using one moved the wrong
+// song the moment a single suggestion had been filtered out.
+export function moveCandidate(id, targetId) {
   const c = snapshot.candidates;
-  if (!c?.length || from === to || from < 0 || from >= c.length) {
+  if (!c?.length || id === targetId) {
+    return;
+  }
+  const from = c.findIndex(x => x.id === id);
+  const to = c.findIndex(x => x.id === targetId);
+  if (from < 0 || to < 0) {
     return;
   }
   const next = c.slice();
   const [moved] = next.splice(from, 1);
-  next.splice(Math.max(0, Math.min(to, next.length)), 0, moved);
+  next.splice(to, 0, moved);
   publish({ ...snapshot, candidates: next });
   if (snapshot.seedId) {
     writeCached(snapshot.seedId, next);
