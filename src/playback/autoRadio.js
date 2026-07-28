@@ -89,6 +89,36 @@ export function reset() {
   }
 }
 
+// Single-pick edits (queue-sheet in-place actions): dismiss one, or reorder
+// within the suggestions. Both keep the batch a SUGGESTION — nothing enters
+// the real queue here — and both write through to the cache so a cold reopen
+// shows the list the user last shaped.
+export function dropCandidate(id) {
+  const c = snapshot.candidates;
+  if (!c?.length) {
+    return;
+  }
+  const next = c.filter(x => x.id !== id);
+  publish({ ...snapshot, candidates: next });
+  if (snapshot.seedId) {
+    writeCached(snapshot.seedId, next);
+  }
+}
+
+export function moveCandidate(from, to) {
+  const c = snapshot.candidates;
+  if (!c?.length || from === to || from < 0 || from >= c.length) {
+    return;
+  }
+  const next = c.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(Math.max(0, Math.min(to, next.length)), 0, moved);
+  publish({ ...snapshot, candidates: next });
+  if (snapshot.seedId) {
+    writeCached(snapshot.seedId, next);
+  }
+}
+
 export function noteQueueState(queue, repeat = 'off') {
   const atEnd =
     queue.tracks.length > 0 && queue.idx === queue.tracks.length - 1;

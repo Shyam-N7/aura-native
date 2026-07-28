@@ -344,6 +344,30 @@ export function PlayerProvider({ children }) {
   // Play the batch starting from row `offset` (web consumeAutoNext's jump).
   // Recomputed from the live refs rather than trusting the rendered list, so a
   // queue edit between paint and tap can't append against a stale queue.
+  // Insert ONE track at an exact queue position — how a single up-next pick
+  // is pulled into the queue (drag-drop or move-to-top) without adopting the
+  // whole batch. The engine sync's same-current tier splices around the
+  // active item, so audio never hiccups.
+  const insertTrackAt = useCallback(
+    (track, at) => {
+      if (!track?.id) {
+        return;
+      }
+      userActedRef.current = true;
+      const q = queueRef.current;
+      if (q.tracks.some(x => x.id === track.id)) {
+        return; // already queued — dedupe rule, same as dedupeAppend's
+      }
+      const pos = Math.max(0, Math.min(at, q.tracks.length));
+      const tracks = [...q.tracks];
+      tracks.splice(pos, 0, track);
+      const nq = { ...q, tracks, idx: pos <= q.idx ? q.idx + 1 : q.idx };
+      applyQueue(nq);
+      enqueueOp(() => engine.syncQueue(nq, { startIndex: nq.idx }));
+    },
+    [applyQueue, enqueueOp],
+  );
+
   // Keep the batch, keep listening: AURA's picks become REAL queue rows — so
   // they can be dragged, removed, moved to top like anything else — while the
   // current song plays on untouched. The engine sync's same-current tier
@@ -1178,6 +1202,7 @@ export function PlayerProvider({ children }) {
       autoNextTracks,
       playAutoNext,
       adoptAutoNext,
+      insertTrackAt,
       isPlaying,
       repeat,
       shuffleActive,
@@ -1211,6 +1236,7 @@ export function PlayerProvider({ children }) {
       autoNextTracks,
       playAutoNext,
       adoptAutoNext,
+      insertTrackAt,
       isPlaying,
       repeat,
       shuffleActive,

@@ -31,6 +31,31 @@ test('a seed answered before publishes its cached batch instantly', async () => 
   expect(snap.candidates?.[0]?.id).toBe('x');
 });
 
+test('single-pick edits: dismiss one, reorder within, cache follows', async () => {
+  getRelated.mockResolvedValue([t('a'), t('b'), t('c')]);
+  autoRadio.noteQueueState(radioQueue());
+  await new Promise(r => setTimeout(r, 0));
+  autoRadio.moveCandidate(2, 0);
+  expect(autoRadio.getAutoNext().candidates.map(x => x.id)).toEqual([
+    'c',
+    'a',
+    'b',
+  ]);
+  autoRadio.dropCandidate('a');
+  expect(autoRadio.getAutoNext().candidates.map(x => x.id)).toEqual([
+    'c',
+    'b',
+  ]);
+  // The cache carries the user-shaped list across a cold reopen.
+  autoRadio.reset();
+  getRelated.mockReturnValue(new Promise(() => {}));
+  autoRadio.noteQueueState(radioQueue());
+  expect(autoRadio.getAutoNext().candidates.map(x => x.id)).toEqual([
+    'c',
+    'b',
+  ]);
+});
+
 test('extend retries once on failure and appends the batch', async () => {
   getRelated
     .mockRejectedValueOnce(new Error('blip'))

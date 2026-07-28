@@ -39,6 +39,7 @@ import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { addToPlaylist, createPlaylist } from '../api/playlists';
 import { storage } from '../storage/mmkv';
 import { openTrackActions } from '../lib/trackActionsSheet';
+import * as autoRadio from '../playback/autoRadio';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
 import { showToast } from '../lib/toast';
 import { confirm } from '../lib/confirm';
@@ -53,6 +54,11 @@ import { fonts, label, radii } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 
 const ROW_HEIGHT = 62;
+
+// Sentinel list item: the "up next · picked by aura" header row that sits
+// between the real queue and the suggestion rows. Rendered at ROW_HEIGHT so
+// the fixed-height drag math stays uniform around it.
+const RADIO_HEAD = { id: '__aura-up-next', __radioHead: true };
 const SHIFT_MS = 160;
 // Auto-scroll while dragging: a continuous per-frame loop (not per-move-event),
 // so it keeps scrolling when the finger holds still at the edge and its speed
@@ -687,32 +693,58 @@ export function QueueSheet() {
   // Stable context callbacks (useCallback in the provider) — handed to the
   // memoized Row directly; passing `player` itself would defeat the memo,
   // since the context value is a fresh object every provider render.
-  const { jumpTo, reorder, removeAt, adoptAutoNext } = player;
-  // AURA's picks render as ORDINARY rows at the queue's tail (in-place grip —
-  // field ask). Any mutating touch adopts the batch into the real queue first
-  // (adoptAutoNext is synchronous on the model), and because indices and row
-  // keys are minted over the combined list, everything — including a drag
-  // already under the finger — continues seamlessly across the swap.
+  const {
+    jumpTo,
+    reorder,
+    removeAt,
+    adoptAutoNext,
+    insertTrackAt,
+    playAutoNext,
+  } = player;
+  // AURA's picks render as ORDINARY rows under their own header (in-place
+  // grip — field ask), but they stay SUGGESTIONS: touching one affects only
+  // that one. Drag a pick below the header to shuffle the suggestions; drag
+  // it up into the queue to insert exactly that track there; ✕ dismisses it;
+  // the header's "add to queue" remains the explicit bulk ask. Picks occupy
+  // queue-space [len, len+count-1], so drop targets translate by zone.
   const radioBatch = player.autoNextTracks;
   const radioLive = (radioBatch?.length ?? 0) > 0;
-  const adoptIfNeeded = useCallback(() => {
-    if (radioLive) {
-      adoptAutoNext();
-    }
-  }, [radioLive, adoptAutoNext]);
+  const pickAt = v => {
+    const { tracks: qt, radio } = commitRef.current;
+    const j = v - qt.length;
+    return j >= 0 && j < (radio?.length ?? 0)
+      ? { j, track: radio[j] }
+      : null;
+  };
   const jumpToRow = useCallback(
-    i => {
-      adoptIfNeeded();
-      jumpTo(i);
+    v => {
+      const p = pickAt(v);
+      if (p) {
+        playAutoNext(p.j); // original tap semantics: batch in, play from here
+      } else {
+        jumpTo(v);
+      }
     },
-    [adoptIfNeeded, jumpTo],
+     
+    [jumpTo, playAutoNext],
   );
   const reorderRow = useCallback(
     (f, to) => {
-      adoptIfNeeded();
-      reorder(f, to);
+      const { tracks: qt } = commitRef.current;
+      const from = pickAt(f);
+      if (!from) {
+        reorder(f, Math.min(to, qt.length - 1));
+        return;
+      }
+      if (to >= qt.length) {
+        autoRadio.moveCandidate(from.j, to - qt.length);
+      } else {
+        insertTrackAt(from.track, to);
+        autoRadio.dropCandidate(from.track.id);
+      }
     },
-    [adoptIfNeeded, reorder],
+     
+    [reorder, insertTrackAt],
   );
   const reduced = useReducedMotion();
   const open = player.ui?.queueOpen ?? false;
@@ -772,10 +804,12 @@ export function QueueSheet() {
     const ph = hidePast ? Math.max(0, idx) : 0;
     const rows = ph ? tracks.slice(ph) : tracks;
     const seen = Object.create(null);
-    // Suggested rows mint keys from the SAME sequence: after adoption the
-    // combined content is identical, so every key — and therefore every Row
-    // instance and any in-flight drag gesture — survives the data swap.
-    const all = radioBatch?.length ? [...rows, ...radioBatch] : rows;
+    // Suggested rows mint keys from the SAME sequence: if one is pulled into
+    // the queue, its key — and therefore its Row instance and any in-flight
+    // drag gesture — survives the data swap.
+    const all = radioBatch?.length
+      ? [...rows, RADIO_HEAD, ...radioBatch]
+      : rows;
     return all.map(item => {
       const n = (seen[item.id] = (seen[item.id] ?? 0) + 1);
       return `${item.id}#${n}`;
@@ -792,33 +826,47 @@ export function QueueSheet() {
   // occurrence", minted over the visible slice) is resolved against the live
   // list at commit time. Splice-synced between commits so back-to-back
   // removals stay correct even before the next render lands.
-  const commitRef = useRef({ tracks: [], base: 0 });
-  commitRef.current = { tracks, base: hidePast ? Math.max(0, idx) : 0 };
+  const commitRef = useRef({ tracks: [], base: 0, radio: [] });
+  commitRef.current = {
+    tracks,
+    base: hidePast ? Math.max(0, idx) : 0,
+    radio: radioBatch ?? [],
+  };
   const removeRow = useCallback(
     (key, index) => {
-      // Adopt BEFORE the exit animation starts: the leaving row must already
-      // be a real queue row, or the batch recompute would re-render it away
-      // mid-storm-off and the deferred removeAt would miss.
-      adoptIfNeeded();
       if (reduced) {
-        removeAt(index);
+        const p = pickAt(index);
+        if (p) {
+          autoRadio.dropCandidate(p.track.id);
+        } else {
+          removeAt(index);
+        }
         return;
       }
       setLeaving(prev => (prev.has(key) ? prev : new Set(prev).add(key)));
     },
-    [reduced, removeAt, adoptIfNeeded],
+     
+    [reduced, removeAt],
   );
   // "move to top" = next in line, right after the playing track. Splice
   // semantics shift the current index down by one when the row comes from
   // above it, so the insert target differs by side (docs/perf/04 4a).
   const moveToTop = useCallback(
     i => {
+      const p = pickAt(i);
+      if (p) {
+        // This pick alone becomes next in line; the batch keeps the rest.
+        insertTrackAt(p.track, idx + 1);
+        autoRadio.dropCandidate(p.track.id);
+        return;
+      }
       if (i === idx) {
         return;
       }
-      reorderRow(i, i > idx ? idx + 1 : idx);
+      reorder(i, i > idx ? idx + 1 : idx);
     },
-    [reorderRow, idx],
+     
+    [reorder, insertTrackAt, idx],
   );
   const onGone = useCallback(
     key => {
@@ -842,6 +890,7 @@ export function QueueSheet() {
         seen += 1;
         if (seen === nth) {
           commitRef.current = {
+            ...commitRef.current,
             tracks: list.slice(0, i).concat(list.slice(i + 1)),
             base,
           };
@@ -849,6 +898,17 @@ export function QueueSheet() {
           removeAt(i);
           return;
         }
+      }
+      // Not in the queue — a dismissed PICK: drop it from the suggestion
+      // batch (and its cache) so it stays gone across reopens.
+      const radio = commitRef.current.radio ?? [];
+      if (radio.some(x => x.id === id)) {
+        commitRef.current = {
+          ...commitRef.current,
+          radio: radio.filter(x => x.id !== id),
+        };
+        armFly(260, 340);
+        autoRadio.dropCandidate(id);
       }
     },
     [armFly, removeAt],
@@ -1055,14 +1115,39 @@ export function QueueSheet() {
   // the native player never see a different numbering.
   const pastHidden = hidePast ? Math.max(0, idx) : 0;
   const visible = pastHidden ? tracks.slice(pastHidden) : tracks;
-  // The picks join the SAME list the drag math runs on: a suggested row's
-  // queue-space index (pastHidden + list index) equals exactly where adoption
-  // puts it, so gestures and drops need no special casing.
-  const listData = radioLive ? [...visible, ...radioBatch] : visible;
+  // The picks join the SAME list the drag math runs on, under their header
+  // row. Queue-space: real rows [0, len-1], picks [len, len+count-1] (the
+  // header renders at ROW_HEIGHT but owns no queue index — drops at `len`
+  // mean "first suggestion").
+  const listData = radioLive
+    ? [...visible, RADIO_HEAD, ...radioBatch]
+    : visible;
   const dragCount = tracks.length + (radioLive ? radioBatch.length : 0);
 
   const renderItem = ({ item, index }) => {
-    const at = index + pastHidden;
+    if (item.__radioHead) {
+      return (
+        <View style={styles.radioHeadRow}>
+          <Text style={[label(9), { color: t.inkFaint }]}>
+            up next · picked by aura
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="add these songs to your queue"
+            onPress={() => {
+              Vibration.vibrate(8);
+              adoptAutoNext();
+            }}
+            hitSlop={8}
+          >
+            <Text style={[label(9), { color: t.accent }]}>add to queue</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    // Picks sit one list slot below their queue-space index (the header row).
+    const at =
+      index + pastHidden - (radioLive && index > visible.length ? 1 : 0);
     const key = rowKeys[index];
     return (
       <Row
@@ -1087,7 +1172,7 @@ export function QueueSheet() {
         dragDir={dragDir}
         dirPivot={dirPivot}
         base={pastHidden}
-        count={dragCount}
+        count={at >= tracks.length ? dragCount : tracks.length}
         listGesture={listGesture}
         onDrag={onDrag}
         fingerY={fingerY}
@@ -1097,34 +1182,7 @@ export function QueueSheet() {
     );
   };
 
-  // AURA's picks now render as ordinary rows at the tail (see radioBatch
-  // above) — this footer only names them and offers the bulk adopt.
-  const renderRadio = () => {
-    if (!radioLive) {
-      return null;
-    }
-    return (
-      <View style={[styles.radio, { borderTopColor: t.line }]}>
-        <View style={styles.radioHead}>
-          <Text style={[label(9), { color: t.inkFaint }, styles.radioLabel]}>
-            the last {radioBatch.length} are picked by aura — drag, remove, or
-            keep them
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="add these songs to your queue"
-            onPress={() => {
-              Vibration.vibrate(8);
-              adoptAutoNext();
-            }}
-            hitSlop={8}
-          >
-            <Text style={[label(9), { color: t.accent }]}>add to queue</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  };
+  // The picks' header renders IN the list (see RADIO_HEAD in renderItem).
 
   return (
     <>
@@ -1247,7 +1305,6 @@ export function QueueSheet() {
               }
               // An element, not a component type — a fresh type each render would
               // remount the batch (and its artwork) on every scroll tick.
-              ListFooterComponent={renderRadio()}
               onScroll={onScroll}
               scrollEventThrottle={16}
               overScrollMode="always"
@@ -1343,28 +1400,15 @@ const styles = StyleSheet.create({
   past: {
     opacity: 0.55,
   },
-  radio: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  radioLabel: {
-    paddingHorizontal: 6,
-  },
-  radioHead: {
+  // The in-list "up next · picked by aura" header — exactly ROW_HEIGHT so
+  // the fixed-height drag math stays uniform around it.
+  radioHeadRow: {
+    height: ROW_HEIGHT,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    paddingRight: 6,
-    marginBottom: 4,
-  },
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    height: 56,
-    borderRadius: 10,
     paddingHorizontal: 6,
+    paddingBottom: 10,
   },
   grip: {
     width: 30,
