@@ -22,11 +22,16 @@ import {
   onTokenRefresh,
   requestPermission,
 } from '@react-native-firebase/messaging';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { fetchAuthed, getUser } from './auth';
 import { showToast } from './toast';
 
-const ASKED_KEY = 'aura.pushAsked';
+// .v2 — the v1 flag was burned by an ask that never happened (see
+// askOsPermission), so every install that predates this has "already been
+// asked" recorded against a dialog it was never shown. Bumping the key gives
+// each of them the one real ask they're owed; the OS caps it from there.
+const ASKED_KEY = 'aura.pushAsked.v2';
 
 let linkHandler = null;
 export function setPushLinkHandler(fn) {
@@ -58,16 +63,43 @@ async function registerToken() {
   }
 }
 
-// Called a beat into the first play. Once ever: the asked flag is set BEFORE
-// the dialog so a crash mid-dialog can't turn into a nag loop.
+// Ask the platform that actually owns the decision.
+//
+// Firebase's requestPermission is an iOS API. On Android it returns a
+// hard-coded AUTHORIZED without showing anything (@react-native-firebase
+// /messaging namespaced.js: `if (isAndroid) return AUTHORIZED`), and the
+// Android native module has no requestPermission method at all. So the old
+// code believed it had asked, registered a token, and left POST_NOTIFICATIONS
+// denied-by-default on Android 13+ — tokens enrolled, nothing displayable.
+// (hasPermission IS real on Android, which is why anyone who granted by hand
+// in Settings still registers on the next boot via initPush.)
+async function askOsPermission() {
+  if (Platform.OS !== 'android') {
+    return granted(await requestPermission(getMessaging()));
+  }
+  if (Platform.Version < 33) {
+    return true; // pre-13: granted at install time
+  }
+  const res = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+  );
+  return res === PermissionsAndroid.RESULTS.GRANTED;
+}
+
+// Called a beat into the first play — a humane moment, once ever.
 export async function ensurePushPermission() {
   if (storage.getItem(ASKED_KEY) === '1') {
     return;
   }
-  storage.setItem(ASKED_KEY, '1');
   try {
-    const status = await requestPermission(getMessaging());
-    if (granted(status)) {
+    const ok = await askOsPermission();
+    // Recorded only once a real answer came back. The flag used to be set
+    // before the call, which was the right instinct against a nag loop but
+    // spent the single ask on a dialog that never opened. A crash mid-dialog
+    // now costs one more prompt on the next play, and Android itself stops
+    // showing it after the user has said no twice.
+    storage.setItem(ASKED_KEY, '1');
+    if (ok) {
       await registerToken();
     }
   } catch (err) {
