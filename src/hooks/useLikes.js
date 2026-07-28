@@ -70,11 +70,18 @@ export async function unlike(id) {
 // Return the store to its pre-boot state — used by tests, and by the Shell on
 // an account change: the module Set outlives sign-out, so without this the
 // next account inherits the previous one's hearts until the process dies.
+// Data only, never `subscribers`: clearing those orphaned every consumer that
+// outlives the Shell (field report: after one in-process sign-out the
+// notification heart stopped following in-app hearts — PlayerProvider mounts
+// above the Shell and its subscribe effect has [] deps, so its bump was gone
+// for the rest of the process). The bump is queued rather than called: the
+// Shell resets from inside a setState updater, so notifying synchronously
+// would push an update into React mid-render.
 export function resetLikesStore() {
   likedIds = new Set();
   booted = false;
   ready = false;
-  subscribers.clear();
+  queueMicrotask(notify);
 }
 
 export function useLikes() {
