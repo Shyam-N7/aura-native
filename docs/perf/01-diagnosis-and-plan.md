@@ -8,8 +8,10 @@ commit `7a7fdd7`; see `00-architecture-map.md` for the layer map.*
 
 **Causes, ranked:**
 
-**(a) No wake lock during network playback — CONFIRMED ABSENT.** kotlin-audio
-`PlayerConfig.kt:35` defaults `WakeMode.NONE` and nothing sets it. With the screen off,
+**(a) No wake lock during network playback — CONFIRMED ABSENT → FIXED (1451ded).**
+The vendored `PlayerConfig` now defaults `WakeMode.NETWORK`; the paragraph below
+describes the state at diagnosis time. kotlin-audio
+`PlayerConfig.kt:35` defaulted `WakeMode.NONE` and nothing set it. With the screen off,
 Doze can sleep the CPU/radio mid-buffer; the buffer drains and playback stalls-stops. The
 foreground service keeps the *process* alive — it does not keep the radio on. Fleet-wide
 consistent (hits every device, worst on aggressive OEMs).
@@ -157,4 +159,13 @@ One concern per commit; each step reports metric moved + verification. **Flagged
 found during recon (not silently fixed):** no battery-exemption prompt anywhere; single-
 shot error recovery with no taxonomy; every cold open pays a catalog round-trip by design.
 
-**STOP — awaiting approval before any fix lands.**
+~~**STOP — awaiting approval before any fix lands.**~~ Approved and shipped: P1–P6
+all landed (see git log from 4e21980 onward). **P3c is the exception — it was never
+built.** No `onAudioSessionIdChanged` forwarding, no `audio-session-changed` event,
+no patch plumbing; the only session handling is the `getAudioSessionId` pull plus the
+AppState re-attach in `lib/equalizer.js`. It appears to have been made unnecessary in
+practice by P3b: with the wake lock held, the service stops being rebuilt, so the
+session never changes and the EQ never detaches — which matches the field report that
+the screen-off equalizer is fixed. What remains is latent, not live: `attached` is
+never invalidated, so IF a session change ever did happen the EQ would go silently
+dead with its switch still reading on.

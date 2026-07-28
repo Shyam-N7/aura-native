@@ -29,11 +29,12 @@ UI (React screens/overlays)
   `foregroundServiceType="mediaPlayback"` (react-native-track-player
   `android/src/main/AndroidManifest.xml:14`); WAKE_LOCK + FOREGROUND_SERVICE
   permissions merge from the library (app manifest comment, line 6).
-- **No wake lock is actually used during playback**: kotlin-audio
-  `PlayerConfig.kt:35` defaults `wakeMode = WakeMode.NONE`, and *nothing* in `src/`
-  or RNTP's `MusicModule`/`MusicService` ever sets it (grep: zero hits). ExoPlayer
-  therefore streams with no CPU/WiFi lock; the foreground service protects the
-  *process*, not the radio. See diagnosis §1.
+- ~~**No wake lock is actually used during playback**~~ — true when this map was
+  written, **fixed in 1451ded**. kotlin-audio `PlayerConfig.kt` now defaults
+  `wakeMode = WakeMode.NETWORK`, and since `MusicService` builds `PlayerConfig`
+  without a `wakeMode` argument that default IS the live value. ExoPlayer holds
+  the partial wake + wifi locks while `playWhenReady`, and releases them on
+  pause/idle and on `exoPlayer.release()`. See diagnosis §1.
 - No battery-optimization exemption prompt exists anywhere in the app.
 
 ## Audio focus
