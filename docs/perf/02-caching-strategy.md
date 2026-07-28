@@ -36,6 +36,10 @@ anywhere. Every layer below names store, bound, eviction, invalidation, and loca
   in kotlin-audio). Invalidation: keyed by URL; a re-resolved URL naturally misses —
   acceptable, the cache is a bandwidth/latency win, not a correctness layer.
 - What breaks if wrong: disk pressure — bounded at 256 MB; storage-full devices evict.
+- **Unit trap (found in review, fixed in `PlayerCache.kt`):** the KB contract above is
+  real, but kotlin-audio handed the number straight to `LeastRecentlyUsedCacheEvictor`,
+  which takes BYTES. For its first release this layer was a 256 **KB** cache — two
+  seconds of audio, i.e. inert. The conversion now happens at that boundary.
 
 **4. Buffer window.** `minBuffer 30 / playBuffer 2.5 / maxBuffer 120` (seconds): faster
 start (play begins at 2.5 s buffered), and a 120 s forward window means ExoPlayer
