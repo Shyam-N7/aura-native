@@ -58,10 +58,14 @@ const BASS_LEVELS = [0, 250, 500, 750, 1000].map(v => ({
 
 // Volume boost stops (millibels). Above +6 dB a warning stands between the
 // tap and the ears (docs/perf/04 4b); the plain (LoudnessEnhancer) fallback
-// never offers those stops at all.
+// never offers those stops at all. Labeled as louder-by percent (amplitude,
+// 10^(dB/20)−1) with the dB alongside — "+100% · +6 dB" reads as "twice as
+// loud a signal" without asking anyone to know decibels.
+const boostPct = mb => Math.round((10 ** (mb / 100 / 20) - 1) * 100);
+const boostText = mb => `+${boostPct(mb)}% · +${mb / 100} dB`;
 const BOOST_LEVELS = [0, 300, 600, 900, 1200].map(v => ({
   id: v,
-  label: v === 0 ? 'off' : `+${v / 100} dB`,
+  label: v === 0 ? 'off' : boostText(v),
   caption: v > 600 ? 'strong — watch your ears' : undefined,
 }));
 
@@ -235,7 +239,7 @@ export function EqualizerPanel() {
     PRESETS.find(p => p.id === activePreset)?.name ??
     'custom';
   const bassLabel = eq.bassBoost === 0 ? 'off' : `${eq.bassBoost / 10}%`;
-  const boostLabel = eq.boostMb === 0 ? 'off' : `+${eq.boostMb / 100} dB`;
+  const boostLabel = eq.boostMb === 0 ? 'off' : boostText(eq.boostMb);
   const outputLabel =
     (OUT_LABEL[eq.output] ?? eq.output) + (eq.pinned ? ' · pinned' : '');
 
