@@ -71,6 +71,15 @@ device, effect libraries present in audio_flinger. **Deliberately not verified y
 attached-chain inspection needs the EQ enabled, which is the user's persisted choice
 (currently off) — flipping it during an unattended test session was out of bounds. First
 real enable verifies it; the eq-attach breadcrumb reports it fleet-wide.
+### Correction (2026-07-28 review): the limiter ratio was too low to hold the ceiling
+The design above fixed threshold, attack and release but never pinned the **ratio**, and
+it shipped at 10:1. Output above the threshold is `threshold + over/ratio`, so a master
+peaking at 0 dBFS at the slider's full +12 dB arrives 13 dB over and leaves at
+`−1 + 13/10 = +0.3 dBFS` — clipping, above roughly +9 dB of boost. Now **20:1**, which
+lands at −0.35 dBFS and leaves headroom for bass boost (which the JS stacking cap does
+not discount — the limiter is what actually catches it). Verified by compile and by the
+arithmetic; the capture harness below is still what would *measure* it.
+
 **Named deferred:** AudioPlaybackCapture THD harness (needs a bundled sine asset);
 500-item drag `gfxinfo` pass (needs a dev hook to inject a synthetic queue); true-gapless
 (<100 ms) Media3 depth — only if the measured ≤650 ms boundary still feels wrong.

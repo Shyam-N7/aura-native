@@ -152,9 +152,18 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
   }
 
   // Gain into a limiter (never bare gain). All-channel limiter: attack 1ms,
-  // release 60ms, ratio 10:1, threshold −1 dBFS — boosted peaks compress
-  // instead of hard-clipping (docs/perf/04 4b). Failure leaves boost null:
-  // optional, never blocks the equalizer.
+  // release 60ms, ratio 20:1, threshold −1 dBFS (docs/perf/04 4b). Failure
+  // leaves boost null: optional, never blocks the equalizer.
+  //
+  // The ratio is load-bearing, not a taste knob. Output above the threshold
+  // is threshold + over/ratio, so a master that peaks at 0 dBFS driven by the
+  // slider's full +12 dB arrives 13 dB over and leaves at −1 + 13/ratio. At
+  // the 10:1 this shipped with that is +0.3 dBFS — it clipped, which is the
+  // one thing the boost design promised it would not do, and it did it on the
+  // loudness-war masters most likely to be played. 20:1 lands at −0.35 dBFS
+  // and keeps headroom for whatever bass boost adds on top (the JS stacking
+  // cap discounts the hottest EQ band but not bass boost — here the limiter
+  // is what actually catches it).
   private fun attachBooster(session: Int) {
     if (Build.VERSION.SDK_INT >= 28) {
       boostDp = try {
@@ -168,7 +177,7 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
         ).build()
         val dp = DynamicsProcessing(EFFECT_PRIORITY, session, cfg)
         dp.setLimiterAllChannelsTo(
-          DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -1f, 0f),
+          DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 20f, -1f, 0f),
         )
         dp
       } catch (_: Throwable) {
