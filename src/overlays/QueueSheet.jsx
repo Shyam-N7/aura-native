@@ -55,6 +55,9 @@ import { fonts, label, radii } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 
 const ROW_HEIGHT = 62;
+// The list's own top padding — shared with styles.list so the drop indicator
+// sits on the same origin the rows do.
+const LIST_TOP_PAD = 4;
 
 // Sentinel list item: the "up next · picked by aura" header row that sits
 // between the real queue and the suggestion rows. Rendered at ROW_HEIGHT so
@@ -105,6 +108,36 @@ function ListFade({ reduced, children }) {
 // the 1Hz position ticks. No times here (field feedback: clutter at row
 // size) — the row's right edge keeps the total, the player owns the clock.
 // Isolated so the ticker re-renders only this leaf, never the list.
+// Where the tile will land. A live line at the top edge of the target slot,
+// driven by the SAME shared values the drop itself commits from — so what it
+// promises and what happens can never disagree. Purely presentational, and
+// hidden both at rest and when the target is the row's own slot (nothing
+// would change, so nothing is claimed).
+function DropLine({ accent, dragFrom, dragTo, baseSV, scrollCmd }) {
+  const style = useAnimatedStyle(() => {
+    if (dragFrom.value < 0 || dragTo.value === dragFrom.value) {
+      return { opacity: 0 };
+    }
+    return {
+      opacity: 1,
+      transform: [
+        {
+          translateY:
+            LIST_TOP_PAD +
+            (dragTo.value - baseSV.value) * ROW_HEIGHT -
+            scrollCmd.value,
+        },
+      ],
+    };
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.dropLine, { backgroundColor: accent }, style]}
+    />
+  );
+}
+
 function NowPlayingLine({ t }) {
   const { position, duration } = usePlaybackProgress(1000);
   const frac = duration > 0 ? Math.min(1, position / duration) : 0;
@@ -164,6 +197,8 @@ const Row = React.memo(function Row({
   dirPivot,
   base,
   count,
+  baseSV,
+  countSV,
   listGesture,
   onDrag,
   fingerY,
@@ -261,6 +296,11 @@ const Row = React.memo(function Row({
       }
       dragFrom.value = index;
       dragTo.value = index;
+      // The frame loop re-derives the drop target every frame; hand it THIS
+      // row's bounds, or it clamps with the queue's and a pick can never
+      // land where it was released.
+      baseSV.value = base;
+      countSV.value = count;
       dragShift.value = 0;
       scrollStart.value = scrollY.value;
       // The auto-scroll drives the list from scrollCmd, an offset it OWNS and
@@ -472,8 +512,11 @@ const Row = React.memo(function Row({
         }
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}
       >
+        {/* Only real queue rows carry a queue position. A suggestion has an
+            order but not a slot — numbering it made "1 track" sit above rows
+            counting to 10, reading as one long queue. */}
         <Text style={[styles.idx, { color: t.inkFaint }]}>
-          {String(index + 1).padStart(2, '0')}
+          {isPick ? '' : String(index + 1).padStart(2, '0')}
         </Text>
         <TrackArt track={item} size={44} radius={7} />
         <View style={styles.meta}>
@@ -837,7 +880,13 @@ export function QueueSheet() {
       // drop strictly above the header — genuinely among queue rows — is a
       // crossing. In queue-space that border sits at qt.length - 1, because
       // the header owns a visual slot but no queue index.
-      if (to >= qt.length - 1) {
+      // The divider slot is the LAST queue position, not a dead zone. It
+      // shifts down the instant a drag targets it, so the tile is visibly
+      // above the divider — i.e. in the queue — and dropping there means
+      // "after the last track". Anything below it is still a suggestion.
+      // (Field report: only one exact band would drop into the queue, because
+      // this boundary sat one slot too high and swallowed the useful target.)
+      if (to >= qt.length) {
         // Reorder within up next, exactly like a queue reorder: the dragged
         // pick takes the slot of whichever pick is displayed there.
         const radio = commitRef.current.radio ?? [];
@@ -912,6 +961,12 @@ export function QueueSheet() {
   );
   const toggleHidePast = () => {
     const nextHidden = !hidePast;
+    // Arm the layout window so the list GROWS or SHRINKS around the past
+    // rows instead of snapping — the same 280ms accordion the library
+    // shelves use. Without this flyMs stays 0 and the change is instant.
+    if (!reduced) {
+      armFly(280, 340);
+    }
     storage.setItem(HIDE_PAST_KEY, nextHidden ? '1' : '0');
     setHidePast(nextHidden);
   };
@@ -1137,8 +1192,19 @@ export function QueueSheet() {
   const baseSV = useSharedValue(0);
   const countSV = useSharedValue(0);
   useEffect(() => {
+    // Rest-state bounds only. A drag OWNS these while it runs — the row that
+    // was picked up writes its own bounds in onStart, because up-next picks
+    // live past the end of the queue and this rest value would clamp every
+    // drop back into the queue's range (field report: nothing could be
+    // reordered or dropped; every commit logged to=0 on a 1-track queue).
+    if (dragFrom.value !== -1) {
+      return;
+    }
     baseSV.value = hidePast ? Math.max(0, idx) : 0;
     countSV.value = tracks.length;
+    // dragFrom is a shared value read imperatively as a guard — it is not a
+    // reactive dependency, and listing it would re-run this on every drag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidePast, idx, tracks.length, baseSV, countSV]);
 
   // Continuous auto-scroll: runs every frame while a drag is active (not tied
@@ -1293,6 +1359,8 @@ export function QueueSheet() {
         // track. Without it the very top of the queue is unreachable.
         base={pastHidden - (at >= tracks.length ? 1 : 0)}
         count={at >= tracks.length ? dragCount : tracks.length}
+        baseSV={baseSV}
+        countSV={countSV}
         listGesture={listGesture}
         onDrag={onDrag}
         fingerY={fingerY}
@@ -1445,6 +1513,13 @@ export function QueueSheet() {
               ]}
             />
           </GestureDetector>
+          <DropLine
+            accent={t.accent}
+            dragFrom={dragFrom}
+            dragTo={dragTo}
+            baseSV={baseSV}
+            scrollCmd={scrollCmd}
+          />
           </ListFade>
         ) : null}
       </Animated.View>
@@ -1502,9 +1577,17 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: 10,
-    paddingTop: 4,
+    paddingTop: LIST_TOP_PAD,
   },
   listFade: { flex: 1 },
+  dropLine: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 0,
+    height: 2,
+    borderRadius: 1,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
