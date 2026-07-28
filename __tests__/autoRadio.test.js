@@ -31,6 +31,36 @@ test('a seed answered before publishes its cached batch instantly', async () => 
   expect(snap.candidates?.[0]?.id).toBe('x');
 });
 
+test('the persisted batch never carries a stream url', async () => {
+  const url = 'https://cdn.example/x.mp4?token=minted-now';
+  getRelated.mockResolvedValue([{ ...t('x', 'Fresh One'), streamUrl: url }]);
+  autoRadio.noteQueueState(radioQueue());
+  await new Promise(r => setTimeout(r, 0));
+
+  // CDN tokens rotate: a batch cached for 24h would splice dead links into
+  // the queue, so only the pick is kept — the live one keeps its fresh url.
+  const raw = JSON.parse(storage.getItem('aura.autoNext.v1'));
+  expect(raw.candidates[0].id).toBe('x');
+  expect(raw.candidates[0].streamUrl).toBeUndefined();
+  expect(autoRadio.getAutoNext().candidates[0].streamUrl).toBe(url);
+
+  // an entry an older build wrote with urls in it is stripped on the way out
+  storage.setItem(
+    'aura.autoNext.v1',
+    JSON.stringify({
+      seedId: 'seed',
+      candidates: [{ ...t('y'), streamUrl: url }],
+      fetchedAt: Date.now(),
+    }),
+  );
+  autoRadio.reset();
+  getRelated.mockReturnValue(new Promise(() => {})); // cold reopen: fetch hangs
+  autoRadio.noteQueueState(radioQueue());
+  const cached = autoRadio.getAutoNext().candidates;
+  expect(cached.map(x => x.id)).toEqual(['y']);
+  expect(cached[0].streamUrl).toBeUndefined();
+});
+
 test('single-pick edits: dismiss one, reorder within, cache follows', async () => {
   getRelated.mockResolvedValue([t('a'), t('b'), t('c')]);
   autoRadio.noteQueueState(radioQueue());

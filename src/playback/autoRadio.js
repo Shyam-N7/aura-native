@@ -10,6 +10,24 @@ import { storage } from '../storage/mmkv';
 const CACHE_KEY = 'aura.autoNext.v1';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+// Stream URLs carry rotating CDN tokens, so they never go in here — the same
+// rule queueModel serializeQueue keeps, and catalog only calls a resolved
+// track fresh for 15 min, not 24h. Field report: a stall at the batch boundary
+// after a cold reopen, because the cached picks spliced hours-dead links
+// straight into the queue and the error ladder had to re-resolve them. The
+// picks are what the cache is for; hydration refetches the urls. Applied on
+// read too, for entries an older build wrote with urls still in them.
+function withoutUrls(candidates) {
+  return candidates.map(t => {
+    if (!t?.streamUrl) {
+      return t;
+    }
+    const rest = { ...t };
+    delete rest.streamUrl;
+    return rest;
+  });
+}
+
 function readCached(seedId) {
   try {
     const raw = JSON.parse(storage.getItem(CACHE_KEY) ?? 'null');
@@ -19,7 +37,7 @@ function readCached(seedId) {
       raw.candidates.length &&
       Date.now() - raw.fetchedAt < CACHE_TTL_MS
     ) {
-      return raw.candidates;
+      return withoutUrls(raw.candidates);
     }
   } catch {
     // corrupt cache — fetch decides
@@ -31,7 +49,11 @@ function writeCached(seedId, candidates) {
   try {
     storage.setItem(
       CACHE_KEY,
-      JSON.stringify({ seedId, candidates, fetchedAt: Date.now() }),
+      JSON.stringify({
+        seedId,
+        candidates: withoutUrls(candidates),
+        fetchedAt: Date.now(),
+      }),
     );
   } catch {
     // storage full — the session just refetches next boot
