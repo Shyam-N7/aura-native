@@ -173,12 +173,38 @@ export async function setupPlayer() {
   subscribeAudioQuality(ensureAutoSampler);
 }
 
+// One lock for every rewrite of the native queue.
+//
+// syncQueue and remapQueue run the SAME remove-then-add rebuild against live
+// indices. syncQueue rides PlayerContext's op chain; remapQueue does not — the
+// auto-quality sampler fires it from a 5s timer that knows nothing about
+// React, and 'auto' is the default quality, so that timer is running for
+// everyone. Interleaved, each removes against indices the other has already
+// invalidated: duplicated or vanished rows in the notification and up-next, or
+// a skip to the wrong song. The op chain can't serialize this on its own
+// because one of the two writers doesn't go through it, so the lock lives
+// here, where both do.
+let queueLock = Promise.resolve();
+function withQueueLock(run) {
+  const pending = queueLock.then(run, run);
+  // The chain must survive a failed op — but this caller still sees its error.
+  queueLock = pending.then(
+    () => {},
+    () => {},
+  );
+  return pending;
+}
+
 // Mirror the model queue into RNTP. When the active RNTP track is already the
 // target current track, the queue is rebuilt AROUND it (remove others,
 // re-insert history + upcoming) so playback is never interrupted by tail
 // mutations (add next / remove / shuffle / auto-radio append). Everything else
 // is a full replace + skip; positionSec only applies there (cold restore).
-export async function syncQueue(queue, { startIndex, positionSec } = {}) {
+export function syncQueue(queue, opts = {}) {
+  return withQueueLock(() => syncQueueLocked(queue, opts));
+}
+
+async function syncQueueLocked(queue, { startIndex, positionSec } = {}) {
   const tracks = queue?.tracks ?? [];
   if (!tracks.length) {
     await TrackPlayer.reset();
@@ -337,7 +363,11 @@ export function setNativeRepeat(repeat) {
 // reloadCurrent, the current track also reloads in place, seeking back to
 // where it was — skipped for auto step-UPS, where interrupting a healthy
 // stream to re-fetch it fatter would be pure loss.
-async function remapQueue(bitrate, { reloadCurrent = true } = {}) {
+function remapQueue(bitrate, opts = {}) {
+  return withQueueLock(() => remapQueueLocked(bitrate, opts));
+}
+
+async function remapQueueLocked(bitrate, { reloadCurrent = true } = {}) {
   const [rQueue, active] = await Promise.all([
     TrackPlayer.getQueue(),
     TrackPlayer.getActiveTrackIndex(),
