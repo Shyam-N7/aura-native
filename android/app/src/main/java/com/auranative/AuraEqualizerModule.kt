@@ -8,6 +8,7 @@ import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.BassBoost
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
@@ -70,13 +71,20 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
   // The probe the whole feature rests on: does this ROM grant an Equalizer at
   // all (OEM sound stacks sometimes refuse), and if so, what bands? Built on a
   // throwaway effect so describing costs nothing and leaves nothing attached.
+  //
+  // Which session is asked matters. Session 0 is the global output mix, and a
+  // ROM can refuse effects THERE while granting them per session — answering
+  // "no equalizer at all" for a phone that has a perfectly good one, after
+  // which the app never even tried the real attach. So JS asks on 0 before
+  // playback exists and asks AGAIN on the player's own session once it does.
   @ReactMethod
-  fun describe(promise: Promise) {
+  fun describe(session: Int, promise: Promise) {
     var probe: Equalizer? = null
     try {
-      // Session 0 is legal for a DESCRIBE-only probe (we attach nothing and
-      // release immediately); it is never used to actually process audio.
-      probe = Equalizer(0, 0)
+      // Legal on any session for a DESCRIBE-only probe: nothing is enabled and
+      // it is released immediately, so it never processes audio. Caller keeps
+      // it off a session we already hold, so control cannot flap.
+      probe = Equalizer(0, session)
       val bands = Arguments.createArray()
       val range = probe.bandLevelRange // [min, max] in millibels
       val minMb = range[0].toInt()
@@ -128,7 +136,26 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
       try {
         releaseEffects()
         sessionId = session
-        equalizer = Equalizer(EFFECT_PRIORITY, session)
+        val eq = Equalizer(EFFECT_PRIORITY, session)
+        equalizer = eq
+        // EFFECT_PRIORITY stays 0 on purpose — an OEM/system effect SHOULD win
+        // this session. What was missing is asking whether it did: constructing
+        // an Equalizer always succeeds, it just comes back without control, and
+        // every setter then quietly does nothing. Field report: ColorOS/Realme
+        // with Dolby, Samsung UHQ, Xiaomi Mi Sound — switch reads ON, faders
+        // move, the audio never changes.
+        if (!eq.hasControl()) {
+          releaseEffects()
+          promise.reject("no_control", "another app is controlling the sound")
+          return@post
+        }
+        // Control can also be taken later (the OEM sound app is opened mid
+        // song), so keep listening and tell JS the moment it moves.
+        eq.setControlStatusListener(
+          AudioEffect.OnControlStatusChangeListener { _, granted ->
+            emitControl(granted)
+          },
+        )
         bassBoost = try {
           BassBoost(EFFECT_PRIORITY, session)
         } catch (_: Throwable) {
@@ -140,6 +167,20 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
         releaseEffects()
         promise.reject("attach_failed", e.message ?: "could not attach", e)
       }
+    }
+  }
+
+  // Control of a session moves without warning (an OEM effect claims it, or
+  // hands it back). JS needs to hear that: a panel with live faders over audio
+  // it no longer drives is the failure this whole listener exists to end.
+  private fun emitControl(granted: Boolean) {
+    val payload: WritableMap = Arguments.createMap()
+    payload.putBoolean("control", granted)
+    try {
+      reactCtx
+        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+        .emit(EVENT_CONTROL, payload)
+    } catch (_: Throwable) {
     }
   }
 
@@ -226,7 +267,26 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
   fun setEnabled(on: Boolean, promise: Promise) {
     main.post {
       try {
-        equalizer?.enabled = on
+        val eq = equalizer
+        if (eq == null) {
+          // Nothing attached — same honest answer as setBandLevel/setBassBoost.
+          promise.resolve(false)
+          return@post
+        }
+        // AudioEffect.setEnabled RETURNS a status and never throws; written as
+        // `eq.enabled = on` kotlin drops that status on the floor and we then
+        // claim success over audio we never touched. Read it.
+        val status = eq.setEnabled(on)
+        val control = eq.hasControl()
+        if (status != AudioEffect.SUCCESS || !control) {
+          val code = when {
+            status == AudioEffect.ERROR_DEAD_OBJECT -> "session_gone"
+            status == AudioEffect.ERROR_INVALID_OPERATION || !control -> "no_control"
+            else -> "enable_failed"
+          }
+          promise.reject(code, "setEnabled($on) refused, status $status")
+          return@post
+        }
         // Bass boost rides the same switch; a zero strength is a no-op anyway.
         bassBoost?.enabled = on && (bassBoost?.roundedStrength ?: 0) > 0
         promise.resolve(true)
@@ -433,6 +493,7 @@ class AuraEqualizerModule(private val reactCtx: ReactApplicationContext) :
   companion object {
     const val NAME = "AuraEqualizer"
     const val EVENT_ROUTE = "aura-audio-route"
+    const val EVENT_CONTROL = "aura-audio-eq-control"
     // Politely low: a system/OEM effect on the same session should win.
     private const val EFFECT_PRIORITY = 0
     private const val SPEAKER = "speaker"

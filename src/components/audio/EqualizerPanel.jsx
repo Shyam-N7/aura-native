@@ -177,10 +177,18 @@ export function EqualizerPanel() {
   ];
 
   if (!eq.available) {
+    // Two different situations, and one sentence used to cover both: a phone
+    // that has no equalizer, and a phone that has one an OEM sound app is
+    // currently holding. Saying "this phone doesn't offer an equalizer —
+    // another app is controlling the sound" contradicts itself in the same
+    // breath, so the permanent verdict is only used when it IS permanent.
     return (
       <Text style={[styles.note, { color: t.inkSoft }]}>
-        this phone doesn't offer an equalizer
-        {eq.unavailableReason ? ` — ${eq.unavailableReason}` : '.'}
+        {eq.deviceEq
+          ? eq.unavailableReason ?? 'the equalizer isn’t available right now.'
+          : `this phone doesn't offer an equalizer${
+              eq.unavailableReason ? ` — ${eq.unavailableReason}` : '.'
+            }`}
       </Text>
     );
   }

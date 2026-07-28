@@ -164,3 +164,156 @@ describe('eqPresets — your own saved curves', () => {
     expect(getEqUserPresets()).toEqual([]);
   });
 });
+
+// ── telling the truth about what reached the audio ───────────────────────
+// The bug these pin: the store said "on" whatever the device did. An OEM
+// sound stack (ColorOS + Dolby, Samsung UHQ, Xiaomi Mi Sound) holds the audio
+// session, our effect attaches without control, every setter quietly does
+// nothing — and the panel showed a switch reading ON with live faders. The
+// panel has one line for bad news (unavailableReason), so that is what each
+// case reads back.
+
+const SESSION_OK = {
+  available: true,
+  bands: DEVICE,
+  boost: 'limiter',
+  output: 'speaker',
+};
+// What a ROM that refuses effects on the global output mix answers for
+// session 0 — while granting them perfectly well per session.
+const MIX_REFUSED = {
+  available: false,
+  reason: 'Equalizer: cannot initialize effect engine',
+  bands: [],
+  output: 'speaker',
+};
+
+// crumb() rides Sentry, and these cases re-evaluate the module graph — keep
+// the vendor out of it entirely.
+jest.mock('@sentry/react-native', () => ({ addBreadcrumb: jest.fn() }));
+
+// equalizer.js reads its native modules once, at import — so each case loads
+// its own copy of the store on top of its own fakes.
+function loadStore({ eq = {}, session = 77 } = {}) {
+  jest.resetModules();
+  const RN = require('react-native');
+  const native = {
+    describe: jest.fn(async () => SESSION_OK),
+    attach: jest.fn(async () => true),
+    release: jest.fn(async () => undefined),
+    setBandLevel: jest.fn(async () => true),
+    setBassBoost: jest.fn(async () => true),
+    setBoost: jest.fn(async () => true),
+    setEnabled: jest.fn(async () => true),
+    startRouteWatch: jest.fn(async () => true),
+    addListener: jest.fn(),
+    removeListeners: jest.fn(),
+    ...eq,
+  };
+  RN.NativeModules.AuraEqualizer = native;
+  RN.NativeModules.TrackPlayerModule = {
+    getAudioSessionId: jest.fn(async () => session),
+  };
+  return { RN, native, store: require('../src/lib/equalizer') };
+}
+
+const refusal = code => Object.assign(new Error(code), { code });
+
+describe('the store owns up when nothing was applied', () => {
+  it('a refused attach reads as unavailable, not as a working switch', async () => {
+    const { store } = loadStore({
+      eq: {
+        attach: jest.fn(async () => {
+          throw refusal('no_control');
+        }),
+      },
+    });
+    await store.initEqualizer();
+    expect(store.getEqualizer().available).toBe(true); // the phone HAS one
+
+    await store.setEnabled(true);
+    expect(store.getEqualizer()).toMatchObject({
+      available: false,
+      unavailableReason: 'another app is controlling the sound right now',
+    });
+  });
+
+  it('setEnabled resolving false is a failure, not a success', async () => {
+    // Nothing attached natively: the module used to resolve true regardless,
+    // and the panel believed it.
+    const { store } = loadStore({
+      eq: { setEnabled: jest.fn(async () => false) },
+    });
+    await store.initEqualizer();
+    await store.setEnabled(true);
+    expect(store.getEqualizer()).toMatchObject({
+      available: false,
+      unavailableReason: 'start a song and open this again',
+    });
+  });
+
+  it('a rejected enable names the reason', async () => {
+    const { store } = loadStore({
+      eq: {
+        setEnabled: jest.fn(async () => {
+          throw refusal('enable_failed');
+        }),
+      },
+    });
+    await store.initEqualizer();
+    await store.setEnabled(true);
+    expect(store.getEqualizer().unavailableReason).toBe(
+      "the system wouldn't turn it on",
+    );
+  });
+
+  it('comes back the moment the effect does', async () => {
+    // The honest state must be recoverable, or one flap kills the feature for
+    // the rest of the run.
+    const { store, native } = loadStore({
+      eq: { setEnabled: jest.fn(async () => false) },
+    });
+    await store.initEqualizer();
+    await store.setEnabled(true);
+    expect(store.getEqualizer().available).toBe(false);
+
+    native.setEnabled.mockImplementation(async () => true);
+    await store.setEnabled(true);
+    expect(store.getEqualizer()).toMatchObject({
+      available: true,
+      unavailableReason: null,
+    });
+  });
+});
+
+describe('session 0 is not the last word on availability', () => {
+  it('asks again on the real session when the output mix is refused', async () => {
+    const { store, native } = loadStore({
+      eq: {
+        describe: jest.fn(async s => (s === 0 ? MIX_REFUSED : SESSION_OK)),
+      },
+    });
+    await store.initEqualizer();
+    expect(native.describe.mock.calls.map(c => c[0])).toEqual([0, 77]);
+    expect(store.getEqualizer().available).toBe(true);
+    expect(store.getEqualizer().bands).toHaveLength(DEVICE.length);
+  });
+
+  it('re-asks on the next foreground when launch had no session yet', async () => {
+    const { store, RN } = loadStore({
+      eq: {
+        describe: jest.fn(async s => (s === 0 ? MIX_REFUSED : SESSION_OK)),
+      },
+      session: 0, // player not up at launch — the usual case
+    });
+    await store.initEqualizer();
+    expect(store.getEqualizer().available).toBe(false);
+
+    RN.NativeModules.TrackPlayerModule.getAudioSessionId.mockImplementation(
+      async () => 77,
+    );
+    const onAppState = RN.AppState.addEventListener.mock.calls.at(-1)[1];
+    await onAppState('active');
+    expect(store.getEqualizer().available).toBe(true);
+  });
+});

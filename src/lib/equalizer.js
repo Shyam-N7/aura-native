@@ -36,6 +36,8 @@ const player =
 const KEY = 'aura.equalizer';
 export const OUTPUTS = ['speaker', 'wired', 'bluetooth'];
 export const ROUTE_EVENT = 'aura-audio-route';
+// AuraEqualizerModule fires this when the session's effect control moves.
+const CONTROL_EVENT = 'aura-audio-eq-control';
 
 // ── the web's mood presets, as (frequency → dB) anchors ──────────────────
 // Ported verbatim from AI Music Development/src/audio/eqConfig.js. Kept as
@@ -123,6 +125,11 @@ function read() {
 
 let state = read();
 let bands = []; // from describe() — empty until the device answers
+// Two different questions, and conflating them is how the panel came to lie.
+// deviceEq: does this phone grant an equalizer at all. available: can the
+// panel be trusted RIGHT NOW — i.e. is there an effect we actually control.
+// They part company the moment an OEM sound stack takes the session.
+let deviceEq = false;
 let available = false;
 let unavailableReason = null;
 let boostMode = 'none'; // 'limiter' (DynamicsProcessing) | 'plain' | 'none'
@@ -169,6 +176,10 @@ export function profileFor(name) {
 export function getEqualizer() {
   return {
     available,
+    // Exposed so the panel can tell "this phone has no equalizer" from "it has
+    // one, just not right now" — the same distinction the two flags above draw.
+    // Without it the screen prints a permanent verdict over a temporary reason.
+    deviceEq,
     unavailableReason,
     enabled: state.enabled,
     bassBoost: state.bassBoost,
@@ -183,29 +194,73 @@ export function getEqualizer() {
 }
 
 // ── native plumbing ──────────────────────────────────────────────────────
+// Plain words for the codes AuraEqualizerModule rejects with. The panel has
+// exactly one channel for bad news — unavailableReason — so everything that
+// means "the faders are not doing anything" is said through here.
+const REASONS = {
+  no_control: 'another app is controlling the sound right now',
+  session_gone: 'start a song and open this again',
+  attach_failed: "the system wouldn't allow it",
+  enable_failed: "the system wouldn't turn it on",
+};
+
+function reasonFor(e) {
+  return REASONS[e?.code] ?? e?.message ?? 'not available right now';
+}
+
+// Nothing is being applied — stop showing a panel that says otherwise. Field
+// report: ColorOS/Realme with Dolby (and Samsung UHQ, Xiaomi Mi Sound) leave
+// the switch reading ON, the faders live, and the audio untouched, because
+// they own the session and our effect never had control.
+// Recoverable by construction: deviceEq stays true, so the next foreground,
+// enable, or control-granted event re-attaches and clears this.
+function lostControl(reason) {
+  attached = false;
+  available = false;
+  unavailableReason = reason;
+  crumb('eq', 'lost', { reason });
+  emit();
+}
+
+function regained() {
+  if (available) {
+    return;
+  }
+  available = true;
+  unavailableReason = null;
+  emit();
+}
+
 // The session id changes whenever the service recreates the player, so it is
 // re-read on every attach and never cached across one.
 async function attachToSession() {
   if (!native || !player?.getAudioSessionId) {
     return false;
   }
+  let session = 0;
   try {
-    const session = await player.getAudioSessionId();
-    if (!session) {
-      return false; // no real session — stay off, never touch session 0
-    }
+    session = await player.getAudioSessionId();
+  } catch {
+    return false; // player isn't up yet — nothing to confess, just not now
+  }
+  if (!session) {
+    return false; // no real session — stay off, never touch session 0
+  }
+  try {
     attached = await native.attach(session);
     crumb('eq', 'attach', { session, ok: attached });
     return attached;
-  } catch {
-    attached = false;
+  } catch (e) {
+    // Refused, which is not the same as "not yet": the effect exists and we
+    // don't drive it. Say so.
+    lostControl(reasonFor(e));
     return false;
   }
 }
 
 // Push the whole current profile at the hardware.
 async function applyAll() {
-  if (!native || !available) {
+  if (!native || !deviceEq) {
     return;
   }
   if (state.enabled && !attached) {
@@ -225,34 +280,68 @@ async function applyAll() {
     await native.setBoost(
       state.enabled ? cappedBoostMb(state.boostMb, gains, boostMode) : 0,
     );
-    await native.setEnabled(state.enabled);
-  } catch {
-    // A mid-flight failure (session died) just leaves the effect off; the
-    // next enable/attach re-establishes it.
-  }
-}
-
-// Called once from the app shell. Reads what the device offers, starts
-// watching the output route, and re-applies if the user had it on.
-export async function initEqualizer() {
-  if (!native) {
-    available = false;
-    unavailableReason = 'not supported on this device';
-    emit();
+    // false = nothing attached on the native side after all. A promise that
+    // merely resolved used to be reason enough to keep claiming it worked.
+    const ok = await native.setEnabled(state.enabled);
+    if (state.enabled && ok === false) {
+      lostControl(REASONS.session_gone);
+      return;
+    }
+  } catch (e) {
+    // A mid-flight failure (session died, an OEM effect took it) leaves the
+    // effect off — name which one instead of swallowing it. The next
+    // enable/attach re-establishes it.
+    lostControl(reasonFor(e));
     return;
   }
+  regained();
+}
+
+// What the device offers, asked on one session. describe() is cheap and
+// leaves nothing attached, so it can be asked more than once.
+async function probe(session) {
   try {
-    const d = await native.describe();
-    available = !!d.available;
+    const d = await native.describe(session);
+    deviceEq = !!d.available;
+    available = deviceEq;
     unavailableReason = d.reason ?? null;
     bands = Array.isArray(d.bands) ? d.bands : [];
     boostMode = d.boost ?? 'none';
     output = d.output ?? 'speaker';
   } catch (e) {
+    deviceEq = false;
     available = false;
     unavailableReason = e?.message ?? 'unavailable';
   }
-  if (available) {
+  return deviceEq;
+}
+
+// Session 0 is the global output MIX. A ROM can refuse effects there and
+// still grant them per session — which read as "this phone has no equalizer"
+// and stopped the app from ever trying the real attach. So the answer from
+// session 0 is never the last word: ask again on the player's own session
+// once there is one. Never while we hold that session, or the throwaway probe
+// would take control off our own effect.
+async function probeSession() {
+  if (deviceEq || attached || !player?.getAudioSessionId) {
+    return false;
+  }
+  try {
+    const session = await player.getAudioSessionId();
+    return session ? await probe(session) : false;
+  } catch {
+    return false;
+  }
+}
+
+let watching = false;
+
+// Everything that only makes sense once the device has said yes: watch the
+// output route, and put back whatever the user had on. Runs at init, or later
+// if the real-session probe is what finally answered.
+async function settle() {
+  if (!watching) {
+    watching = true;
     try {
       await native.startRouteWatch();
       const emitter = new NativeEventEmitter(native);
@@ -266,20 +355,59 @@ export async function initEqualizer() {
         emit();
         applyAll();
       });
+      // Control of the session can move at any time (the OEM sound app is
+      // opened mid song, or closed again). Losing it means the faders stop
+      // meaning anything; getting it back means our curve has to go on again.
+      emitter.addListener(CONTROL_EVENT, ev => {
+        if (!ev?.control) {
+          lostControl(REASONS.no_control);
+          return;
+        }
+        regained();
+        applyAll();
+      });
     } catch {
       // route watching is a nicety — the equalizer still works without it
     }
-    // The service can recreate the player (and with it the audio session)
-    // while we're in the background, which silently detaches the effect.
-    // Coming back to the foreground re-establishes it.
-    AppState.addEventListener('change', s => {
-      if (s === 'active' && state.enabled && !attached) {
-        applyAll();
+  }
+  if (state.enabled) {
+    await applyAll();
+  }
+}
+
+// Called once from the app shell. Reads what the device offers, starts
+// watching the output route, and re-applies if the user had it on.
+export async function initEqualizer() {
+  if (!native) {
+    available = false;
+    unavailableReason = 'not supported on this device';
+    emit();
+    return;
+  }
+  if (!(await probe(0))) {
+    await probeSession();
+  }
+  // Two jobs on the way back to the foreground. The service can recreate the
+  // player (and with it the audio session) while we're away, which silently
+  // detaches the effect — and if session 0 was the only answer this device
+  // ever gave, this is the chance to ask it again with a real session.
+  AppState.addEventListener('change', async s => {
+    if (s !== 'active') {
+      return;
+    }
+    if (!deviceEq) {
+      if (await probeSession()) {
+        await settle();
+        emit();
       }
-    });
-    if (state.enabled) {
+      return;
+    }
+    if (state.enabled && !attached) {
       await applyAll();
     }
+  });
+  if (deviceEq) {
+    await settle();
   }
   emit();
 }
