@@ -44,6 +44,12 @@ import { startRecorder } from './recorder';
 const QUEUE_KEY = 'aura.queue';
 const POSITION_KEY = 'aura.position';
 const REPEAT_KEY = 'aura.repeat';
+// Persisted-shape version (autoRadio's aura.autoNext.v1 pattern). Stamped
+// INSIDE the payload, not on the key: a renamed key would silently drop every
+// existing user's queue, and a queue is theirs. A payload from a shape we
+// don't know is dropped; one with no version at all is the pre-versioning
+// write of this same shape, so it restores.
+const QUEUE_VERSION = 1;
 
 function loadStoredQueue() {
   try {
@@ -55,11 +61,23 @@ function loadStoredQueue() {
     if (!parsed || !Array.isArray(parsed.tracks) || !parsed.tracks.length) {
       return null;
     }
-    return model.createQueue(
-      parsed.tracks,
-      Number.isFinite(parsed.idx) ? parsed.idx : 0,
-      parsed.source || "tonight's set",
-    );
+    if (parsed.v != null && parsed.v !== QUEUE_VERSION) {
+      return null;
+    }
+    // An id-less entry is permanently unplayable: engine.toRntpTrack stamps it
+    // with the dead PENDING_URL, hydrateAround skips it (no id to fetch), and
+    // the error recovery refetches by undefined id — a dead row nothing can
+    // ever get past. Drop those alone; the rest of the queue is still theirs.
+    const tracks = parsed.tracks.filter(t => t?.id);
+    if (!tracks.length) {
+      return null;
+    }
+    const rawIdx = Number.isFinite(parsed.idx) ? parsed.idx : 0;
+    // Survivors before the saved spot ARE its new index; if the saved entry
+    // was itself dropped this lands on the next one, the same way removeAt
+    // slides the following track in.
+    const idx = parsed.tracks.slice(0, rawIdx).filter(t => t?.id).length;
+    return model.createQueue(tracks, idx, parsed.source || "tonight's set");
   } catch {
     return null;
   }
@@ -566,6 +584,24 @@ export function PlayerProvider({ children }) {
     [flushPosition],
   );
 
+  // ExoPlayer answers a PlaybackException by going idle but leaves
+  // playWhenReady alone, so no play-when-ready event fires and the button kept
+  // saying "playing" through the whole recovery walk (docs/perf/03) — up to
+  // ~80s of silence with a frozen ribbon (field report). Playback state is the
+  // only signal that moves. This COMPLEMENTS the playWhenReady mirror above:
+  // intent still belongs to playWhenReady, this just stops it lying about the
+  // audio.
+  // Buffering / loading are deliberately left alone — they're the normal
+  // mid-track rebuffer, and mirroring them would flicker the button every
+  // time the network hiccups.
+  const onPlaybackState = useCallback(e => {
+    if (e?.state === 'playing') {
+      setIsPlaying(true);
+    } else if (e?.state === 'error' || e?.state === 'none') {
+      setIsPlaying(false);
+    }
+  }, []);
+
   // ── user intents ─────────────────────────────────────────────────────────
 
   const playQueue = useCallback(
@@ -958,6 +994,7 @@ export function PlayerProvider({ children }) {
       onActiveTrackChanged,
       onPlaybackError: engine.handlePlaybackError,
       onPlayWhenReadyChanged,
+      onPlaybackState,
       onProgress,
     });
 
@@ -1070,6 +1107,7 @@ export function PlayerProvider({ children }) {
     flushPosition,
     next,
     onActiveTrackChanged,
+    onPlaybackState,
     onPlayWhenReadyChanged,
     onProgress,
     onQueueEnded,
@@ -1168,18 +1206,38 @@ export function PlayerProvider({ children }) {
 
   // Persist the queue (streamUrl stripped) on every meaningful change; an
   // emptied queue removes the key so a sign-out reset can't resurrect it.
+  const savePending = useRef(null);
   const saveTimer = useRef(null);
+  const flushQueue = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const q = savePending.current;
+    if (!q) {
+      return;
+    }
+    savePending.current = null;
+    if (q.tracks.length) {
+      storage.setItem(
+        QUEUE_KEY,
+        JSON.stringify({ ...model.serializeQueue(q), v: QUEUE_VERSION }),
+      );
+    } else {
+      storage.removeItem(QUEUE_KEY);
+    }
+  }, []);
   useEffect(() => {
+    savePending.current = queue;
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      if (queue.tracks.length) {
-        storage.setItem(QUEUE_KEY, JSON.stringify(model.serializeQueue(queue)));
-      } else {
-        storage.removeItem(QUEUE_KEY);
-      }
-    }, 400);
+    saveTimer.current = setTimeout(flushQueue, 400);
     return () => clearTimeout(saveTimer.current);
-  }, [queue]);
+  }, [queue, flushQueue]);
+  // Teardown must not eat the last edit — the position path already flushes on
+  // unmount (flushPosition), while this one discarded its pending write, so a
+  // queue touched in the final 400ms of a session came back stale on the next
+  // boot. flushQueue is stable, so this cleanup only ever runs at unmount.
+  useEffect(() => flushQueue, [flushQueue]);
 
   // Prefetch the auto-radio continuation when the current track becomes the
   // last of a 'more like this' queue; hydrate stream URLs coming into play.
