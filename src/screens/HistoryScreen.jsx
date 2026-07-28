@@ -151,6 +151,9 @@ export default function HistoryScreen({ navigation }) {
   const [clock, setClock] = useState(null);
   const [status, setStatus] = useState('loading');
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed page used to be swallowed: the spinner blinked, no rows arrived,
+  // and the screen read as "that's all my history" (or as a dead button).
+  const [moreError, setMoreError] = useState(false);
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -177,12 +180,13 @@ export default function HistoryScreen({ navigation }) {
       return;
     }
     setLoadingMore(true);
+    setMoreError(false);
     getHistory({ limit: 80, before: nextBefore })
       .then(h => {
         setPlays(prev => [...prev, ...h.plays]);
         setNextBefore(h.nextBefore);
       })
-      .catch(() => {})
+      .catch(() => setMoreError(true))
       .finally(() => setLoadingMore(false));
   };
 
@@ -219,20 +223,29 @@ export default function HistoryScreen({ navigation }) {
 
   const footer =
     status === 'ok' && nextBefore ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="load more"
-        onPress={loadMore}
-        style={({ pressed }) => [
-          styles.more,
-          { borderColor: t.line },
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={[label(10), { color: t.inkSoft }]}>
-          {loadingMore ? 'Loading…' : 'Load more'}
-        </Text>
-      </Pressable>
+      <>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="load more"
+          onPress={loadMore}
+          style={({ pressed }) => [
+            styles.more,
+            { borderColor: t.line },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[label(10), { color: t.inkSoft }]}>
+            {loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load more'}
+          </Text>
+        </Pressable>
+        {moreError && (
+          <Text
+            style={[styles.stateLine, styles.moreError, { color: t.inkSoft }]}
+          >
+            Couldn't load more.
+          </Text>
+        )}
+      </>
     ) : null;
 
   const renderItem = ({ item }) => {
@@ -346,4 +359,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginTop: 18,
   },
+  moreError: { textAlign: 'center', marginTop: 8 },
 });

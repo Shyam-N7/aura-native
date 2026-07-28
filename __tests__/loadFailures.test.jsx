@@ -1,0 +1,174 @@
+import React from 'react';
+import ReactTestRenderer from 'react-test-renderer';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import YouScreen from '../src/screens/YouScreen';
+import HistoryScreen from '../src/screens/HistoryScreen';
+import { getPushPrefs, setPushPrefs } from '../src/lib/push';
+import { getHistory } from '../src/api/stats';
+import { resetLikesStore } from '../src/hooks/useLikes';
+
+// The two loads whose failures used to be swallowed into a lie: the
+// notification switches painted "all on" for an account they never fetched,
+// and history's load-more blinked its spinner and gave up in silence.
+
+jest.mock('../src/playback/PlayerContext', () => ({
+  usePlayer: () => ({
+    current: null,
+    queue: { tracks: [], idx: -1, source: null },
+    isPlaying: false,
+    quality: 'high',
+    playQueue: jest.fn(),
+    playTrack: jest.fn(),
+    setQuality: jest.fn(),
+    ui: { playerOpen: false, openPlayer: jest.fn() },
+  }),
+}));
+jest.mock('../src/lib/auth', () => ({
+  getUser: () => ({ name: 'Shyam N', email: 's@x.y' }),
+  getActiveExplicitOff: () => false,
+  subscribeAuth: jest.fn(() => () => {}),
+  setMyAvatar: jest.fn(),
+  clearMyAvatar: jest.fn(),
+  enableFamilyMode: jest.fn(),
+  disableFamilyMode: jest.fn(),
+  updatePreferences: jest.fn(() => Promise.resolve({})),
+  logout: jest.fn(),
+}));
+jest.mock('../src/lib/push', () => ({
+  getPushPrefs: jest.fn(),
+  setPushPrefs: jest.fn(),
+}));
+jest.mock('../src/api/stats', () => ({
+  getHistory: jest.fn(),
+  getMusicClockPlays: jest.fn(() => Promise.resolve([])),
+}));
+jest.mock('../src/api/library', () => ({
+  getLibrarySummary: jest.fn(() =>
+    Promise.resolve({ tracksPlayed: 12, minutesListened: 34 }),
+  ),
+}));
+jest.mock('../src/api/hidden', () => ({
+  listHidden: jest.fn(() => Promise.resolve([])),
+  unhideTrack: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('../src/api/likes', () => ({
+  listLiked: jest.fn(() => Promise.resolve([])),
+  listLikedIds: jest.fn(() => Promise.resolve([])),
+  likeTrack: jest.fn(() => Promise.resolve()),
+  unlikeTrack: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('../src/api/playlists', () => ({
+  listPlaylists: jest.fn(() => Promise.resolve([])),
+}));
+jest.mock('../src/lib/confirm', () => ({
+  confirm: jest.fn(() => Promise.resolve(false)),
+}));
+
+function texts(node) {
+  if (node == null) {
+    return '';
+  }
+  if (typeof node === 'string') {
+    return node;
+  }
+  if (Array.isArray(node)) {
+    return node.map(texts).join('');
+  }
+  return texts(node.children);
+}
+const byLabel = (tree, accessibilityLabel) =>
+  tree.root.findAllByProps({ accessibilityLabel })[0];
+
+async function render(node) {
+  let tree;
+  await ReactTestRenderer.act(async () => {
+    tree = ReactTestRenderer.create(<ThemeProvider>{node}</ThemeProvider>);
+  });
+  return tree;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  resetLikesStore();
+  getHistory.mockResolvedValue({ plays: [], nextBefore: null });
+});
+
+test('a failed prefs fetch says so and retries — it never paints the switches on', async () => {
+  getPushPrefs.mockRejectedValueOnce(new Error('offline'));
+  const navigation = {
+    navigate: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+  };
+  const tree = await render(<YouScreen navigation={navigation} />);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'settings').props.onPress();
+  });
+
+  // The bug: all three rows rendered from the null fallback (on, in the accent
+  // colour) and quietly ate every tap. They must not be there at all.
+  expect(byLabel(tree, 'new music for you')).toBeUndefined();
+  expect(byLabel(tree, 'friends & playlists')).toBeUndefined();
+  expect(byLabel(tree, 'listening reminders')).toBeUndefined();
+  expect(texts(tree.toJSON())).toContain(
+    "couldn't load your notification settings.",
+  );
+
+  // Recoverable by hand, and the rows then wear the account's real state —
+  // mixes off, not the fallback's on.
+  getPushPrefs.mockResolvedValueOnce({ mixes: false, social: true });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'try again').props.onPress();
+  });
+  const mixesRow = () => byLabel(tree, 'new music for you');
+  expect(mixesRow().props.accessibilityState).toEqual({});
+  expect(texts(tree.toJSON())).toContain('no mix announcements.');
+
+  // And the switch is live again.
+  setPushPrefs.mockResolvedValueOnce({ mixes: true, social: true });
+  await ReactTestRenderer.act(async () => {
+    mixesRow().props.onPress();
+  });
+  expect(setPushPrefs).toHaveBeenCalledWith({ mixes: true });
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('a failed history page says so instead of reading as the end of history', async () => {
+  const play = (id, hour) => ({
+    id,
+    title: `Song ${id}`,
+    artist: 'a',
+    language: 'tamil',
+    playedAt: new Date(2026, 6, 15, hour).getTime(),
+  });
+  getHistory
+    .mockResolvedValueOnce({ plays: [play('t1', 9)], nextBefore: 1000 })
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce({ plays: [play('t2', 8)], nextBefore: null });
+
+  const tree = await render(
+    <HistoryScreen navigation={{ goBack: jest.fn() }} />,
+  );
+  expect(texts(tree.toJSON())).toContain('Load more');
+
+  // The bug: the page failed, the spinner stopped, nothing said why — the
+  // screen read as "that's all of it" or as a dead button.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'load more').props.onPress();
+  });
+  let body = texts(tree.toJSON());
+  expect(body).toContain("Couldn't load more.");
+  expect(body).toContain('Try again');
+  expect(body).not.toContain('Song t2');
+
+  // Tapping again picks the same page back up.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'load more').props.onPress();
+  });
+  body = texts(tree.toJSON());
+  expect(body).toContain('Song t2');
+  expect(body).not.toContain("Couldn't load more.");
+  expect(byLabel(tree, 'load more')).toBeUndefined();
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});

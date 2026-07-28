@@ -291,8 +291,13 @@ export default function YouScreen({ navigation }) {
   // every device). Loaded when the settings shelf opens, like the hidden
   // list; each row flips optimistically and reverts if the save fails.
   const [pushPrefs, setPushPrefsState] = useState(null);
+  // A dead fetch used to be swallowed: prefs stayed null and the rows painted
+  // from the "all on" fallback — three switches claiming a state nobody had
+  // fetched, ignoring every tap. Rows now wait for the real answer; clearing
+  // pushError re-runs the fetch.
+  const [pushError, setPushError] = useState(false);
   useEffect(() => {
-    if (openShelf !== 'settings' || pushPrefs) {
+    if (openShelf !== 'settings' || pushPrefs || pushError) {
       return undefined;
     }
     let live = true;
@@ -302,11 +307,15 @@ export default function YouScreen({ navigation }) {
           setPushPrefsState(p);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live) {
+          setPushError(true);
+        }
+      });
     return () => {
       live = false;
     };
-  }, [openShelf, pushPrefs]);
+  }, [openShelf, pushPrefs, pushError]);
   const togglePushPref = async key => {
     if (!pushPrefs) {
       return;
@@ -998,7 +1007,34 @@ export default function YouScreen({ navigation }) {
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   notifications
                 </Text>
-                {[
+                {!pushPrefs && !pushError && (
+                  <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
+                    loading…
+                  </Text>
+                )}
+                {pushError && (
+                  <View style={styles.hiddenRow}>
+                    <View style={styles.rowMeta}>
+                      <Text
+                        style={[styles.qualityCaption, { color: t.inkSoft }]}
+                      >
+                        couldn't load your notification settings.
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="try again"
+                      onPress={() => setPushError(false)}
+                      hitSlop={8}
+                      style={({ pressed }) => pressed && styles.pressed}
+                    >
+                      <Text style={[label(9.5), { color: t.accent }]}>
+                        try again
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+                {pushPrefs && [
                   {
                     key: 'mixes',
                     title: 'new music for you',
@@ -1018,14 +1054,13 @@ export default function YouScreen({ navigation }) {
                     offCap: 'no reminders.',
                   },
                 ].map(row => {
-                  const on = pushPrefs ? pushPrefs[row.key] !== false : true;
+                  const on = pushPrefs[row.key] !== false;
                   return (
                     <Pressable
                       key={row.key}
                       accessibilityRole="button"
                       accessibilityLabel={row.title}
                       accessibilityState={on ? { selected: true } : {}}
-                      disabled={!pushPrefs}
                       onPress={() => togglePushPref(row.key)}
                       style={({ pressed }) => [
                         styles.qualityRow,
