@@ -344,6 +344,23 @@ export function PlayerProvider({ children }) {
   // Play the batch starting from row `offset` (web consumeAutoNext's jump).
   // Recomputed from the live refs rather than trusting the rendered list, so a
   // queue edit between paint and tap can't append against a stale queue.
+  // Keep the batch, keep listening: AURA's picks become REAL queue rows — so
+  // they can be dragged, removed, moved to top like anything else — while the
+  // current song plays on untouched. The engine sync's same-current tier
+  // appends around the active item, so audio never hiccups; autoRadio then
+  // prefetches the continuation past the new end, same as any queue.
+  const adoptAutoNext = useCallback(() => {
+    userActedRef.current = true;
+    const q = queueRef.current;
+    const extended = model.dedupeAppend(q, autoNextRef.current?.candidates);
+    if (extended === q) {
+      return;
+    }
+    autoRadio.reset();
+    applyQueue(extended);
+    enqueueOp(() => engine.syncQueue(extended, { startIndex: extended.idx }));
+  }, [applyQueue, enqueueOp]);
+
   const playAutoNext = useCallback(
     (offset = 0) => {
       // A user intent like every other — without this, a cold restore still in
@@ -1160,6 +1177,7 @@ export function PlayerProvider({ children }) {
       autoNext,
       autoNextTracks,
       playAutoNext,
+      adoptAutoNext,
       isPlaying,
       repeat,
       shuffleActive,
@@ -1192,6 +1210,7 @@ export function PlayerProvider({ children }) {
       autoNext,
       autoNextTracks,
       playAutoNext,
+      adoptAutoNext,
       isPlaying,
       repeat,
       shuffleActive,

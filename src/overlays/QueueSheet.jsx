@@ -1069,9 +1069,24 @@ export function QueueSheet() {
     }
     return (
       <View style={[styles.radio, { borderTopColor: t.line }]}>
-        <Text style={[label(9), { color: t.inkFaint }, styles.radioLabel]}>
-          up next · picked by aura
-        </Text>
+        <View style={styles.radioHead}>
+          <Text style={[label(9), { color: t.inkFaint }, styles.radioLabel]}>
+            up next · picked by aura
+          </Text>
+          {/* One tap makes the picks REAL queue rows — grip, drag, remove,
+              move to top — while the music plays on (adoptAutoNext). */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="add these songs to your queue"
+            onPress={() => {
+              Vibration.vibrate(8);
+              player.adoptAutoNext();
+            }}
+            hitSlop={8}
+          >
+            <Text style={[label(9), { color: t.accent }]}>add to queue</Text>
+          </Pressable>
+        </View>
         {radioBatch.map((rt, i) => (
           <Pressable
             key={`${rt.id}-${i}`}
@@ -1327,6 +1342,12 @@ const styles = StyleSheet.create({
   },
   radioLabel: {
     paddingHorizontal: 6,
+  },
+  radioHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 6,
     marginBottom: 4,
   },
   radioRow: {
