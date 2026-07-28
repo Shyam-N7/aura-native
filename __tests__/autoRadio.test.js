@@ -1,6 +1,7 @@
 import { getRelated } from '../src/api/related';
 import * as autoRadio from '../src/playback/autoRadio';
 import { createQueue } from '../src/playback/queueModel';
+import { storage } from '../src/storage/mmkv';
 
 jest.mock('../src/api/related', () => ({ getRelated: jest.fn() }));
 
@@ -12,6 +13,22 @@ const radioQueue = () =>
 beforeEach(() => {
   autoRadio.reset();
   getRelated.mockReset();
+  // The persisted batch (aura.autoNext.v1) legitimately suppresses the
+  // "finding next song" state for a seed it has answered before — clear it so
+  // each test starts from the never-seen-this-seed world it describes.
+  storage.removeItem('aura.autoNext.v1');
+});
+
+test('a seed answered before publishes its cached batch instantly', async () => {
+  getRelated.mockResolvedValue([t('x', 'Fresh One')]);
+  autoRadio.noteQueueState(radioQueue());
+  await new Promise(r => setTimeout(r, 0)); // fetch lands, cache writes
+  autoRadio.reset();
+  getRelated.mockReturnValue(new Promise(() => {})); // cold reopen: fetch hangs
+  autoRadio.noteQueueState(radioQueue());
+  const snap = autoRadio.getAutoNext();
+  expect(snap.loading).toBe(false); // no "finding next song" flash
+  expect(snap.candidates?.[0]?.id).toBe('x');
 });
 
 test('extend retries once on failure and appends the batch', async () => {
