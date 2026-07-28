@@ -31,6 +31,10 @@ export function useFeaturedPool({ limit = 24 } = {}) {
     ),
   }));
 
+  // First run offline there's no snapshot to fall back on, so home's "couldn't
+  // load" state is the only route back to a fetch — `retry` re-runs this one.
+  const [attempt, setAttempt] = useState(0);
+
   const shownMode = useRef(mode);
   useEffect(() => {
     let stale = false;
@@ -61,13 +65,16 @@ export function useFeaturedPool({ limit = 24 } = {}) {
       })
       .catch(() => {
         if (!stale) {
-          setState({ status: 'error', tracks: [] });
+          // Keep whatever is already on screen — this mode's snapshot, or the
+          // pool a switch is revalidating. A failed refresh must never blank a
+          // home that already painted; `status` is all home needs to say so.
+          setState(s => ({ status: 'error', tracks: s.tracks }));
         }
       });
     return () => {
       stale = true;
     };
-  }, [limit, mode]);
+  }, [limit, mode, attempt]);
 
-  return state;
+  return { ...state, retry: () => setAttempt(n => n + 1) };
 }

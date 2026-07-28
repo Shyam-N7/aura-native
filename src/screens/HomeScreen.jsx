@@ -39,6 +39,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { ModeMixCard } from '../components/home/ModeMixCard';
 import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
 import { OtterToggle } from '../components/ui/OtterToggle';
+import { PressScale } from '../components/ui/PressScale';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
 import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
 import { storage } from '../storage/mmkv';
@@ -340,6 +341,26 @@ export default function HomeScreen({ navigation }) {
       : true,
   );
 
+  // Field report: first open with no signal is a greeting over blank space —
+  // nothing on disk to paint and every section self-hides when empty, so a
+  // failed cold fetch read as a broken app rather than a failed load. Gated on
+  // the pool having failed AND nothing else having reached the screen; one
+  // cached rail means home has content and stays as it is. No NetInfo here, so
+  // the copy can't say you're offline, only that it couldn't load — and retry
+  // re-runs the pool fetch, which is what fills a first-run home.
+  const homeBlank =
+    pool.status === 'error' &&
+    !hero &&
+    !picks.length &&
+    !stations.length &&
+    !newPicks.length &&
+    !recent?.length &&
+    !topArtists?.length &&
+    !yourPlaylists?.length &&
+    !visibleAuto.length &&
+    !moreLike?.tracks?.length &&
+    !discover?.popularPlaylists?.length;
+
   const activeMode = user?.activeMode ?? 'everyday';
   const modeLabel =
     (user?.modes ?? []).find(m => m.key === activeMode)?.label ?? activeMode;
@@ -449,6 +470,27 @@ export default function HomeScreen({ navigation }) {
             playing={player.isPlaying}
             onOpen={openPlayer}
           />
+
+          {homeBlank && (
+            <View style={[styles.pad, styles.blank]}>
+              <Text style={[styles.blankLine, { color: t.ink }]}>
+                couldn't load your music.
+              </Text>
+              <Text style={[styles.blankSub, { color: t.inkSoft }]}>
+                check your connection and try again.
+              </Text>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel="try again"
+                onPress={pool.retry}
+                style={[styles.blankRetry, { borderColor: t.line }]}
+              >
+                <Text style={[styles.blankSub, { color: t.inkSoft }]}>
+                  try again
+                </Text>
+              </PressScale>
+            </View>
+          )}
 
           {picks.length > 0 && (
             <View>
@@ -688,6 +730,16 @@ const styles = StyleSheet.create({
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
   tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
   wheelWrap: { alignItems: 'center', paddingTop: 6 },
+  blank: { alignItems: 'center', gap: 8, paddingVertical: 28 },
+  blankLine: { fontFamily: fonts.semibold, fontSize: 17 },
+  blankSub: { fontFamily: fonts.regular, fontSize: 13.5, textAlign: 'center' },
+  blankRetry: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 4,
+  },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
