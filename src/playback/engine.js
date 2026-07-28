@@ -586,19 +586,44 @@ async function loadAndResume(track, position) {
 
 // Probe our own origin — any response (even an error status) proves routing;
 // only a thrown fetch means offline. 5s cadence per docs/perf/03.
+//
+// The probe carries its own timeout because RN's fetch has none (OkHttp sets
+// no read timeout), so a half-open socket — captive portal, a tunnel, a
+// cell/wifi handoff — leaves the promise neither resolved NOR rejected.
+const PROBE_TIMEOUT_MS = 5000;
+const PROBE_GAP_MS = 5000;
+
+async function probeOrigin(timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    await fetch(`${API_BASE}/manifest.webmanifest`, {
+      method: 'HEAD',
+      signal: ctrl.signal,
+    });
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function waitForConnectivity(maxMs) {
   const deadline = Date.now() + maxMs;
-  for (;;) {
+  // The clock is tested at the TOP of the loop, not only in the catch. With
+  // the old shape a probe that never settled meant the deadline was never
+  // reached at all, and the caller (handlePlaybackError) never returned: no
+  // pause, no skip, no toast, and isPlaying left true over silence. The wait
+  // must be able to give up even when the network refuses to answer.
+  while (Date.now() < deadline) {
     try {
-      await fetch(`${API_BASE}/manifest.webmanifest`, { method: 'HEAD' });
+      await probeOrigin(Math.min(PROBE_TIMEOUT_MS, deadline - Date.now()));
       return true;
     } catch {
-      if (Date.now() > deadline) {
-        return false;
-      }
-      await new Promise(r => setTimeout(r, 5000));
+      // offline, or the probe itself timed out — wait, then re-test the clock
     }
+    await new Promise(r => setTimeout(r, PROBE_GAP_MS));
   }
+  return false;
 }
 
 export async function handlePlaybackError(err) {
