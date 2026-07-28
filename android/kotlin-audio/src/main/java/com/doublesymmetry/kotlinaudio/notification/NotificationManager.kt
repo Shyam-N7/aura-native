@@ -670,13 +670,35 @@ class NotificationManager internal constructor(
                     }
                 }
 
-                // AURA fork extension: a CUSTOM icon change (heart filled ⇄
-                // outline) must rebuild the notification manager — it caches
-                // its custom actions at construction, so this is the only way
-                // the swapped icon reaches the notification action row.
+                // AURA fork extension: only a STRUCTURAL change to a custom
+                // button (a different action) is worth a rebuild. An icon swap
+                // is not.
+                //
+                // This used to compare the icon too, on the belief that a
+                // rebuild was the only way a filled ⇄ outline heart reached the
+                // action row. It isn't: updateMediaSessionPlaybackActions()
+                // re-registers setCustomActionProviders on EVERY
+                // createNotification call, and the connector invalidates the
+                // playback state on set — see the comment at that call, which
+                // says exactly this. The two claims contradicted each other and
+                // this was the stale one.
+                //
+                // The cost of believing it was real: every heart toggle, and
+                // every track change where the liked state differs, ran
+                // hideNotification() against a LIVE foreground-service
+                // notification — setPlayer(null), manager dropped, rebuilt —
+                // while the service's own collector only reacts to POSTED and
+                // ignores CANCELLED. Tearing down the notification a foreground
+                // service is holding is not something a heart tap should do.
+                //
+                // Unverified on API ≤ 12, where the notification's own action
+                // row (rather than the system media card) may need a track
+                // change before it repaints. That is a far smaller cost than
+                // the teardown, and 13+ is session-driven where the providers
+                // above are the channel.
                 is NotificationButton.CUSTOM -> {
                     (currentNotificationButtonsMapByType[NotificationButton.CUSTOM::class] as? NotificationButton.CUSTOM).let { currentButton ->
-                        newButton.icon != currentButton?.icon || newButton.action != currentButton?.action
+                        newButton.action != currentButton?.action
                     }
                 }
 
