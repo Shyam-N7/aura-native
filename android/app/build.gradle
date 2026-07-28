@@ -8,9 +8,15 @@ apply plugin: "com.google.gms.google-services"
 // so field crash stacks show real files/lines instead of minified noise.
 // Auth comes from SENTRY_AUTH_TOKEN in the build environment — the token
 // lives OUTSIDE the repo (D:\Brave Downloads\aura-sentry-token.txt), never in
-// sentry.properties. Without the env var the upload step no-ops via
-// SENTRY_DISABLE_AUTO_UPLOAD, keeping tokenless builds green.
+// sentry.properties.
 apply from: new File(["node", "--print", "require.resolve('@sentry/react-native/package.json')"].execute(null, rootDir).text.trim(), "../sentry.gradle")
+// Tokenless machine: assembleRelease exited 1 at createBundleReleaseJsAndAssets_SentryUpload_*,
+// and since every release-variant task drags that upload in, even a bare compileReleaseKotlin
+// died. The plugin's own escape hatch is SENTRY_DISABLE_AUTO_UPLOAD, which nobody sets, so
+// re-gate its onlyIf on the token itself — no token, no upload, build stays green.
+project.ext.shouldSentryAutoUploadGeneral = {
+    System.getenv("SENTRY_AUTH_TOKEN") && System.getenv("SENTRY_DISABLE_AUTO_UPLOAD") != "true"
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -85,6 +91,25 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// keystore.properties is git-ignored, and Groovy evaluates signingConfigs at CONFIGURATION time
+// on every invocation — so loading it unguarded meant a fresh clone couldn't run any task at all,
+// `gradlew tasks` and assembleDebug included. Half-filled props are the same case: a null password
+// only shows up much later as an opaque signer error. Missing creds now leave the release config
+// empty and stop the release build alone, by name, below.
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def hasReleaseSigning = keystoreProps['storePassword'] && keystoreProps['keyPassword']
+if (!hasReleaseSigning) {
+    tasks.matching { it.name in ['packageRelease', 'packageReleaseBundle'] }.configureEach {
+        doFirst {
+            throw new GradleException("release signing needs android/keystore.properties with storePassword and keyPassword. it's git-ignored, so restore it from your backup.")
+        }
+    }
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -107,12 +132,12 @@ android {
             keyPassword 'android'
         }
         release {
-            def keystoreProps = new Properties()
-            rootProject.file('keystore.properties').withInputStream { keystoreProps.load(it) }
-            storeFile file('aura-release.keystore')
-            storePassword keystoreProps['storePassword']
-            keyAlias 'aura'
-            keyPassword keystoreProps['keyPassword']
+            if (hasReleaseSigning) {
+                storeFile file('aura-release.keystore')
+                storePassword keystoreProps['storePassword']
+                keyAlias 'aura'
+                keyPassword keystoreProps['keyPassword']
+            }
         }
     }
     buildTypes {
