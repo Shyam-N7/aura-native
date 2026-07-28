@@ -113,19 +113,33 @@ function ListFade({ reduced, children }) {
 // promises and what happens can never disagree. Purely presentational, and
 // hidden both at rest and when the target is the row's own slot (nothing
 // would change, so nothing is claimed).
-function DropLine({ accent, dragFrom, dragTo, baseSV, scrollCmd }) {
+function DropLine({ accent, dragFrom, dragTo, baseSV, scrollY }) {
   const style = useAnimatedStyle(() => {
-    if (dragFrom.value < 0 || dragTo.value === dragFrom.value) {
+    // Shown for the whole drag, including while the target still equals the
+    // row's own index. Hiding that case looked tidy and was the bug: a pick's
+    // own index IS the first up-next position, so crossing into the queue
+    // takes a full row of travel during which the target never changes — the
+    // line vanished for exactly the stretch where the user is trying to judge
+    // the crossing. Inside up next the target changes every row, which is why
+    // it only ever looked broken on the way into the queue.
+    if (dragFrom.value < 0) {
       return { opacity: 0 };
     }
     return {
       opacity: 1,
       transform: [
         {
+          // scrollY, NOT scrollCmd. Both track the list during a drag, but
+          // scrollCmd is only written when the auto-scroll has velocity and is
+          // clamped against maxY — an ESTIMATE of the content extent built from
+          // (count - base) rows. When that estimate is off, scrollCmd drifts
+          // from where the list actually sits and the line inherits the error,
+          // parking somewhere the tile never goes. scrollY is fed by the real
+          // scroll events as well, so it self-corrects.
           translateY:
             LIST_TOP_PAD +
             (dragTo.value - baseSV.value) * ROW_HEIGHT -
-            scrollCmd.value,
+            scrollY.value,
         },
       ],
     };
@@ -1518,7 +1532,7 @@ export function QueueSheet() {
             dragFrom={dragFrom}
             dragTo={dragTo}
             baseSV={baseSV}
-            scrollCmd={scrollCmd}
+            scrollY={scrollY}
           />
           </ListFade>
         ) : null}
