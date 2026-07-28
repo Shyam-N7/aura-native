@@ -1,5 +1,42 @@
 import { getRelated } from '../api/related';
 import { dedupeAppend } from './queueModel';
+import { storage } from '../storage/mmkv';
+
+// The last landed batch, persisted (docs/perf/02 pattern): the module dies
+// with the JS process, so every cold reopen used to refetch the SAME picks
+// while the sheet said "finding next song". Now the cache publishes instantly
+// for the same seed and the fresh fetch replaces it silently in the
+// background; offline, the cached batch still carries the session forward.
+const CACHE_KEY = 'aura.autoNext.v1';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readCached(seedId) {
+  try {
+    const raw = JSON.parse(storage.getItem(CACHE_KEY) ?? 'null');
+    if (
+      raw?.seedId === seedId &&
+      Array.isArray(raw.candidates) &&
+      raw.candidates.length &&
+      Date.now() - raw.fetchedAt < CACHE_TTL_MS
+    ) {
+      return raw.candidates;
+    }
+  } catch {
+    // corrupt cache — fetch decides
+  }
+  return null;
+}
+
+function writeCached(seedId, candidates) {
+  try {
+    storage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ seedId, candidates, fetchedAt: Date.now() }),
+    );
+  } catch {
+    // storage full — the session just refetches next boot
+  }
+}
 
 // Endless "more like this" continuation (web src/App.jsx auto-radio, slimmed
 // to the native queue model). The context calls noteQueueState on every queue
@@ -80,24 +117,35 @@ export function noteQueueState(queue, repeat = 'off') {
   if (state.seedId === seed.id) {
     return;
   }
+  const cached = readCached(seed.id);
   const promise = fetchBatch(seed)
     .then(list => list ?? [])
     .catch(() => {
-      // Both attempts failed — clear so a later extend() fetches fresh.
-      if (state.promise === promise) {
+      // Both attempts failed — with a cached batch on screen, keep it (it
+      // still plays); bare-handed, clear so a later extend() fetches fresh.
+      if (state.promise === promise && !cached) {
         reset();
       }
       return [];
     });
   state = { seedId: seed.id, promise };
-  publish({ seedId: seed.id, candidates: null, loading: true });
+  // The cached batch shows the instant the seed matches — "finding next
+  // song" only ever appears for a seed we've truly never answered.
+  publish({ seedId: seed.id, candidates: cached, loading: !cached });
   promise.then(list => {
     // A reset (queue moved on / both fetches failed) or a newer seed supersedes
     // this batch — only the live prefetch may publish.
     if (state.promise !== promise) {
       return;
     }
-    publish({ seedId: seed.id, candidates: list, loading: false });
+    if (list.length) {
+      writeCached(seed.id, list);
+    }
+    publish({
+      seedId: seed.id,
+      candidates: list.length ? list : cached,
+      loading: false,
+    });
   });
 }
 
@@ -116,6 +164,11 @@ export async function extend(queue) {
     batch = await fetchBatch(seed).catch(() => null);
   }
   reset();
+  if (!batch?.length) {
+    // Offline (or upstream down) at the queue's end: the cached batch keeps
+    // the session moving instead of falling silent.
+    batch = readCached(seed.id);
+  }
   if (!batch?.length) {
     return null;
   }
