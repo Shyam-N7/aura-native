@@ -26,6 +26,7 @@ import {
 import { getTrack, trackCacheAge } from '../api/catalog';
 import { mark } from '../lib/perfMarks';
 import { report } from '../lib/crumbs';
+import { dumpQueueDrift } from '../lib/queueDrift';
 import { getLoudness, requestMeasure } from '../api/loudness';
 import { prefetchLyrics } from '../api/lyrics';
 import { useLikes } from '../hooks/useLikes';
@@ -1256,6 +1257,21 @@ export function PlayerProvider({ children }) {
   // queue touched in the final 400ms of a session came back stale on the next
   // boot. flushQueue is stable, so this cleanup only ever runs at unmount.
   useEffect(() => flushQueue, [flushQueue]);
+
+  // Dev-only drift readout: does RNTP still hold what MMKV persisted? Rides
+  // the op chain so it runs AFTER any in-flight engine mutation rather than
+  // mid-push (which would report drift that is really just a queue write still
+  // travelling), and waits out the 400ms persist debounce first. __DEV__ is
+  // stripped from release bundles, so this costs shipping users nothing.
+  useEffect(() => {
+    if (!__DEV__) {
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      enqueueOp(() => dumpQueueDrift('post-change'));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [queue, enqueueOp]);
 
   // Prefetch the auto-radio continuation when the current track becomes the
   // last of a 'more like this' queue; hydrate stream URLs coming into play.
