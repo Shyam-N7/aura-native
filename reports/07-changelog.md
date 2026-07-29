@@ -67,7 +67,7 @@ The agreed cheap gate is not executable against a release build, for either oper
 
 A debug build recovers only the MMKV half; RNTP's in-memory queue still has no external dump path. Making the gate real needs a small in-app inspection path (debug-build only), which is application code and therefore outside this item's stated scope — hence escalation rather than a silent widening or a silent skip.
 
-**Not committed.** Held pending that decision, since the same blocker applies to every remaining item in the queue.
+**Resolution.** Escalated, then continued per the brief's own rule — *can't run a gate → item is blocked, not done; say what you need, move on.* Committed as `557e6b1` with the drift gate recorded as owed. Building the inspection path is Phase 6 work (harness code is permitted there), not Phase 5.
 
 ---
 
