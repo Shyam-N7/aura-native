@@ -13,7 +13,7 @@ import {
 import { autoTier, noteAutoSample, resetAuto } from '../lib/autoQuality';
 import { getTrack as fetchTrack } from '../api/catalog';
 import { API_BASE } from '../lib/auth';
-import { crumb } from '../lib/crumbs';
+import { crumb, report } from '../lib/crumbs';
 import {
   MAX_ATTEMPTS,
   MAX_RECOVERY_MS,
@@ -804,6 +804,15 @@ export async function handlePlaybackError(err) {
     return;
   }
   crumb('recovery', 'give-up', { id: cur.id, attempts: recovery.attempt });
+  // The ladder is exhausted: every rung, the re-resolve, and the offline wait
+  // all failed for a track the user is still sitting on. That is the clearest
+  // "playback is broken for this person" signal the app can produce, and until
+  // now it left the device as a toast and nothing else.
+  report(err, 'playback.give-up', {
+    id: cur.id,
+    attempts: recovery.attempt,
+    klass,
+  });
   showToast("couldn't play this track — skipping.");
   if (active + 1 < rQueue.length) {
     await TrackPlayer.skipToNext();

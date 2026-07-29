@@ -25,6 +25,7 @@ import {
 } from '../lib/leveling';
 import { getTrack, trackCacheAge } from '../api/catalog';
 import { mark } from '../lib/perfMarks';
+import { report } from '../lib/crumbs';
 import { getLoudness, requestMeasure } from '../api/loudness';
 import { prefetchLyrics } from '../api/lyrics';
 import { useLikes } from '../hooks/useLikes';
@@ -151,6 +152,14 @@ export function PlayerProvider({ children }) {
   const enqueueOp = useCallback(op => {
     opChain.current = opChain.current.then(op).catch(err => {
       console.warn('[player] engine op failed', err?.message ?? err);
+      // Where model/native divergence is BORN: the mutation already landed in
+      // the React model (and from there in MMKV), and the push to the engine
+      // just failed. Nothing downstream reconciles the two, so the queue the
+      // user sees and the queue that plays have quietly parted. Not a dead end
+      // the user feels in the moment, which is why it was easy to miss — but
+      // it is the one event that explains a whole class of "wrong song" and
+      // "my reorder didn't stick" reports.
+      report(err, 'player.engine-op-failed');
     });
     return opChain.current;
   }, []);
@@ -182,6 +191,11 @@ export function PlayerProvider({ children }) {
             await op();
           } catch (err2) {
             console.warn('[player] play op failed twice', err2?.message ?? err2);
+            // Second failure after a full native-queue rebuild — the field
+            // report this retry was built for ("tapping play did nothing")
+            // happening anyway. Worth an event: it is silence the user is
+            // staring at.
+            report(err2, 'player.play-op-failed');
             setIsPlaying(false);
             showToast("couldn't play — tap play to try again.");
           }
@@ -1027,6 +1041,10 @@ export function PlayerProvider({ children }) {
           });
         } else {
           console.warn('[player] setup failed', setupErr?.message ?? setupErr);
+          // Not the backgrounded-boot case (that retries on foreground above)
+          // — the player genuinely never came up, so this whole session is
+          // silent. Nothing downstream can recover it.
+          report(setupErr, 'player.setup-failed');
         }
         return;
       }

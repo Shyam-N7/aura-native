@@ -25,6 +25,7 @@ import {
 import { PermissionsAndroid, Platform } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { fetchAuthed, getUser } from './auth';
+import { report } from './crumbs';
 import { showToast } from './toast';
 
 // .v2 — the v1 flag was burned by an ask that never happened (see
@@ -55,11 +56,19 @@ async function registerToken() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     });
+    // A 404 is the server half simply not being deployed — the next boot
+    // retries and that is the designed behaviour, not a failure to report.
+    // Anything else means this device is enrolled nowhere and will never be
+    // reached, which nothing else in the app would ever tell us.
     if (!res.ok && res.status !== 404) {
       console.warn('[push] register failed', res.status);
+      report(new Error(`push register failed (${res.status})`), 'push.register-failed', {
+        status: res.status,
+      });
     }
   } catch (err) {
     console.warn('[push] register failed', err?.message ?? err);
+    report(err, 'push.register-failed');
   }
 }
 
