@@ -1,6 +1,8 @@
 package com.auranative
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -69,6 +71,41 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+    createPushChannel()
+  }
+
+  /**
+   * The channel every FCM notification lands in. Without one declared, the
+   * Firebase SDK invents its own fallback at whatever importance it chooses —
+   * which on O+ is the difference between a push that lights a locked screen
+   * and one the user never sees, and it shows up in system settings under a
+   * generic name the user can't recognise as ours.
+   *
+   * Created here rather than from JS on purpose: a notification-type push is
+   * rendered by the OS itself, and that can happen while the app is dead and
+   * no JS context exists. Application.onCreate runs for that delivery too.
+   * createNotificationChannel is idempotent, so re-running it is free — but
+   * note the OS ignores importance changes to an EXISTING channel, so a later
+   * change of mind needs a new id, not an edit.
+   */
+  private fun createPushChannel() {
+    val channel =
+      NotificationChannel(
+        PUSH_CHANNEL_ID,
+        getString(R.string.push_channel_name),
+        NotificationManager.IMPORTANCE_HIGH,
+      )
+    channel.description = getString(R.string.push_channel_description)
+    getSystemService(NotificationManager::class.java)
+      ?.createNotificationChannel(channel)
+  }
+
+  companion object {
+    /**
+     * Mirrored in AndroidManifest (default_notification_channel_id) and in the
+     * server's send payload (server/push.js). All three must agree.
+     */
+    const val PUSH_CHANNEL_ID = "aura.push.v1"
   }
 
   /**

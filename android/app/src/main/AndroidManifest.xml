@@ -33,6 +33,18 @@
         android:name="com.google.firebase.messaging.default_notification_color"
         android:resource="@color/push_accent"
         tools:replace="android:resource" />
+      <!-- The channel MainApplication.createPushChannel() creates. Literal,
+           not @string: the id is an identifier the server also hard-codes, not
+           display copy.
+           tools:replace — react-native-firebase's own manifest declares this
+           key with an EMPTY value, which is precisely why every push until now
+           landed in the SDK's fallback channel at an importance we never
+           chose. Ours must win the merge, same as default_notification_color
+           above. -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="aura.push.v1"
+        tools:replace="android:value" />
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">AURA</string>
+    <!-- Shown in Android's notification settings, so it has to read as ours. -->
+    <string name="push_channel_name">music &amp; updates</string>
+    <string name="push_channel_description">new mixes, playlist activity, and the occasional nudge.</string>
 </resources>
