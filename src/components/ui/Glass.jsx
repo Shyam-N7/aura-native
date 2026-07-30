@@ -38,12 +38,24 @@ export function Glass({ radius = 26, style, solid = false, soft = false, childre
             <Stop offset="0" stopColor="#ffffff" stopOpacity={g.shimmerFrom} />
             <Stop offset="1" stopColor="#ffffff" stopOpacity={g.shimmerTo} />
           </LinearGradient>
+          {/* The slab's dark under-edge: light entering thick glass dies at
+              the bottom. A short fade, not a hairline — the height is what
+              sells the thickness. */}
+          <LinearGradient id="underShade" x1="0" y1="1" x2="0" y2="0">
+            <Stop offset="0" stopColor="#000000" stopOpacity={0.22} />
+            <Stop offset="1" stopColor="#000000" stopOpacity={0} />
+          </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#shimmer)" />
+        <Rect x="0" y="78%" width="100%" height="22%" fill="url(#underShade)" />
       </Svg>
       <View
         pointerEvents="none"
         style={[styles.insetLight, { backgroundColor: g.insetLight }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[styles.insetShade, { backgroundColor: g.insetShade }]}
       />
       {children}
     </View>
@@ -59,5 +71,12 @@ const styles = StyleSheet.create({
     right: 10,
     height: 1,
     opacity: 0.9,
+  },
+  insetShade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 10,
+    right: 10,
+    height: 1,
   },
 });

@@ -127,18 +127,23 @@ export const elevation = {
 
 // Web glass recipe: gradient shimmer + hairline border + inset top-light over
 // the tint. Shimmer is white at these opacities (numeric, for rn-svg's sake).
+// Tuned "thick" (owner's reference, 2026-07-30): stronger diagonal shimmer,
+// brighter rim + top bevel, and a dark inner bottom edge (insetShade) so the
+// pill reads as a slab of glass with depth, not a film.
 export const glass = {
-  shimmerFrom: 0.09,
-  shimmerTo: 0.02,
-  border: 'rgba(255,255,255,0.14)',
-  insetLight: 'rgba(255,255,255,0.25)',
+  shimmerFrom: 0.14,
+  shimmerTo: 0.035,
+  border: 'rgba(255,255,255,0.18)',
+  insetLight: 'rgba(255,255,255,0.35)',
+  insetShade: 'rgba(31,23,14,0.16)',
   discBg: 'rgba(22,19,16,0.34)',
   discBorder: 'rgba(255,255,255,0.22)',
   midnight: {
-    shimmerFrom: 0.07,
-    shimmerTo: 0.015,
-    border: 'rgba(255,255,255,0.10)',
-    insetLight: 'rgba(255,255,255,0.12)',
+    shimmerFrom: 0.11,
+    shimmerTo: 0.025,
+    border: 'rgba(255,255,255,0.14)',
+    insetLight: 'rgba(255,255,255,0.20)',
+    insetShade: 'rgba(0,0,0,0.32)',
   },
 };
 

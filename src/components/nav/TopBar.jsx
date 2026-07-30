@@ -34,7 +34,12 @@ const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'cat' };
 // The web's glass top bar: wordmark left, controls right.
 // `navigation` comes from the hosting screen's props (screens render standalone
 // in tests, so no useNavigation here).
-export function TopBar({ navigation }) {
+// `float` pins the bar over the screen's scroller (web: position fixed) so
+// content slides beneath the glass — the host pads its content by
+// TOPBAR_CLEARANCE + insets.top instead of stacking below the bar.
+export const TOPBAR_CLEARANCE = 68; // 10 above + 52 bar + 6 below
+
+export function TopBar({ navigation, float = false }) {
   const { name, pref, t, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const user = getUser();
@@ -113,8 +118,17 @@ export function TopBar({ navigation }) {
   }));
 
   return (
-    <View style={[styles.wrap, { marginTop: insets.top + 10 }]}>
-      <Glass radius={radii.pill} style={styles.bar}>
+    <View
+      style={[
+        styles.wrap,
+        float ? styles.float : null,
+        { marginTop: insets.top + 10 },
+      ]}
+    >
+      {/* soft = the dock capsule's exact tint register, so the two pieces of
+          floating chrome read as the same glass (the ask that landed this:
+          "top bar background same as bottom bar"). */}
+      <Glass radius={radii.pill} soft style={styles.bar}>
         <View style={styles.row}>
           <Pressable
             accessible={false}
@@ -221,6 +235,7 @@ const styles = StyleSheet.create({
   // bounce translates the whole scroller, and without this a card could
   // composite over the translucent bar during an overscroll (field report).
   wrap: { paddingHorizontal: 14, marginBottom: 6, zIndex: 20 },
+  float: { position: 'absolute', top: 0, left: 0, right: 0 },
   bar: { height: 52, justifyContent: 'center' },
   brand: { justifyContent: 'center' },
   auraGlow: { position: 'absolute', left: -22, right: -22, top: -8, bottom: -8 },

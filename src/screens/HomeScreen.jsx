@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { clearScrollDepth, setScrollDepth } from '../lib/scrollDepth';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { useTrackDirection } from '../hooks/useTrackDirection';
@@ -24,7 +26,7 @@ import {
 } from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
-import { TopBar } from '../components/nav/TopBar';
+import { TopBar, TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { SectionHeader } from '../components/home/SectionHeader';
@@ -121,7 +123,19 @@ const BG_NO_CONFIRM_KEY = 'aura.backgroundPlayNoConfirm';
 
 export default function HomeScreen({ navigation }) {
   const { t } = useTheme();
+  const insets = useSafeAreaInsets();
   const player = usePlayer();
+  // Deep-scroll signal for the dock's back-to-top contraction. The scroller
+  // ref is how "take me back up" actually gets back up; blur clears the flag
+  // so the dock never contracts over some other screen.
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    const unsub = navigation?.addListener?.('blur', clearScrollDepth);
+    return () => {
+      unsub?.();
+      clearScrollDepth();
+    };
+  }, [navigation]);
   // Filmstrip direction of the last track change — the banner steps with it.
   const trackDir = useTrackDirection(player.queue);
   const user = getUser();
@@ -427,10 +441,21 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <TopBar navigation={navigation} />
+      <TopBar navigation={navigation} float />
       <ScreenFade>
         <BounceScrollView
-          contentContainerStyle={styles.content}
+          ref={scrollRef}
+          onDeepChange={deep =>
+            setScrollDepth(deep, () =>
+              scrollRef.current?.scrollTo?.({ y: 0, animated: true }),
+            )
+          }
+          contentContainerStyle={[
+            styles.content,
+            // The bar floats over the scroller now (web: position fixed) —
+            // content starts under the glass and slides beneath it.
+            { paddingTop: insets.top + TOPBAR_CLEARANCE },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.pad, styles.greetRow]}>
@@ -721,7 +746,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: {
     gap: 28,
-    paddingTop: 14,
+    // paddingTop rides inline: insets.top + TOPBAR_CLEARANCE (the bar floats).
     paddingBottom: 24 + DOCK_CLEARANCE,
   },
   pad: { paddingHorizontal: 22, gap: 4 },
