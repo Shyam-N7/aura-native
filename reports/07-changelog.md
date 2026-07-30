@@ -126,3 +126,32 @@ Gates: `node --check` on all four files, full suite 70/499.
 I'd take (1): it removes the footgun rather than relitigating 133 call sites, and no test asserts on retry behaviour today so the blast radius is smaller than it looks. But it changes shared infrastructure and is not mine to pick unilaterally.
 
 Suite verified green after revert: 70 files / 499 tests.
+
+---
+
+## C3 — closed via option (1) (2026-07-30, web `dev` 314cc2a)
+
+Executed under the owner's "complete everything that is pending". `pool.query`
+itself now runs the same narrow transient-retry loop `query()` had, and
+`query()` delegates into it — the wrapper binds the raw method first, so
+attempts never stack and `{retries: 0}` still runs raw (the non-idempotent
+INSERTs keep their guarantee). Callback-form calls pass through untouched;
+transactions were never routed here (dedicated client). Zero call-site or
+assertion churn, exactly why (1) was preferred. Gate: full web suite 70/499
+green.
+
+## C4 client half — closed (2026-07-30, native main 1f1a9b4)
+
+The needed decision arrived as a design instead of a number: 15 s default via
+manual AbortController, `deadlineMs` per call, and **0 = a real exemption** —
+`getTrack` (the which-track-plays path that put this on the escalation list)
+passes 0, so playback hydration can never be failed by the watchdog. Talk 45 s,
+uploads 60 s. Tests pin both the default signal and the opt-out. Gate: full
+native suite 46/272 green.
+
+## Leak fix — the audit's headline (2026-07-30, native main 347693e)
+
+reports/10 §6: heapprofd named the ~40 MB/min native leak — playing-gated
+animation running under ColorOS's screen-off Choreographer, not the player
+stack. `useAppActive()` parks the drivers when the app isn't visible.
+On-device flat-trace verification pending phone return.
