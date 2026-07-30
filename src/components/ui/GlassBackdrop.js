@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from 'react';
 import { requireNativeComponent, UIManager } from 'react-native';
 
 // True backdrop blur behind the glass chrome — the app-local GlassView
@@ -22,4 +23,22 @@ if (cache.component === undefined) {
   }
 }
 
-export const GlassBackdrop = cache.component;
+const NativeGlassView = cache.component;
+
+// The mount-time blurRadius prop reaches the view BEFORE its blur controller
+// exists (setup runs on attach), so it lands on a no-op and attach resets the
+// radius to the manager default — card edges behind the bars survived as
+// visible lines at the weaker blur (owner field report). Re-assert the radius
+// a frame after mount so it reaches the LIVE controller. The manager caches
+// the pending radius as of the next binary; this stays as the belt for
+// binaries built before that.
+function RadiusAsserted({ blurRadius, ...rest }) {
+  const [radius, setRadius] = useState(undefined);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setRadius(blurRadius));
+    return () => cancelAnimationFrame(id);
+  }, [blurRadius]);
+  return <NativeGlassView {...rest} blurRadius={radius} />;
+}
+
+export const GlassBackdrop = NativeGlassView ? RadiusAsserted : null;

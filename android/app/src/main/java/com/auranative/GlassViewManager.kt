@@ -1,5 +1,6 @@
 package com.auranative
 
+import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import com.facebook.react.uimanager.SimpleViewManager
@@ -18,19 +19,31 @@ import eightbitlab.com.blurview.BlurView
  * It re-blurs whenever the root invalidates — a live cost while content
  * scrolls beneath, fine for two 52dp bars, so never stack more of these.
  */
-class GlassViewManager : SimpleViewManager<BlurView>() {
+
+/**
+ * Props land BEFORE the blur controller exists (setup can only run once the
+ * view is attached and the React root is laid out), and BlurView silently
+ * drops setBlurRadius calls on its no-op controller. Park the radius here so
+ * setup applies what JS actually asked for — without this, the mount-time
+ * radius vanished and every pill ran the default (owner-visible as card
+ * edges surviving the too-weak blur).
+ */
+class GlassBlurView(context: Context) : BlurView(context) {
+  var pendingRadius = GlassViewManager.DEFAULT_RADIUS
+  var controllerReady = false
+}
+
+class GlassViewManager : SimpleViewManager<GlassBlurView>() {
   override fun getName() = "GlassView"
 
-  override fun createViewInstance(ctx: ThemedReactContext): BlurView {
-    val blurView = BlurView(ctx)
+  override fun createViewInstance(ctx: ThemedReactContext): GlassBlurView {
+    val blurView = GlassBlurView(ctx)
     // Set up once attached — the React root isn't laid out at create time.
     // BlurView's own attach/detach hooks handle every re-attach after this.
     blurView.addOnAttachStateChangeListener(
       object : View.OnAttachStateChangeListener {
-        var setUp = false
-
         override fun onViewAttachedToWindow(v: View) {
-          if (setUp) return
+          if (blurView.controllerReady) return
           val activity = ctx.currentActivity ?: return
           val root =
             activity.findViewById<ViewGroup>(android.R.id.content) ?: return
@@ -41,9 +54,9 @@ class GlassViewManager : SimpleViewManager<BlurView>() {
           blurView
             .setupWith(root)
             .setFrameClearDrawable(activity.window.decorView.background)
-            .setBlurRadius(DEFAULT_RADIUS)
+            .setBlurRadius(blurView.pendingRadius)
             .setBlurAutoUpdate(true)
-          setUp = true
+          blurView.controllerReady = true
         }
 
         override fun onViewDetachedFromWindow(v: View) = Unit
@@ -53,13 +66,16 @@ class GlassViewManager : SimpleViewManager<BlurView>() {
   }
 
   @ReactProp(name = "blurRadius", defaultFloat = DEFAULT_RADIUS)
-  fun setBlurRadius(view: BlurView, radius: Float) {
-    view.setBlurRadius(radius)
+  fun setBlurRadius(view: GlassBlurView, radius: Float) {
+    view.pendingRadius = radius
+    if (view.controllerReady) {
+      view.setBlurRadius(radius)
+    }
   }
 
   companion object {
-    // BlurView downsamples before blurring, so 20 lands near the web's
-    // backdrop-filter blur(40px).
+    // BlurView's RenderEffect path applies this at snapshot resolution;
+    // the JS side passes the web-matched value (tokens glass.backdropRadius).
     const val DEFAULT_RADIUS = 20f
   }
 }
