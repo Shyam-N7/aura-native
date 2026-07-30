@@ -3,6 +3,7 @@ import { SectionList } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
+  runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -31,7 +32,15 @@ const KICK_MAX = 72;
 const BOUNCE_SPRING = { mass: 1, stiffness: 220, damping: 22 };
 
 function withRubberBand(Scroller) {
-  return function Bouncy({ style, ...props }) {
+  // onDeepChange / deepThreshold: a boolean "scrolled deep" signal for the
+  // dock's back-to-top contraction (lib/scrollDepth). It fires ONCE per
+  // threshold crossing — a boundary check inside the existing scroll worklet,
+  // never a per-frame JS hop (reports/10 made per-frame work while invisible
+  // an explicit anti-pattern).
+  return React.forwardRef(function Bouncy(
+    { style, onDeepChange, deepThreshold = 480, ...props },
+    ref,
+  ) {
     const scrollY = useSharedValue(0);
     const prevY = useSharedValue(0);
     const contentH = useSharedValue(0);
@@ -39,6 +48,7 @@ function withRubberBand(Scroller) {
     const over = useSharedValue(0);
     const anchor = useSharedValue(0);
     const touching = useSharedValue(false);
+    const wasDeep = useSharedValue(false);
 
     const pan = Gesture.Pan()
       .activeOffsetY([-10, 10])
@@ -116,6 +126,13 @@ function withRubberBand(Scroller) {
       scrollY.value = y;
       contentH.value = e.contentSize.height;
       layoutH.value = e.layoutMeasurement.height;
+      const deep = y > deepThreshold;
+      if (deep !== wasDeep.value) {
+        wasDeep.value = deep;
+        if (onDeepChange) {
+          runOnJS(onDeepChange)(deep);
+        }
+      }
     });
 
     const bounceStyle = useAnimatedStyle(() => ({
@@ -125,6 +142,7 @@ function withRubberBand(Scroller) {
     return (
       <GestureDetector gesture={Gesture.Simultaneous(native, pan)}>
         <Scroller
+          ref={ref}
           {...props}
           // The band replaces the platform edge treatment entirely; the
           // dimension seeds below make the very first gesture edge-aware
@@ -142,7 +160,7 @@ function withRubberBand(Scroller) {
         />
       </GestureDetector>
     );
-  };
+  });
 }
 
 export const BounceScrollView = withRubberBand(Animated.ScrollView);

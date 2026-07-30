@@ -87,6 +87,8 @@ const ICONS = {
   sliders: { d: 'M6 4 v6 M6 14 v6 M12 4 v10 M12 18 v2 M18 4 v2 M18 10 v10 M4 12 h4 M10 16 h4 M16 8 h4' },
   // Send arrow — the talk composer's submit.
   'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
+  // Straight-up arrow — the dock's "take me back up" pill.
+  'arrow-up': { d: 'M12 21 V3 M5 10 l7 -7 7 7' },
   // Checkmark — "already in this playlist" on the add-to-playlist rows.
   check: { d: 'M4 12 l5 5 L20 6' },
   eye: {

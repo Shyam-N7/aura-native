@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, Vibration, View } from 'react-native';
+import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  interpolate,
   runOnJS,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
   useReducedMotion,
@@ -17,6 +19,7 @@ import { Goo } from '../ui/Goo';
 import { PressScale } from '../ui/PressScale';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
+import { subscribeScrollDepth } from '../../lib/scrollDepth';
 import { gooFill, label, radii } from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
@@ -41,11 +44,16 @@ export const DOCK_CLEARANCE = 96;
 const GOO_PAD = 14;
 const GOO_WINDOW_MS = 460;
 
+// Back-to-top contraction (web MobileDock --btt): the dock narrows to this
+// centered pill while the nav items melt to centre through the goo.
+const BTT_WIDTH = 200;
+const BTT_MS = 420;
+
 // Focused tab off a root nav state: root stack route 0 is the Tabs navigator;
 // its nested index is the focused tab (0 until the tab navigator has state).
 const tabIndexOf = state => state?.routes?.[0]?.state?.index ?? 0;
 
-function DockTab({ route, focused, label: tabLabel, tint, accent, onPress }) {
+function DockTab({ route, focused, label: tabLabel, tint, accent, onPress, index = 0, bttV }) {
   const reduced = useReducedMotion();
   const dot = useSharedValue(focused ? 1 : 0);
   useEffect(() => {
@@ -56,19 +64,36 @@ function DockTab({ route, focused, label: tabLabel, tint, accent, onPress }) {
       : withTiming(focused ? 1 : 0, { duration: DUR.dot, easing: EASE.settle });
   }, [focused, dot, reduced]);
   const dotStyle = useAnimatedStyle(() => ({ transform: [{ scale: dot.value }] }));
+  // Back-to-top melt: each tab slides toward the dock's centre as the capsule
+  // contracts (web --btt nth-child ±150%/±50%), measured off its own width so
+  // the row's flex layout stays untouched.
+  const [w, setW] = useState(0);
+  const meltStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: bttV ? (1.5 - index) * w * bttV.value : 0 },
+    ],
+  }));
 
   return (
-    <PressScale
-      accessibilityRole="button"
-      accessibilityState={focused ? { selected: true } : {}}
-      accessibilityLabel={tabLabel}
-      onPress={onPress}
-      style={styles.tab}
+    // The melt lives on a wrapper: PressScale writes `transform` for its own
+    // press-squash, and two transform-writing styles on one node means the
+    // later one erases the earlier — the wrapper keeps both motions alive.
+    <Animated.View
+      style={[styles.tab, meltStyle]}
+      onLayout={e => setW(e.nativeEvent.layout.width)}
     >
-      <Icon name={TAB_ICONS[route.name]} size={22} color={tint} />
-      <Text style={[label(7.5), { color: tint }]}>{tabLabel}</Text>
-      <Animated.View style={[styles.dot, { backgroundColor: accent }, dotStyle]} />
-    </PressScale>
+      <PressScale
+        accessibilityRole="button"
+        accessibilityState={focused ? { selected: true } : {}}
+        accessibilityLabel={tabLabel}
+        onPress={onPress}
+        style={styles.tabInner}
+      >
+        <Icon name={TAB_ICONS[route.name]} size={22} color={tint} />
+        <Text style={[label(7.5), { color: tint }]}>{tabLabel}</Text>
+        <Animated.View style={[styles.dot, { backgroundColor: accent }, dotStyle]} />
+      </PressScale>
+    </Animated.View>
   );
 }
 
@@ -121,23 +146,102 @@ export function Dock({ navRef }) {
   const firstRender = useRef(true);
   const budR = useSharedValue(BEAD_SIZE / 2);
 
-  // Bud window: when a track first appears, draw opaque silhouettes (capsule +
-  // growing bead) through the goo filter so the two masses fuse like liquid,
-  // then swap the real glass back in.
+  // Back-to-top mode: the focused screen reports "scrolled deep" through
+  // lib/scrollDepth and the whole dock liquid-contracts to a centered
+  // "take me back up" pill (web MobileDock mode='backtotop'). bttV drives
+  // every piece of the choreography off one clock.
+  const [btt, setBtt] = useState(false);
+  const toTopRef = useRef(null);
+  const bttV = useSharedValue(0);
+  useEffect(
+    () =>
+      subscribeScrollDepth(s => {
+        toTopRef.current = s.toTop;
+        setBtt(s.deep);
+      }),
+    [],
+  );
+  useEffect(() => {
+    bttV.value = reduced
+      ? btt
+        ? 1
+        : 0
+      : withTiming(btt ? 1 : 0, { duration: BTT_MS, easing: EASE.settle });
+  }, [btt, bttV, reduced]);
+
+  // Goo window: opaque silhouettes ride the metaball filter for the MORPH
+  // moments only, then the real glass swaps back in — same one-window rule as
+  // the web (`filter` at rest would just blur the chrome). Two triggers share
+  // it: a track first appearing (the bead buds out of the capsule) and the
+  // back-to-top flip (the capsule contracts, items melt to centre).
+  const prevTrack = useRef(hasTrack);
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
+      prevTrack.current = hasTrack;
       return;
     }
-    if (hasTrack && !reduced) {
+    const trackFlipped = prevTrack.current !== hasTrack;
+    prevTrack.current = hasTrack;
+    if ((hasTrack || btt) && !reduced) {
       setGooActive(true);
-      budR.value = BEAD_SIZE * 0.1;
-      budR.value = withTiming(BEAD_SIZE / 2, { duration: DUR.bud, easing: EASE.settle });
+      // The bud animation belongs to the track appearing — a back-to-top flip
+      // reuses the window but must not re-bud a bead that was already out
+      // (its silhouette RETRACTS instead, via the (1 - bttV) factor below).
+      if (trackFlipped && hasTrack) {
+        budR.value = BEAD_SIZE * 0.1;
+        budR.value = withTiming(BEAD_SIZE / 2, { duration: DUR.bud, easing: EASE.settle });
+      }
       const id = setTimeout(() => setGooActive(false), GOO_WINDOW_MS);
       return () => clearTimeout(id);
     }
     setGooActive(false);
-  }, [hasTrack, budR, reduced]);
+  }, [hasTrack, btt, budR, reduced]);
+
+  // Silhouette geometry for the goo window, all off the same two clocks.
+  // Bead: buds with budR, retracts with btt. Capsule: narrows to the centered
+  // pill. Item blobs: the four tabs' masses converging on centre so the
+  // metaball fuses them into the contracting capsule (web --btt ::before).
+  const beadSilR = useDerivedValue(() => budR.value * (1 - bttV.value));
+  const capSilW = useDerivedValue(() =>
+    interpolate(bttV.value, [0, 1], [width, BTT_WIDTH]),
+  );
+  const capSilX = useDerivedValue(
+    () => GOO_PAD + (width - capSilW.value) / 2,
+  );
+  const itemCxAt = i => {
+    'worklet';
+    const padL = hasTrack ? 60 : 4;
+    const usable = width - padL - 4;
+    const base = GOO_PAD + padL + (usable / TABS.length) * (i + 0.5);
+    return interpolate(bttV.value, [0, 1], [base, GOO_PAD + width / 2]);
+  };
+  const itemSil0 = useDerivedValue(() => itemCxAt(0));
+  const itemSil1 = useDerivedValue(() => itemCxAt(1));
+  const itemSil2 = useDerivedValue(() => itemCxAt(2));
+  const itemSil3 = useDerivedValue(() => itemCxAt(3));
+  const itemSilCx = [itemSil0, itemSil1, itemSil2, itemSil3];
+
+  // The visible chrome follows the same clock as the silhouettes.
+  const capsuleStyle = useAnimatedStyle(() => ({
+    width: width > 0 ? interpolate(bttV.value, [0, 1], [width, BTT_WIDTH]) : undefined,
+    alignSelf: 'center',
+  }));
+  // Nav row fades and shrinks out ahead of the label (web: opacity 200ms,
+  // scale .86); items also converge via per-item meltX so the real chrome
+  // matches what the metaball silhouettes are doing.
+  const rowMeltStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(bttV.value, [0, 0.55], [1, 0], 'clamp'),
+    transform: [{ scale: 1 - bttV.value * 0.14 }],
+  }));
+  const bttLabelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(bttV.value, [0.55, 1], [0, 1], 'clamp'),
+    transform: [{ scale: 0.85 + bttV.value * 0.15 }],
+  }));
+  const beadRetractStyle = useAnimatedStyle(() => ({
+    opacity: 1 - bttV.value,
+    transform: [{ scale: 1 - bttV.value }],
+  }));
 
   // Tabs slide right to clear the bead (web: padding-left 60).
   const padLeft = useSharedValue(hasTrack ? 60 : 4);
@@ -237,9 +341,9 @@ export function Dock({ navRef }) {
             ]}
           >
             <RoundedRect
-              x={GOO_PAD}
+              x={capSilX}
               y={GOO_PAD}
-              width={width}
+              width={capSilW}
               height={52}
               r={radii.dock}
               color={gooFill[name]}
@@ -247,38 +351,78 @@ export function Dock({ navRef }) {
             <Circle
               cx={GOO_PAD + 4 + BEAD_SIZE / 2}
               cy={GOO_PAD + 26}
-              r={budR}
+              r={beadSilR}
               color={gooFill[name]}
             />
+            {/* The four tabs as blobs of mass, melting into the contracting
+                capsule (only btt moves them; they sit inside the capsule
+                silhouette — invisible — at rest). */}
+            {btt &&
+              TABS.map((tab, i) => (
+                <Circle
+                  key={tab.name}
+                  cx={itemSilCx[i]}
+                  cy={GOO_PAD + 26}
+                  r={16}
+                  color={gooFill[name]}
+                />
+              ))}
           </Goo>
         )}
-        <Glass radius={radii.dock} solid={gooActive} soft style={styles.capsule}>
-          <GestureDetector gesture={tabSwipe}>
+        <Animated.View style={capsuleStyle}>
+          <Glass radius={radii.dock} solid={gooActive} soft style={styles.capsule}>
+            <GestureDetector gesture={tabSwipe}>
+              <Animated.View
+                pointerEvents={btt ? 'none' : 'auto'}
+                style={[styles.row, rowStyle, rowMeltStyle]}
+                onLayout={(e) => setRowW(e.nativeEvent.layout.width)}
+              >
+                {TABS.map((tab, i) => {
+                  const focused = activeIndex === i;
+                  return (
+                    <DockTab
+                      key={tab.name}
+                      route={tab}
+                      focused={focused}
+                      label={tab.label}
+                      tint={focused ? t.accent : t.inkFaint}
+                      accent={t.accent}
+                      onPress={() => goTab(tab.name)}
+                      index={i}
+                      bttV={bttV}
+                    />
+                  );
+                })}
+              </Animated.View>
+            </GestureDetector>
+            {/* The pill the dock contracts INTO — web .aura-dock__btt. Fades
+                in 80ms behind the melting items so they clear before the
+                label lands. */}
             <Animated.View
-              style={[styles.row, rowStyle]}
-              onLayout={(e) => setRowW(e.nativeEvent.layout.width)}
+              pointerEvents={btt ? 'auto' : 'none'}
+              style={[styles.btt, bttLabelStyle]}
             >
-              {TABS.map((tab, i) => {
-                const focused = activeIndex === i;
-                return (
-                  <DockTab
-                    key={tab.name}
-                    route={tab}
-                    focused={focused}
-                    label={tab.label}
-                    tint={focused ? t.accent : t.inkFaint}
-                    accent={t.accent}
-                    onPress={() => goTab(tab.name)}
-                  />
-                );
-              })}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="take me back up"
+                onPress={() => toTopRef.current?.()}
+                style={styles.bttPress}
+              >
+                <Icon name="arrow-up" size={14} color={t.ink} />
+                <Text style={[styles.bttText, { color: t.ink }]}>
+                  take me back up
+                </Text>
+              </Pressable>
             </Animated.View>
-          </GestureDetector>
-        </Glass>
+          </Glass>
+        </Animated.View>
         {hasTrack && (
-          <View style={[styles.beadSlot, gooActive && styles.hidden]}>
+          <Animated.View
+            pointerEvents={btt ? 'none' : 'auto'}
+            style={[styles.beadSlot, beadRetractStyle, gooActive && styles.hidden]}
+          >
             <Bead />
-          </View>
+          </Animated.View>
         )}
       </View>
     </View>
@@ -298,8 +442,22 @@ const styles = StyleSheet.create({
   goo: { position: 'absolute', zIndex: 1 },
   capsule: { height: 52, justifyContent: 'center' },
   row: { flexDirection: 'row', paddingRight: 4 },
-  tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 6 },
+  tab: { flex: 1, justifyContent: 'center' },
+  tabInner: { alignItems: 'center', gap: 3, paddingVertical: 6 },
   dot: { position: 'absolute', bottom: -1, width: 4, height: 4, borderRadius: 2 },
   beadSlot: { position: 'absolute', left: 4, top: 0, zIndex: 2 },
   hidden: { opacity: 0 },
+  btt: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bttPress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  bttText: { fontFamily: 'HankenGrotesk-SemiBold', fontSize: 13 },
 });
