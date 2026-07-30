@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { SectionList } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -30,6 +30,9 @@ const AnimatedSectionList = Animated.createAnimatedComponent(SectionList);
 const RUBBER = 150;
 const KICK_MAX = 72;
 const BOUNCE_SPRING = { mass: 1, stiffness: 220, damping: 22 };
+// Web parity (hooks/useActiveScroll.js): the deep signal relaxes this long
+// after the last scroll movement, so the dock's tabs return once you stop.
+const IDLE_MS = 2500;
 
 function withRubberBand(Scroller) {
   // onDeepChange / deepThreshold: a boolean "scrolled deep" signal for the
@@ -49,6 +52,29 @@ function withRubberBand(Scroller) {
     const anchor = useSharedValue(0);
     const touching = useSharedValue(false);
     const wasDeep = useSharedValue(false);
+
+    // The idle timer lives on the JS side; worklets ping it only on gesture
+    // boundaries. notifyDeep both delivers the signal and cancels any pending
+    // revert; armIdle schedules the relax.
+    const idle = useRef(null);
+    const notifyDeep = useCallback(
+      deep => {
+        clearTimeout(idle.current);
+        if (onDeepChange) {
+          onDeepChange(deep);
+        }
+      },
+      [onDeepChange],
+    );
+    const armIdle = useCallback(() => {
+      clearTimeout(idle.current);
+      idle.current = setTimeout(() => {
+        if (onDeepChange) {
+          onDeepChange(false);
+        }
+      }, IDLE_MS);
+    }, [onDeepChange]);
+    useEffect(() => () => clearTimeout(idle.current), []);
 
     const pan = Gesture.Pan()
       .activeOffsetY([-10, 10])
@@ -98,7 +124,31 @@ function withRubberBand(Scroller) {
 
     const native = Gesture.Native();
 
-    const onScroll = useAnimatedScrollHandler(e => {
+    const onScroll = useAnimatedScrollHandler({
+      // Re-assert deep the moment a deep list moves again (cancels a pending
+      // revert), relax IDLE_MS after the movement stops. Once per gesture,
+      // never per frame.
+      onBeginDrag: () => {
+        if (wasDeep.value && onDeepChange) {
+          runOnJS(notifyDeep)(true);
+        }
+      },
+      onMomentumBegin: () => {
+        if (wasDeep.value && onDeepChange) {
+          runOnJS(notifyDeep)(true);
+        }
+      },
+      onEndDrag: () => {
+        if (wasDeep.value && onDeepChange) {
+          runOnJS(armIdle)();
+        }
+      },
+      onMomentumEnd: () => {
+        if (wasDeep.value && onDeepChange) {
+          runOnJS(armIdle)();
+        }
+      },
+      onScroll: e => {
       const y = e.contentOffset.y;
       const maxY = Math.max(
         0,
@@ -130,9 +180,10 @@ function withRubberBand(Scroller) {
       if (deep !== wasDeep.value) {
         wasDeep.value = deep;
         if (onDeepChange) {
-          runOnJS(onDeepChange)(deep);
+          runOnJS(notifyDeep)(deep);
         }
       }
+      },
     });
 
     const bounceStyle = useAnimatedStyle(() => ({
