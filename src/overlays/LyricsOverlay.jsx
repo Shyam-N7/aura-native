@@ -32,6 +32,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
+import { useAppActive } from '../hooks/useAppActive';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { getLyrics } from '../api/lyrics';
 import { requestStems } from '../api/stems';
@@ -756,8 +757,12 @@ export function LyricsOverlay() {
   const { width: winW } = useWindowDimensions();
   const player = usePlayer();
   const open = player.ui?.lyricsOpen ?? false;
-  // 4Hz only while shown — same background-churn rule as PlayerSheet.
-  const { position, duration } = usePlaybackProgress(open ? 250 : 60_000);
+  // 4Hz only while shown AND visible — same background-churn rule as
+  // PlayerSheet (open-but-locked would otherwise tick all listen long).
+  const appActive = useAppActive();
+  const { position, duration } = usePlaybackProgress(
+    open && appActive ? 250 : 60_000,
+  );
   const reduced = useReducedMotion();
 
   const track = player.current;

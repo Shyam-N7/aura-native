@@ -32,6 +32,7 @@ import Animated, {
 import { useTheme } from '../theme/ThemeContext';
 import { storage } from '../storage/mmkv';
 import { usePlayer } from '../playback/PlayerContext';
+import { useAppActive } from '../hooks/useAppActive';
 import { usePlaybackProgress } from '../hooks/usePlaybackProgress';
 import { useLikes } from '../hooks/useLikes';
 import { useTrackDirection } from '../hooks/useTrackDirection';
@@ -372,10 +373,15 @@ export function PlayerSheet() {
   const { width: winW, height: winH } = useWindowDimensions();
   const player = usePlayer();
   const open = player.ui?.playerOpen ?? false;
-  // 4Hz only while the sheet is actually shown. Closed, this component stays
-  // mounted for the whole session (hours, screen off) — a 250ms RNTP poll
-  // there is pure background churn the OS holds against us.
-  const { position, duration } = usePlaybackProgress(open ? 250 : 60_000);
+  // 4Hz only while the sheet is actually shown AND the app is visible.
+  // Closed, this component stays mounted for the whole session (hours,
+  // screen off) — a 250ms RNTP poll there is pure background churn the OS
+  // holds against us. Open-but-backgrounded (locked mid-listen) is the same
+  // churn plus the ribbon/time re-render cascade: reports/10 leak territory.
+  const appActive = useAppActive();
+  const { position, duration } = usePlaybackProgress(
+    open && appActive ? 250 : 60_000,
+  );
   const reduced = useReducedMotion();
   const { isLiked, like, unlike } = useLikes();
 
@@ -568,10 +574,11 @@ export function PlayerSheet() {
   // Breathing accent glow behind the play button, playing only (web aura-breathe).
   // Gated on `open` as well: the sheet stays mounted for the whole session, so
   // without it this infinite animation keeps ticking the UI thread behind a
-  // closed player — including screen-off playback, where nothing renders it.
+  // closed player — and on appActive, because open-but-locked keeps ticking
+  // too (ColorOS runs animation frames with the screen off — reports/10).
   const playing = player.isPlaying;
   useEffect(() => {
-    if (playing && open && !reduced) {
+    if (playing && open && appActive && !reduced) {
       breathe.value = withRepeat(
         withTiming(1.08, {
           duration: DUR.breathe / 2,
@@ -584,7 +591,7 @@ export function PlayerSheet() {
     }
     breathe.value = withTiming(0.85, { duration: 300 });
     return undefined;
-  }, [playing, open, reduced, breathe]);
+  }, [playing, open, appActive, reduced, breathe]);
 
   // Drag-follow dismiss. On commit the shared close() runs — its slide-out
   // starts from wherever the drag left the sheet (the transforms sum), so the

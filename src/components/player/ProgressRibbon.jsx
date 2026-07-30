@@ -12,6 +12,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useAppActive } from '../../hooks/useAppActive';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -81,10 +82,16 @@ export function ProgressRibbon({
         (Math.PI * 2);
     }
   }, playing);
+  // Each tick rebuilds two ~80-point path strings on the worklet runtime and
+  // commits them as svg props — the single heaviest per-frame worker in the
+  // app, so backgrounded (screen off, still playing) it MUST park: ColorOS
+  // keeps the frame clock alive there, and this loop was a main feeder of the
+  // reports/10 native-heap leak.
+  const appActive = useAppActive();
   useEffect(() => {
     // A flat line has no wave to advance — park the frame clock entirely.
-    wave.setActive(playing && variant !== 'line');
-  }, [playing, variant, wave]);
+    wave.setActive(playing && variant !== 'line' && appActive);
+  }, [playing, variant, appActive, wave]);
 
   // Scrub reporter: fires only when the DISPLAYED second changes (not per
   // frame), and once with -1 when the finger lifts.

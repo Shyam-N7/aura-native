@@ -15,6 +15,7 @@ import { PressScale } from '../ui/PressScale';
 import { TrackArt } from '../TrackRow';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
+import { useAppActive } from '../../hooks/useAppActive';
 import { usePlaybackProgress } from '../../hooks/usePlaybackProgress';
 import { useTrackDirection } from '../../hooks/useTrackDirection';
 import { DUR, EASE, SPRING } from '../../theme/motion';
@@ -34,7 +35,12 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 export function Bead() {
   const { t } = useTheme();
   const player = usePlayer();
-  const { progress } = usePlaybackProgress();
+  // Backgrounded, the 4Hz tick would keep restarting the 260ms ring sweep —
+  // an animation that never ends, invisibly, for as long as music plays
+  // (the reports/10 leak). The bead is always mounted, so it gates on app
+  // visibility the way PlayerSheet gates its poll on `open`.
+  const active = useAppActive();
+  const { progress } = usePlaybackProgress(active ? 250 : 60_000);
   const reduced = useReducedMotion();
 
   // Smooth the 4Hz progress ticks into a continuous ring sweep.

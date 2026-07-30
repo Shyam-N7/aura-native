@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAppActive } from '../../hooks/useAppActive';
 import { PressScale } from '../ui/PressScale';
 import { TrackArt } from '../TrackRow';
 import { fonts, label } from '../../theme/tokens';
@@ -43,6 +44,10 @@ const seedLanes = id => {
 // a mechanical pulse. Purely decorative: no touches, hidden from a11y.
 function AuraDance({ id, playing, reduced }) {
   const { t } = useTheme();
+  // These loops are gated on `playing`, so with the screen off they'd dance
+  // unseen for the whole listen — one of the reports/10 leak drivers. Settle
+  // whenever the app isn't visible, same as a pause.
+  const active = useAppActive();
   const w0 = useSharedValue(0); // outer ring sway, -1..1
   const w1 = useSharedValue(0); // inner ring sway, offset phase
   const beat = useSharedValue(0); // core pulse, 0..1
@@ -50,7 +55,7 @@ function AuraDance({ id, playing, reduced }) {
 
   useEffect(() => {
     const waves = [w0, w1];
-    if (reduced || !playing) {
+    if (reduced || !playing || !active) {
       // Settle to the resting mark — the logo, holding its breath.
       [...waves, beat].forEach(v => {
         cancelAnimation(v);
@@ -94,7 +99,7 @@ function AuraDance({ id, playing, reduced }) {
       -1,
       true,
     );
-  }, [lanes, playing, reduced, w0, w1, beat]);
+  }, [lanes, playing, reduced, active, w0, w1, beat]);
 
   const a0 = 0.05 + lanes[0] * 0.05;
   const a1 = 0.08 + lanes[1] * 0.06;
