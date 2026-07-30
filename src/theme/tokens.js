@@ -135,7 +135,11 @@ export const glass = {
   shimmerTo: 0.035,
   border: 'rgba(255,255,255,0.18)',
   insetLight: 'rgba(255,255,255,0.35)',
-  insetShade: 'rgba(31,23,14,0.16)',
+  // Light glass gets its depth from brightness (bevel + shimmer), NOT a dark
+  // edge — the web's light mode carries no shade band (owner's reference).
+  // Whisper values here; midnight is where the slab shows its dark under-edge.
+  insetShade: 'rgba(31,23,14,0.05)',
+  underShade: 0.05,
   discBg: 'rgba(22,19,16,0.34)',
   discBorder: 'rgba(255,255,255,0.22)',
   midnight: {
@@ -143,7 +147,8 @@ export const glass = {
     shimmerTo: 0.025,
     border: 'rgba(255,255,255,0.14)',
     insetLight: 'rgba(255,255,255,0.20)',
-    insetShade: 'rgba(0,0,0,0.32)',
+    insetShade: 'rgba(0,0,0,0.30)',
+    underShade: 0.2,
   },
 };
 
@@ -160,10 +165,13 @@ export const glassTint = {
 // reads as frosted glass — a clear bar you still sense content behind, the
 // closest this stack gets to the web's backdrop blur (capture-based blur is
 // broken on-device; see Glass.jsx). 0.70 let too much through and looked thin.
+// 0.87: shapes behind dissolve into colour bleed (translucent), instead of
+// ghosting through sharply (transparent) — owner-tuned live over real art.
+// The web gets this from backdrop blur; opacity is the honest native dial.
 export const glassTintSoft = {
-  dusk: 'rgba(244,236,224,0.80)',
-  midnight: 'rgba(35,30,24,0.82)',
-  bloom: 'rgba(251,243,239,0.80)',
+  dusk: 'rgba(244,236,224,0.87)',
+  midnight: 'rgba(35,30,24,0.88)',
+  bloom: 'rgba(251,243,239,0.87)',
 };
 
 // Opaque fill used while goo is fusing (the web swaps glass for color-mix during the

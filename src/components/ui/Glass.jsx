@@ -42,7 +42,7 @@ export function Glass({ radius = 26, style, solid = false, soft = false, childre
               the bottom. A short fade, not a hairline — the height is what
               sells the thickness. */}
           <LinearGradient id="underShade" x1="0" y1="1" x2="0" y2="0">
-            <Stop offset="0" stopColor="#000000" stopOpacity={0.22} />
+            <Stop offset="0" stopColor="#000000" stopOpacity={g.underShade} />
             <Stop offset="1" stopColor="#000000" stopOpacity={0} />
           </LinearGradient>
         </Defs>
