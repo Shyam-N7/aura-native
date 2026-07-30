@@ -21,6 +21,13 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
+      <!-- Lets shell profilers (heapprofd/Perfetto) attach to RELEASE builds —
+           Google-sanctioned for production; exposes profiling only to adb
+           shell, nothing to other apps. Added to name the native-heap leak:
+           ~33MB/min during screen-off playback on ColorOS 14, category-fenced
+           in reports/10-leak-and-kill.md, allocator unknown until a heapprofd
+           capture can read malloc stacks from a real device. -->
+      <profileable android:shell="true" tools:targetApi="29" />
       <!-- FCM notification branding: the white aura mark as the status-bar
            icon (the launcher's monochrome layer) and the accent as its tint,
            for every push the OS renders on our behalf. -->
