@@ -239,9 +239,22 @@ export function PlayerProvider({ children }) {
       enqueueOp(async () => {
         const active = await engine.getActiveIndex();
         if (active != null && active !== before.idx && before.tracks[active]) {
-          const fixed = mutate({ ...before, idx: active });
-          applyQueue(fixed);
-          return engine.syncQueue(fixed, { startIndex: fixed.idx });
+          // The index alone can lie: mid-rebuild it reads as a transient
+          // (engine.getActiveTrack's caveat), and recomputing around a lie
+          // repoints the queue at a song that was never playing — seen live
+          // as a paused reorder stepping the now-playing row. Drift is real
+          // only when the native ACTIVE TRACK is genuinely a different song
+          // than the model's, and is the song the index claims it is.
+          const nativeTrack = await engine.getActiveTrack();
+          const drifted =
+            nativeTrack?.id != null &&
+            nativeTrack.id !== before.tracks[before.idx]?.id &&
+            before.tracks[active]?.id === nativeTrack.id;
+          if (drifted) {
+            const fixed = mutate({ ...before, idx: active });
+            applyQueue(fixed);
+            return engine.syncQueue(fixed, { startIndex: fixed.idx });
+          }
         }
         return engine.syncQueue(nq, { startIndex: nq.idx });
       });

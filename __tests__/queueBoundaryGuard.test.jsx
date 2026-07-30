@@ -125,6 +125,32 @@ test('add-to-queue at a boundary does not rewind either', async () => {
   expect(s.queue[s.activeIndex].id).toBe('t2');
 });
 
+// The other face of the guard: the index READ can itself be wrong — a
+// mid-rebuild transient — while nothing actually advanced. Trusting it
+// recomputed the mutation around a song that was never playing and visibly
+// stepped the now-playing row during a paused reorder (seen on-device).
+// Drift must be confirmed by the active TRACK's id, not the index alone.
+test('a transient native index while paused does not repoint the queue', async () => {
+  await mount();
+  expect(__getMockState().queue.map(t => t.id)).toEqual(['t1', 't2', 't3']);
+
+  // The index read lies once; the active track still honestly reads t1.
+  const spy = jest
+    .spyOn(TrackPlayer, 'getActiveTrackIndex')
+    .mockResolvedValueOnce(2);
+  await ReactTestRenderer.act(async () => {
+    api.reorder(2, 1);
+  });
+  await flush();
+  spy.mockRestore();
+
+  const s = __getMockState();
+  expect(s.queue.map(t => t.id)).toEqual(['t1', 't3', 't2']);
+  // Pre-fix this landed on t3: the guard recomputed around the transient and
+  // skipped there. The song the user was on must not move.
+  expect(s.queue[s.activeIndex].id).toBe('t1');
+});
+
 test('with no backlog the plain path still applies the edit', async () => {
   await mount();
 
