@@ -131,6 +131,10 @@ export const elevation = {
 // brighter rim + top bevel, and a dark inner bottom edge (insetShade) so the
 // pill reads as a slab of glass with depth, not a film.
 export const glass = {
+  // Backdrop blur strength (GlassView). RenderEffect applies this at full
+  // resolution, so match the web's blur(40px) directly — at 20 the hard edges
+  // of cards behind the bars survived as boxy seams (owner field report).
+  backdropRadius: 40,
   shimmerFrom: 0.14,
   shimmerTo: 0.035,
   border: 'rgba(255,255,255,0.18)',

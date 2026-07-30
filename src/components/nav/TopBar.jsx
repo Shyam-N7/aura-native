@@ -127,8 +127,9 @@ export function TopBar({ navigation, float = false }) {
     >
       {/* soft = the dock capsule's exact tint register, so the two pieces of
           floating chrome read as the same glass (the ask that landed this:
-          "top bar background same as bottom bar"). */}
-      <Glass radius={radii.pill} soft style={styles.bar}>
+          "top bar background same as bottom bar"). blur = the real backdrop
+          behind it, same as the dock. */}
+      <Glass radius={radii.pill} soft blur style={styles.bar}>
         <View style={styles.row}>
           <Pressable
             accessible={false}

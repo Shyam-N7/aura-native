@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme/ThemeContext';
+import { GlassBackdrop } from './GlassBackdrop';
 import { glass, glassTint, glassTintSoft, gooFill } from '../../theme/tokens';
 
 // The web's glass recipe without backdrop-filter: a translucent surface tint,
@@ -11,11 +12,22 @@ import { glass, glassTint, glassTintSoft, gooFill } from '../../theme/tokens';
 // over AURA's flat theme backgrounds a tint is visually identical to blur.
 // `solid` swaps the tint for an opaque fill — used during goo windows (the
 // metaball needs alpha to merge against). `soft` uses the lower-alpha tint for
-// chrome floating over scrolling content. NEVER add elevation here: Android
-// renders an elevated translucent view as an opaque white slab.
-export function Glass({ radius = 26, style, solid = false, soft = false, children }) {
+// chrome floating over scrolling content. `blur` swaps the tint for the REAL
+// backdrop (GlassView) with nothing over it but the shimmer — the web's exact
+// register — reserved for the two floating bars; it goes dormant while
+// `solid` so BlurView and the Skia goo layer never run in the same frame. NEVER add elevation here: Android renders an elevated
+// translucent view as an opaque white slab.
+export function Glass({
+  radius = 26,
+  style,
+  solid = false,
+  soft = false,
+  blur = false,
+  children,
+}) {
   const { name } = useTheme();
   const g = name === 'midnight' ? { ...glass, ...glass.midnight } : glass;
+  const blurOn = blur && !solid && GlassBackdrop != null;
   const tint = soft ? glassTintSoft[name] : glassTint[name];
 
   return (
@@ -25,11 +37,29 @@ export function Glass({ radius = 26, style, solid = false, soft = false, childre
         {
           borderRadius: radius,
           borderColor: g.border,
-          backgroundColor: solid ? gooFill[name] : tint,
+          // With blur live, the tint moves to an overlay ABOVE the backdrop —
+          // a background here would paint beneath it and vanish.
+          backgroundColor: solid
+            ? gooFill[name]
+            : blurOn
+              ? 'transparent'
+              : tint,
         },
         style,
       ]}
     >
+      {/* Web-exact register: the pill over blur carries NO surface tint —
+          the shimmer gradient + rim over the blurred backdrop IS the glass,
+          and content colour bleeds through at full strength (owner: "match
+          the level it is in web"). */}
+      {blurOn && (
+        <GlassBackdrop
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+          collapsable={false}
+          blurRadius={g.backdropRadius}
+        />
+      )}
       <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
         <Defs>
           {/* Solid stopColor + numeric stopOpacity — rn-svg renders rgba() stop

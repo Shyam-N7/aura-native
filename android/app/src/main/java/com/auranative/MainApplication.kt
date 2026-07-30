@@ -45,6 +45,8 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
           // The equalizer's platform-effects bridge — app-local, so nothing to
           // autolink.
           add(AuraEqualizerPackage())
+          // Backdrop blur for the glass chrome — also app-local.
+          add(GlassViewPackage())
         },
     )
   }

@@ -152,9 +152,18 @@ android {
     }
 }
 
+// Dimezis BlurView (the glass backdrop) is published on JitPack only.
+repositories {
+    maven { url 'https://www.jitpack.io' }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+
+    // Backdrop blur behind the glass chrome (GlassViewManager) — snapshots
+    // the content beneath and blurs it via RenderEffect on API 31+.
+    implementation("com.github.Dimezis:BlurView:version-2.0.6")
 
     // Same Coil that KotlinAudio uses for notification artwork —
     // MainApplication implements ImageLoaderFactory to cap its memory cache

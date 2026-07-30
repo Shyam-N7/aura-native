@@ -370,7 +370,9 @@ export function Dock({ navRef }) {
           </Goo>
         )}
         <Animated.View style={capsuleStyle}>
-          <Glass radius={radii.dock} solid={gooActive} soft style={styles.capsule}>
+          {/* blur sleeps automatically while solid (goo windows) — BlurView
+              and the Skia layer effect never share a frame. */}
+          <Glass radius={radii.dock} solid={gooActive} soft blur style={styles.capsule}>
             <GestureDetector gesture={tabSwipe}>
               <Animated.View
                 pointerEvents={btt ? 'none' : 'auto'}
