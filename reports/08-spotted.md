@@ -59,3 +59,9 @@ Silently no-ops on the RMX3371 (reports success, value unchanged) but works corr
 ## SP6 — RN Firebase ships an empty `default_notification_channel_id`
 
 Found via a manifest-merger failure while implementing C2. `react-native-firebase_messaging`'s own manifest declares `com.google.firebase.messaging.default_notification_channel_id` with an **empty value**. That is the mechanism behind C2: the SDK read `""` as the app's default channel and fell back to its own. Resolved within C2 by `tools:replace="android:value"`, mirroring what `default_notification_color` already does in the same file.
+
+- **jest workers force-exited once per full run** ("worker process has failed to
+  exit gracefully… active timers") — pre-existing: fires identically with and
+  without the 2026-07-30 leak-fix diff (A/B'd both ways, 272/272 green both
+  ways). Some suite leaves a live timer at teardown; `--detectOpenHandles` run
+  not done (out of scope mid-leak-fix).

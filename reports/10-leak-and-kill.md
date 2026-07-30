@@ -61,3 +61,64 @@ Heap free at last sample: 41 MB of a 354 MB arena — the next kill minutes away
 - `scripts/adbq.sh` (AI Music repo) + a `Bash(bash scripts/adbq.sh *)` allow rule: static-permission adb access, created when the harness's auto-approval model went down mid-forensics. The rule was added by the owner.
 - `input motionevent DOWN/MOVE…/UP` chains drive gesture-handler pans on OxygenOS (not ColorOS) — machine-driven drag testing exists now; `sendevent` is permission-denied unrooted.
 - Arrival-watch pattern (2 s notification polling) and per-minute condition samplers (screen/audio/pid/PSS) both earned their keep tonight.
+
+## 6. RCA — the allocator, named (2026-07-30 12:09–12:14 IST, realme RMX3371 / ColorOS 14)
+
+Step 1 of §4 executed: `<profileable android:shell="true"/>` (commit e8c491f),
+heapprofd capture during verified screen-off playback — private session on, state
+sampled per minute (`Dozing` + `state=PLAYING(3)` on every sample; meminfo alloc
+74.8 → 166.5 → 179.2 MB across the window). Trace + config:
+`reports/assets/leak-heapprofd.{pftrace,cfg}` (4 min, 16 KiB sampling, 30 s dumps).
+
+**The leak reproduced inside the capture** — net unfreed malloc grew in all eight
+30-second dumps, ~158 MB total (~40 MB/min), on ~330 MB/dump of churn.
+
+**Where §3 was wrong, on the record:** the surviving hypothesis (player/stream
+native path — codec client, audio client, datasource) is **innocent**. The codec
+appears at exactly one callsite: `CCodecBufferChannel::start → LinearOutputBuffers`
+— 6 MB across 6 allocations, the bounded per-track output-buffer arrays.
+
+**Where the bytes actually come from** (top callsites, malloc stacks):
+
+| net MB | count | stack (leaf → root) |
+|---|---|---|
+| 27.0 | 1721 | `operator new` ← reanimated ← **worklets/hermesvm frame execution** ← `AnimationFrameCallback::onAnimationFrame` ← `AnimationFrameQueue.executeQueue` |
+| 23.5 | 1502 | `operator new` ← reactnative ← **`FabricMountingManager::executeMount`** ← `RuntimeScheduler_Modern::runEventLoop` (JS thread) |
+| 21.7 | 1334 | same worklet-frame family as the first |
+| 16.0 | **1** | a single unfreed 16 MB Hermes allocation inside the worklet runtime, made mid-animation-frame |
+| 11.9 + 9.2 + … | | further worklet-frame and executeMount callsites, same two families |
+
+**Mechanism.** ColorOS 14 keeps delivering Choreographer animation frames with the
+screen off (most ROMs stop them — hence the flat 6T). Everything animating purely
+on `playing` therefore keeps executing invisibly for the entire listen:
+
+- `Bead.jsx` — the dock bead polled progress at 4 Hz and restarted a 260 ms
+  `withTiming` ring sweep every 250 ms: a per-frame animation that never ends,
+  mounted for the whole session.
+- `NowPlayingBanner` `AuraDance` — three infinite `withRepeat` loops while playing.
+- `ProgressRibbon` — a `useFrameCallback` rebuilding two ~80-point SVG path
+  strings per frame, parked only by `playing`/variant (sheet-open + locked ran it).
+
+Every reconstruction matches the eliminations in §3: playback-gated (paused → no
+ticks, loops settle), UI-category-flat (the cost is malloc in the worklet runtime
+and mount layer, not Gfx/EGL), JS/Dalvik-flat (worklet Hermes heap is native
+malloc), effects-independent, ROM-specific.
+
+**Fix (commit 347693e):** visibility as a first-class gate — `useAppActive()`;
+progress polls drop to 60 s when backgrounded (the sheets' existing `open` idiom,
+extended); AuraDance settles and the ribbon's clock parks when not visible.
+Correct on every ROM: an invisible animation is pure battery cost even where the
+ROM stops the frames.
+
+**Verification: PENDING on-device.** Protocol on phone return: install the fixed
+build → screen-off playback ≥ 10 min → per-minute meminfo must hold flat (paused-
+control shape); optionally a second heapprofd trace for the before/after.
+
+**Upstream note (candidate, after verification):** per-frame allocations retained
+across hours inside reanimated/worklets + `executeMount` under a screen-off
+Choreographer is worth an upstream report with this trace once our gate confirms
+the slope dies with the drivers parked.
+
+**Spotted while verifying (not touched, per rules):** the full jest suite prints
+"A worker process has failed to exit gracefully" once — present with AND without
+the fix diff (A/B'd), pre-existing; belongs to reports/08-spotted.md.
