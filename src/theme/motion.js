@@ -7,6 +7,7 @@ export const EASE = {
   settle: Easing.bezier(0.2, 0.7, 0.2, 1), // the house curve (aura-rise, dots, bud)
   enter: Easing.bezier(0.215, 0.61, 0.355, 1), // GSAP power3.out equivalent
   exit: Easing.bezier(0.4, 0, 0.2, 1),
+  liquid: Easing.bezier(0.34, 1.32, 0.5, 1), // overshoot — the top-bar search morph's scale swell/collapse
 };
 
 export const SPRING = {

@@ -1,11 +1,18 @@
-import React, { useCallback, useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from 'react';
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -18,7 +25,8 @@ import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
 import { getUser } from '../../lib/auth';
 import { openModeSheet } from '../../lib/modeSheet';
-import { themes, type, radii, label } from '../../theme/tokens';
+import { closeSearch, openSearch, useSearchQuery } from '../../lib/searchQuery';
+import { themes, type, radii, label, fonts } from '../../theme/tokens';
 import { EASE, SPRING } from '../../theme/motion';
 
 // Resting halo opacity once the wordmark's bloom settles.
@@ -39,7 +47,10 @@ const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'cat' };
 // TOPBAR_CLEARANCE + insets.top instead of stacking below the bar.
 export const TOPBAR_CLEARANCE = 68; // 10 above + 52 bar + 6 below
 
-export function TopBar({ navigation, float = false }) {
+export const TopBar = forwardRef(function TopBar(
+  { navigation, float = false, onSubmitSearch },
+  ref,
+) {
   const { name, pref, t, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const user = getUser();
@@ -117,6 +128,75 @@ export function TopBar({ navigation, float = false }) {
     ],
   }));
 
+  // Liquid search morph (web MobileTopBar port): the pill never resizes — two
+  // absolutely-stacked layers cross-fade + scale in place. `open` rides the
+  // shared bus (module-scope, not context) so whichever tab the chip is
+  // tapped from and the Search tab's own TopBar instance agree on one state;
+  // the query itself rides the same bus so SearchScreen reads what's typed
+  // here.
+  const { query, open: searching, setQuery } = useSearchQuery();
+  const searchInputRef = useRef(null);
+  useImperativeHandle(ref, () => ({
+    // SearchScreen calls this right before the player opens over an open
+    // search: dismissing the keyboard alone leaves a lingering layout inset
+    // on some ROMs unless the field also drops logical focus.
+    blurSearch: () => searchInputRef.current?.blur(),
+  }));
+
+  const barOpacity = useSharedValue(1);
+  const barScale = useSharedValue(1);
+  const fieldOpacity = useSharedValue(0);
+  const fieldScale = useSharedValue(0.78);
+
+  useEffect(() => {
+    if (reduced) {
+      barOpacity.value = withTiming(searching ? 0 : 1, { duration: 160 });
+      fieldOpacity.value = withTiming(searching ? 1 : 0, { duration: 160 });
+      barScale.value = 1;
+      fieldScale.value = 1;
+    } else if (searching) {
+      barOpacity.value = withTiming(0, { duration: 200, easing: EASE.settle });
+      barScale.value = withTiming(0.88, { duration: 380, easing: EASE.liquid });
+      // 60ms delay so the trio clears before the field blooms (web parity);
+      // closing mirrors this with no delay.
+      fieldOpacity.value = withDelay(60, withTiming(1, { duration: 200, easing: EASE.settle }));
+      fieldScale.value = withTiming(1, { duration: 380, easing: EASE.liquid });
+    } else {
+      barOpacity.value = withTiming(1, { duration: 200, easing: EASE.settle });
+      barScale.value = withTiming(1, { duration: 380, easing: EASE.liquid });
+      fieldOpacity.value = withTiming(0, { duration: 200, easing: EASE.settle });
+      fieldScale.value = withTiming(0.78, { duration: 380, easing: EASE.liquid });
+    }
+  }, [searching, reduced, barOpacity, barScale, fieldOpacity, fieldScale]);
+
+  // Autofocus on open (120ms — a same-tick focus can miss right after a tab
+  // switch on some ROMs); dismiss on close. Skipped when this instance isn't
+  // the focused screen — Home/Talk/You keep their own mounted TopBar once
+  // visited, and only the one actually on screen should grab the keyboard.
+  useEffect(() => {
+    if (!searching) {
+      Keyboard.dismiss();
+      return undefined;
+    }
+    if (!(navigation?.isFocused?.() ?? true)) return undefined;
+    const id = setTimeout(() => searchInputRef.current?.focus(), 120);
+    return () => clearTimeout(id);
+  }, [searching, navigation]);
+
+  const onSearchPress = () => {
+    openSearch();
+    navigation?.navigate('Search');
+  };
+
+  const barLayerStyle = useAnimatedStyle(() => ({
+    opacity: barOpacity.value,
+    transform: [{ scale: barScale.value }],
+  }));
+  const fieldLayerStyle = useAnimatedStyle(() => ({
+    opacity: fieldOpacity.value,
+    transform: [{ scale: fieldScale.value }],
+  }));
+
   return (
     <View
       style={[
@@ -130,7 +210,11 @@ export function TopBar({ navigation, float = false }) {
           "top bar background same as bottom bar"). blur = the real backdrop
           behind it, same as the dock. */}
       <Glass radius={radii.pill} soft blur style={styles.bar}>
-        <View style={styles.row}>
+        <Animated.View
+          pointerEvents={searching ? 'none' : 'auto'}
+          importantForAccessibility={searching ? 'no-hide-descendants' : 'auto'}
+          style={[styles.layer, styles.row, barLayerStyle]}
+        >
           <Pressable
             accessible={false}
             importantForAccessibility="no-hide-descendants"
@@ -210,7 +294,7 @@ export function TopBar({ navigation, float = false }) {
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="open search"
-            onPress={() => navigation?.navigate('Search')}
+            onPress={onSearchPress}
             style={[styles.chip, { borderColor: t.line }]}
           >
             <Icon name="search" size={16} color={t.inkSoft} />
@@ -225,11 +309,60 @@ export function TopBar({ navigation, float = false }) {
               {initial}
             </Text>
           </PressScale>
-        </View>
+        </Animated.View>
+
+        {/* Layer 2 — the search field, always mounted (so typing here keeps
+            reaching the shared query even while inert) and only interactive
+            while open. */}
+        <Animated.View
+          pointerEvents={searching ? 'auto' : 'none'}
+          importantForAccessibility={searching ? 'auto' : 'no-hide-descendants'}
+          style={[styles.layer, styles.fieldRow, fieldLayerStyle]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="close search"
+            onPress={closeSearch}
+            hitSlop={8}
+            style={styles.backBtn}
+          >
+            <Icon name="chevron-left" size={20} color={t.inkSoft} />
+          </Pressable>
+          <Icon name="search" size={16} color={t.inkFaint} />
+          <TextInput
+            ref={searchInputRef}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="search a song, artist, or mood…"
+            placeholderTextColor={t.inkFaint}
+            style={[styles.fieldInput, { color: t.ink }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            inputMode="search"
+            returnKeyType="search"
+            onSubmitEditing={onSubmitSearch}
+            cursorColor={t.accent}
+            selectionColor={t.accent}
+          />
+          {query.length > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="clear search"
+              onPress={() => {
+                setQuery('');
+                searchInputRef.current?.focus();
+              }}
+              hitSlop={8}
+              style={styles.clearBtn}
+            >
+              <Icon name="close" size={16} color={t.inkSoft} />
+            </Pressable>
+          )}
+        </Animated.View>
       </Glass>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   // zIndex keeps the bar painting above the screen's scroller: the rubber-band
@@ -240,12 +373,25 @@ const styles = StyleSheet.create({
   bar: { height: 52, justifyContent: 'center' },
   brand: { justifyContent: 'center' },
   auraGlow: { position: 'absolute', left: -22, right: -22, top: -8, bottom: -8 },
+  // Search-morph layers: absolutely stacked to fill the pill, pivoting on the
+  // search chip's corner (web transform-origin) so the swell reads as coming
+  // out of it.
+  layer: { ...StyleSheet.absoluteFillObject, transformOrigin: 'right center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 10,
   },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  backBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  clearBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  fieldInput: { flex: 1, fontFamily: fonts.regular, fontSize: 15, padding: 0 },
   spacer: { flex: 1 },
   modePill: {
     height: 32,

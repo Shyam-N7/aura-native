@@ -9,16 +9,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
-import { SearchField } from '../components/search/SearchField';
-import { Icon } from '../components/Icon';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
+import { TopBar, TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { searchCatalog } from '../api/catalog';
 import { LANGUAGES } from '../data/languages';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { dropExplicit } from '../lib/explicit';
+import { closeSearch, openSearch, useSearchQuery } from '../lib/searchQuery';
 import { TrackRow, TrackArt } from '../components/TrackRow';
 import {
   useRecentSearches,
@@ -78,9 +78,12 @@ export default function SearchScreen({ navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  const inputRef = useRef(null);
+  // The floating top bar is this screen's one input surface (its search chip
+  // morphs into the field in place) — the ref reaches its imperative blur,
+  // and the query itself rides the same shared bus the field writes to.
+  const topBarRef = useRef(null);
 
-  const [q, setQ] = useState('');
+  const { query: q, setQuery: setQ } = useSearchQuery();
   const [debouncedQ, setDebouncedQ] = useState('');
   const [lang, setLang] = useState(lastLang);
   const [hit, setHit] = useState(EMPTY);
@@ -113,23 +116,25 @@ export default function SearchScreen({ navigation }) {
   const playerOpen = player.ui?.playerOpen;
   useEffect(() => {
     if (playerOpen) {
-      inputRef.current?.blur();
+      topBarRef.current?.blurSearch();
       Keyboard.dismiss();
     }
   }, [playerOpen]);
 
-  // Pop the keyboard whenever the tab gains focus.
+  // This tab IS the morphed search field: landing here (the dock's search
+  // icon, or the top bar's chip from elsewhere) opens the shared morph so the
+  // floating bar shows the field instead of its resting brand/mode/theme
+  // layer; leaving closes it again — same blur-clears-state shape as
+  // HomeScreen's scrollDepth listener.
   useEffect(() => {
     if (!navigation?.addListener) {
       return undefined;
     }
-    let timer;
-    const unsub = navigation.addListener('focus', () => {
-      timer = setTimeout(() => inputRef.current?.focus(), 120);
-    });
+    const offFocus = navigation.addListener('focus', openSearch);
+    const offBlur = navigation.addListener('blur', closeSearch);
     return () => {
-      clearTimeout(timer);
-      unsub();
+      offFocus();
+      offBlur();
     };
   }, [navigation]);
 
@@ -199,7 +204,7 @@ export default function SearchScreen({ navigation }) {
     // into a keyboard-short window and leave a pale strip where the keyboard
     // had been. Blurring the input drops the inset so the window restores to
     // full height first.
-    inputRef.current?.blur();
+    topBarRef.current?.blurSearch();
     Keyboard.dismiss();
     // Web labels a direct search pick 'your pick' (auto-radio still continues
     // it at queue end and flips the source when the batch applies).
@@ -224,36 +229,15 @@ export default function SearchScreen({ navigation }) {
   const albumsFirst = view.top?.type === 'album';
 
   return (
-    <View
-      style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={styles.searchRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="back"
-            onPress={() =>
-              navigation?.canGoBack?.()
-                ? navigation.goBack()
-                : navigation?.navigate?.('Home')
-            }
-            hitSlop={10}
-            style={styles.backBtn}
-          >
-            <Icon name="chevron-left" size={24} color={t.ink} />
-          </Pressable>
-          <View style={styles.searchFieldWrap}>
-            <SearchField
-              inputRef={inputRef}
-              value={q}
-              onChangeText={setQ}
-              placeholder="search songs, artists…"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={remember}
-            />
-          </View>
-        </View>
+    <View style={[styles.root, { backgroundColor: t.bg }]}>
+      <TopBar
+        ref={topBarRef}
+        navigation={navigation}
+        float
+        onSubmitSearch={remember}
+      />
+      <View
+        style={[styles.header, { paddingTop: insets.top + TOPBAR_CLEARANCE }]}>
         <ScrollView overScrollMode="always"
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -515,21 +499,8 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 12,
     gap: 10,
   },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  backBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchFieldWrap: { flex: 1 },
   pillRow: {
     gap: 8,
     paddingBottom: 2,

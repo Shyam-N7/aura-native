@@ -6,6 +6,7 @@ import SearchScreen from '../src/screens/SearchScreen';
 import { searchCatalog } from '../src/api/catalog';
 import { LANGUAGES } from '../src/data/languages';
 import { clearRecentSearches } from '../src/hooks/useRecentSearches';
+import { closeSearch } from '../src/lib/searchQuery';
 
 const mockPlayTrack = jest.fn();
 const mockOpenPlayer = jest.fn();
@@ -84,6 +85,10 @@ beforeEach(() => {
   // The recents store is module-scoped — earlier tests' commits (playing a
   // result records the query) must not leak into the recents assertions.
   clearRecentSearches();
+  // The search query/morph bus is module-scoped too (the top bar's floating
+  // field and this screen share it) — reset so a query typed in one test
+  // doesn't seed the next.
+  closeSearch();
   searchCatalog.mockResolvedValue(RESULT);
 });
 afterEach(() => {
