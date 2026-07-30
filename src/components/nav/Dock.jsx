@@ -355,18 +355,20 @@ export function Dock({ navRef }) {
               color={gooFill[name]}
             />
             {/* The four tabs as blobs of mass, melting into the contracting
-                capsule (only btt moves them; they sit inside the capsule
-                silhouette — invisible — at rest). */}
-            {btt &&
-              TABS.map((tab, i) => (
-                <Circle
-                  key={tab.name}
-                  cx={itemSilCx[i]}
-                  cy={GOO_PAD + 26}
-                  r={16}
-                  color={gooFill[name]}
-                />
-              ))}
+                capsule. Mounted for EVERY goo window, not just while btt is
+                set: the exit morph runs after btt has already flipped false,
+                and gating on it skipped the reverse un-fusion (the return
+                read as a plain widen — owner field report). At rest they sit
+                inside the capsule silhouette, invisible. */}
+            {TABS.map((tab, i) => (
+              <Circle
+                key={tab.name}
+                cx={itemSilCx[i]}
+                cy={GOO_PAD + 26}
+                r={16}
+                color={gooFill[name]}
+              />
+            ))}
           </Goo>
         )}
         <Animated.View style={capsuleStyle}>
