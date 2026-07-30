@@ -89,6 +89,10 @@ const ICONS = {
   'arrow-right': { d: 'M3 12 h18 M14 5 l7 7 -7 7' },
   // Straight-up arrow — the dock's "take me back up" pill.
   'arrow-up': { d: 'M12 21 V3 M5 10 l7 -7 7 7' },
+  // The quiet panel's bell — arch, baseline, clapper.
+  bell: {
+    d: 'M6 16.5 V10.5 a6 6 0 0 1 12 0 V16.5 M4.5 16.5 h15 M10.2 20 a1.9 1.9 0 0 0 3.6 0',
+  },
   // Checkmark — "already in this playlist" on the add-to-playlist rows.
   check: { d: 'M4 12 l5 5 L20 6' },
   eye: {

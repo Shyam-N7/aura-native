@@ -41,6 +41,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { ModeMixCard } from '../components/home/ModeMixCard';
 import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
 import { OtterToggle } from '../components/ui/OtterToggle';
+import { QuietPanelBell } from '../components/home/QuietPanelBell';
 import { PressScale } from '../components/ui/PressScale';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
 import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
@@ -470,6 +471,9 @@ export default function HomeScreen({ navigation }) {
                 music that gets your mood
               </Text>
             </View>
+            {/* Bell first, toggle at the edge — the owner's placement call
+                for the quiet panel's doorway. */}
+            <QuietPanelBell />
             <OtterToggle
               value={bgPlay}
               onPress={onBgToggle}

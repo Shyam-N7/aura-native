@@ -26,7 +26,8 @@ import { ModeSheet } from './src/overlays/ModeSheet';
 import { QualitySheet } from './src/overlays/QualitySheet';
 import { WhatsNewSheet } from './src/overlays/WhatsNewSheet';
 import { ConfirmSheet } from './src/overlays/ConfirmSheet';
-import { PresenceBanners } from './src/overlays/PresenceBanners';
+import { PresenceAgent } from './src/overlays/PresenceAgent';
+import { QuietPanelSheet } from './src/overlays/QuietPanelSheet';
 import { Toast } from './src/components/Toast';
 import { Dock } from './src/components/nav/Dock';
 import RootTabs from './src/navigation/RootTabs';
@@ -275,8 +276,11 @@ function Shell() {
         <WhatsNewSheet />
         {/* The house confirm — replaces every OS Alert dialog. */}
         <ConfirmSheet />
-        {/* Heartbeats + "playing elsewhere" note + cross-device resume. */}
-        <PresenceBanners />
+        {/* The quiet panel — presence + recorded feed behind the home bell. */}
+        <QuietPanelSheet />
+        {/* Headless: heartbeats + cross-device presence, published to the
+            home now-playing card via lib/presenceFeed (no floating pills). */}
+        <PresenceAgent />
       </NavigationContainer>
     );
   }
