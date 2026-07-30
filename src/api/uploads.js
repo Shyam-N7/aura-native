@@ -14,6 +14,8 @@ export async function uploadImage(asset, { kind = 'cover' } = {}) {
       method: 'POST',
       headers: { 'Content-Type': asset.type ?? 'image/jpeg' },
       body: blob,
+      // A multi-MB image on a slow uplink outlives the 15s default honestly.
+      deadlineMs: 60000,
     },
   );
   const body = await res.json().catch(() => ({}));

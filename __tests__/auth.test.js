@@ -38,8 +38,27 @@ test('fetchAuthed prefixes API_BASE and injects the bearer token', async () => {
 
   expect(fetchMock).toHaveBeenCalledWith(
     `${API_BASE}/api/catalog/featured?limit=5`,
-    { headers: { Authorization: 'Bearer jwt-123' } },
+    expect.objectContaining({
+      headers: { Authorization: 'Bearer jwt-123' },
+      // The C4 default deadline: every call carries an abort signal unless a
+      // caller opts out — asserted here so removing it fails a gate.
+      signal: expect.any(AbortSignal),
+    }),
   );
+});
+
+test('fetchAuthed deadlineMs: 0 opts out of the default abort signal', async () => {
+  storage.setItem('aura.authToken', 'jwt-123');
+  storage.setItem('aura.authUser', JSON.stringify({ id: 1 }));
+  fetchMock.mockResolvedValueOnce(jsonRes(200, {}));
+
+  // The playback-critical exemption (getTrack passes this): no signal at all,
+  // so a slow track resolve can never be turned into a failure by C4.
+  await fetchAuthed('/api/catalog/track/abc', { deadlineMs: 0 });
+
+  const opts = fetchMock.mock.calls.at(-1)[1];
+  expect(opts.signal).toBeUndefined();
+  expect(opts.deadlineMs).toBeUndefined(); // stripped, never leaks into fetch
 });
 
 test('fetchAuthed keeps caller headers alongside the token', async () => {

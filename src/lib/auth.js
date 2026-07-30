@@ -489,14 +489,41 @@ function authHeaders(extra = {}) {
 // Prefix relative paths with the API origin and ride the Bearer token on
 // every call. A 401 hands off to the session re-check above instead of
 // failing silently.
+//
+// Every call now carries a deadline (server work is bounded at 10s upstream +
+// function overhead, so a healthy response never needs longer): without one, a
+// hung connection was a 60-second spinner ended only by Vercel's maxDuration.
+// `deadlineMs` overrides; 0 disables. The exemptions are deliberate and narrow:
+// - getTrack (playback hydration/recovery) passes 0 — a timeout there turns
+//   slow-success into failure on the path that decides WHICH TRACK PLAYS, and
+//   playback behaviour must not change as a side effect of this item.
+// - Gemini talk and image uploads pass longer budgets; both legitimately
+//   outlive 15s on a slow network.
+// Manual controller rather than AbortSignal.timeout: Hermes doesn't ship the
+// static, and the timer must be cleared on settle either way — an uncleared
+// timer is the jest leaked-handle class.
+const DEFAULT_DEADLINE_MS = 15000;
+
 export function fetchAuthed(path, opts = {}) {
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
-  return fetch(url, { ...opts, headers: authHeaders(opts.headers) }).then(
-    res => {
+  const { deadlineMs = DEFAULT_DEADLINE_MS, ...rest } = opts;
+  let signal = rest.signal;
+  let timer = null;
+  if (!signal && deadlineMs > 0) {
+    const ctrl = new AbortController();
+    timer = setTimeout(() => ctrl.abort(), deadlineMs);
+    signal = ctrl.signal;
+  }
+  return fetch(url, { ...rest, signal, headers: authHeaders(rest.headers) })
+    .then(res => {
       if (res.status === 401) {
         revalidateSession();
       }
       return res;
-    },
-  );
+    })
+    .finally(() => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    });
 }

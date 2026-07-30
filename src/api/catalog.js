@@ -131,6 +131,13 @@ export async function getTrack(id, { signal, fresh } = {}) {
     `/api/catalog/track/${encodeURIComponent(id)}`,
     {
       signal,
+      // No default deadline here, ON PURPOSE. This resolve feeds queue
+      // hydration, cold restore, and error recovery — the paths that decide
+      // which track plays. A deadline turns a slow success into a failure,
+      // and playback semantics must not change as a side effect of the
+      // fetchAuthed deadline (C4). Callers that want cancellation pass their
+      // own signal, as before.
+      deadlineMs: 0,
     },
   );
   if (!res.ok) {
