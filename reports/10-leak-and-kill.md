@@ -122,3 +122,33 @@ the slope dies with the drivers parked.
 **Spotted while verifying (not touched, per rules):** the full jest suite prints
 "A worker process has failed to exit gracefully" once — present with AND without
 the fix diff (A/B'd), pre-existing; belongs to reports/08-spotted.md.
+
+## 7. Verification — PASSED (2026-07-30 13:58–14:10 IST, RMX3371 / ColorOS 14)
+
+Fixed build (347693e) installed 13:46. Protocol: screen-off playback, private
+session, per-minute samples of pid / Native Heap / TOTAL PSS / wakefulness /
+playback state.
+
+```
+pid 2945, Dozing + PLAYING on all 11 samples
+Native Heap alloc:  67.0(t0) → 10.0 → 25.5 → 13.9 → 14.8 → 15.6 → 24.5
+                    → 22.0 → 20.9 → 16.8 → 23.6 → 23.4 MB      — FLAT
+TOTAL PSS:          202–230 MB, no trend                        — FLAT
+Pre-fix, same protocol, same phone: 74.8 → 166.5 → 179.2 MB in 6 min.
+```
+
+The ~40 MB/min slope is gone. Leak: **fixed and verified.**
+
+**The second killer, caught in between.** The first verification attempt died
+at 13:49:23 — 2 minutes in, heap ~60 MB and falling — in a same-second sweep
+that also took WhatsApp, gearhead and two Oplus services. No `am_kill`, no
+lmkd record, no crash, no tombstone: a SIGKILL from below ActivityManager
+(`has died: prcp FGS`). Context: this is a 5.65 GB-RAM device showing ~130 MB
+MemFree; ColorOS sweeps hard once the screen is off, FGS-with-audio included.
+It is NOT the memory leak — it fires at tiny heap — and it is not app-fixable
+from inside; the mitigation is user-granted protection (Battery → allow
+background activity, "pause app activity if unused" off, lock in recents).
+With those granted, the passing run above survived its full window on the
+same afternoon the unprotected run died at 2 minutes. Longer soaks will
+firm this up; the onboarding should walk ColorOS users through these
+settings (product follow-up, not a code change).
