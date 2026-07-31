@@ -95,10 +95,15 @@ export function Glass({
         pointerEvents="none"
         style={[styles.insetLight, { backgroundColor: g.insetLight }]}
       />
-      <View
-        pointerEvents="none"
-        style={[styles.insetShade, { backgroundColor: g.insetShade }]}
-      />
+      {/* Same rule as the shade band: the 1px dark bottom hairline is tint-
+          register depth. Over the blur it's a visible line (midnight runs it
+          at 0.30 black — the owner could still see it after the band fix). */}
+      {!blurOn && (
+        <View
+          pointerEvents="none"
+          style={[styles.insetShade, { backgroundColor: g.insetShade }]}
+        />
+      )}
       {children}
     </View>
   );
