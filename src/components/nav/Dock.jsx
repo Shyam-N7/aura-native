@@ -162,11 +162,14 @@ export function Dock({ navRef }) {
     [],
   );
   useEffect(() => {
+    // The liquid overshoot, BOTH directions — settle made the return feel
+    // dead next to the web's springy landing (owner report). Consumers that
+    // can't survive bttV briefly leaving 0..1 clamp where they read it.
     bttV.value = reduced
       ? btt
         ? 1
         : 0
-      : withTiming(btt ? 1 : 0, { duration: BTT_MS, easing: EASE.settle });
+      : withTiming(btt ? 1 : 0, { duration: BTT_MS, easing: EASE.liquid });
   }, [btt, bttV, reduced]);
 
   // Goo window: opaque silhouettes ride the metaball filter for the MORPH
@@ -202,9 +205,11 @@ export function Dock({ navRef }) {
   // Bead: buds with budR, retracts with btt. Capsule: narrows to the centered
   // pill. Item blobs: the four tabs' masses converging on centre so the
   // metaball fuses them into the contracting capsule (web --btt ::before).
-  const beadSilR = useDerivedValue(() => budR.value * (1 - bttV.value));
+  const beadSilR = useDerivedValue(() =>
+    Math.max(0, budR.value * (1 - bttV.value)),
+  );
   const capSilW = useDerivedValue(() =>
-    interpolate(bttV.value, [0, 1], [width, BTT_WIDTH]),
+    interpolate(bttV.value, [0, 1], [width, BTT_WIDTH], 'clamp'),
   );
   const capSilX = useDerivedValue(
     () => GOO_PAD + (width - capSilW.value) / 2,
@@ -224,7 +229,11 @@ export function Dock({ navRef }) {
 
   // The visible chrome follows the same clock as the silhouettes.
   const capsuleStyle = useAnimatedStyle(() => ({
-    width: width > 0 ? interpolate(bttV.value, [0, 1], [width, BTT_WIDTH]) : undefined,
+    // clamp: the liquid overshoot must not poke the capsule past its slot.
+    width:
+      width > 0
+        ? interpolate(bttV.value, [0, 1], [width, BTT_WIDTH], 'clamp')
+        : undefined,
     alignSelf: 'center',
   }));
   // Nav row fades and shrinks out ahead of the label (web: opacity 200ms,
@@ -238,10 +247,14 @@ export function Dock({ navRef }) {
     opacity: interpolate(bttV.value, [0.55, 1], [0, 1], 'clamp'),
     transform: [{ scale: 0.85 + bttV.value * 0.15 }],
   }));
-  const beadRetractStyle = useAnimatedStyle(() => ({
-    opacity: 1 - bttV.value,
-    transform: [{ scale: 1 - bttV.value }],
-  }));
+  const beadRetractStyle = useAnimatedStyle(() => {
+    // Floor at 0: a liquid overshoot past 1 would mirror-flip the bead.
+    const s = Math.max(0, 1 - bttV.value);
+    return {
+      opacity: Math.min(1, s),
+      transform: [{ scale: s }],
+    };
+  });
 
   // Tabs slide right to clear the bead (web: padding-left 60).
   const padLeft = useSharedValue(hasTrack ? 60 : 4);

@@ -77,7 +77,19 @@ export function Glass({
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#shimmer)" />
-        <Rect x="0" y="78%" width="100%" height="22%" fill="url(#underShade)" />
+        {/* The dark under-edge belongs to the TINT register only: over the
+            tintless blur it floats on transparent glass and reads as a line
+            across the pill (owner report, survived the radius fix). The web's
+            blurred pill carries no shade band — shimmer + rim only. */}
+        {!blurOn && (
+          <Rect
+            x="0"
+            y="78%"
+            width="100%"
+            height="22%"
+            fill="url(#underShade)"
+          />
+        )}
       </Svg>
       <View
         pointerEvents="none"
