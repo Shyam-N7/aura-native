@@ -91,7 +91,9 @@ export function OtterToggle({ value, onPress, height = 30, label }) {
         <AnimatedRect animatedProps={knobProps} fill={t.bg} />
       </Svg>
       {!!label && (
-        <Text style={[labelType(8), { color: t.inkFaint }]}>{label}</Text>
+        <Text style={[labelType(8), styles.label, { color: t.inkFaint }]}>
+          {label}
+        </Text>
       )}
     </Pressable>
   );
@@ -99,4 +101,7 @@ export function OtterToggle({ value, onPress, height = 30, label }) {
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 5 },
+  // Hosts may cap the column width (home's corner stack) — a wrapped label
+  // must centre its second line, not rag left.
+  label: { textAlign: 'center' },
 });

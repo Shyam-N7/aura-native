@@ -471,14 +471,22 @@ export default function HomeScreen({ navigation }) {
                 music that gets your mood
               </Text>
             </View>
-            {/* Bell first, toggle at the edge — the owner's placement call
-                for the quiet panel's doorway. */}
-            <QuietPanelBell />
-            <OtterToggle
-              value={bgPlay}
-              onPress={onBgToggle}
-              label="background play"
-            />
+            {/* The corner stack (owner's call): the bell owns the greeting
+                block's top-right corner, the toggle sits beneath it — one
+                right-edge column instead of chips floating mid-row. */}
+            <View style={styles.headActions}>
+              <QuietPanelBell />
+              {/* The box caps the column at the pill's width so the label
+                  wraps to two small lines — a one-line "background play" was
+                  what squeezed the greeting into wrapping. */}
+              <View style={styles.bgToggleBox}>
+                <OtterToggle
+                  value={bgPlay}
+                  onPress={onBgToggle}
+                  label="background play"
+                />
+              </View>
+            </View>
           </View>
 
           {activeMode !== 'everyday' && (
@@ -754,8 +762,12 @@ const styles = StyleSheet.create({
     paddingBottom: 24 + DOCK_CLEARANCE,
   },
   pad: { paddingHorizontal: 22, gap: 4 },
-  greetRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  // flex-start so the corner stack's bell tops out level with the greeting's
+  // first line — the block's true corner, not its vertical middle.
+  greetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
   greetCol: { flex: 1, gap: 4 },
+  headActions: { alignItems: 'center', gap: 10 },
+  bgToggleBox: { width: 84, alignItems: 'center' },
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
   tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
   wheelWrap: { alignItems: 'center', paddingTop: 6 },

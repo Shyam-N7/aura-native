@@ -43,9 +43,9 @@ export function QuietPanelSheet() {
   useEffect(() => subscribeQuietPanel(setOpen), []);
   useEffect(() => subscribePresenceFeed(setFeed), []);
 
-  // Fetch on every open — the feed is small (≤30 rows) and this is the one
-  // moment staleness would show. Seen is marked after the list renders, so
-  // the dots are visible for THIS read and gone the next.
+  // Fetch on every open, but show ONLY what hasn't been seen — a row you've
+  // read is cleared and never comes back (owner's call). Seen is marked after
+  // this read renders, so the batch is visible once and gone the next open.
   useEffect(() => {
     if (!open) {
       return undefined;
@@ -53,7 +53,7 @@ export function QuietPanelSheet() {
     let alive = true;
     getNotifications().then(list => {
       if (alive) {
-        setRows(list);
+        setRows(list.filter(n => !n.seenAt));
         markNotificationsSeen();
       }
     });
@@ -145,9 +145,7 @@ export function QuietPanelSheet() {
               {ago(n.createdAt)}
             </Text>
           </View>
-          {!n.seenAt && (
-            <View style={[styles.liveDot, { backgroundColor: t.accent }]} />
-          )}
+          <View style={[styles.liveDot, { backgroundColor: t.accent }]} />
         </View>
       ))}
     </Sheet>
