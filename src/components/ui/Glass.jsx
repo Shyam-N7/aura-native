@@ -27,7 +27,14 @@ export function Glass({
 }) {
   const { name } = useTheme();
   const g = name === 'midnight' ? { ...glass, ...glass.midnight } : glass;
-  const blurOn = blur && !solid && GlassBackdrop != null;
+  // Mounting and the visual register are SPLIT: unmounting the native
+  // backdrop on every goo window destroyed and rebuilt the whole blur
+  // controller (bitmaps, listeners, first capture) per tab tap. The view now
+  // stays mounted through goo — suspended (captures off) and transparent —
+  // while every visual branch still keys off blurOn so the goo window keeps
+  // the tint-register look the metaball needs.
+  const blurMounted = blur && GlassBackdrop != null;
+  const blurOn = blurMounted && !solid;
   const tint = soft ? glassTintSoft[name] : glassTint[name];
 
   return (
@@ -52,12 +59,13 @@ export function Glass({
           the shimmer gradient + rim over the blurred backdrop IS the glass,
           and content colour bleeds through at full strength (owner: "match
           the level it is in web"). */}
-      {blurOn && (
+      {blurMounted && (
         <GlassBackdrop
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, solid && styles.hidden]}
           pointerEvents="none"
           collapsable={false}
           blurRadius={g.backdropRadius}
+          suspended={solid}
         />
       )}
       <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -127,6 +135,9 @@ export function Glass({
 
 const styles = StyleSheet.create({
   shell: { borderWidth: 1, overflow: 'hidden' },
+  // Suspended backdrop during goo: invisible (HWUI quick-rejects alpha 0)
+  // but alive, so goo's end is a prop flip, not a controller rebuild.
+  hidden: { opacity: 0 },
   insetLight: {
     position: 'absolute',
     top: 0,

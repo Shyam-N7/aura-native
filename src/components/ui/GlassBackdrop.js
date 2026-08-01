@@ -33,17 +33,25 @@ const NativeGlassView = cache.component;
 // a frame after mount so it reaches the LIVE controller. The manager caches
 // the pending radius as of the next binary; this stays as the belt for
 // binaries built before that.
-function RadiusAsserted({ blurRadius, ...rest }) {
+function RadiusAsserted({ blurRadius, suspended = false, ...rest }) {
   const [radius, setRadius] = useState(undefined);
   // Navigation transitions freeze the capture loop (lib/navFreeze) so the
-  // per-frame root redraw can't disturb the stack animation.
+  // per-frame root redraw can't disturb the stack animation. `suspended`
+  // rides the same native prop: Glass parks the backdrop through goo windows
+  // instead of unmounting it (captures off, view alive).
   const [frozen, setFrozen] = useState(false);
   useEffect(() => subscribeGlassFreeze(setFrozen), []);
   useEffect(() => {
     const id = requestAnimationFrame(() => setRadius(blurRadius));
     return () => cancelAnimationFrame(id);
   }, [blurRadius]);
-  return <NativeGlassView {...rest} blurRadius={radius} frozen={frozen} />;
+  return (
+    <NativeGlassView
+      {...rest}
+      blurRadius={radius}
+      frozen={frozen || suspended}
+    />
+  );
 }
 
 export const GlassBackdrop = NativeGlassView ? RadiusAsserted : null;
