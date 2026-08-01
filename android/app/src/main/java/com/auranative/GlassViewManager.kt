@@ -49,17 +49,6 @@ class GlassBlurView(context: Context) : BlurView(context) {
       invalidate()
     }
   }
-
-  // BlurView.onAttachedToWindow unconditionally force-enables auto-update
-  // (library behavior, bytecode-verified) — a native detach/reattach during
-  // a freeze or goo-suspend would silently resume captures against the JS
-  // frozen prop. Re-assert the parked state.
-  override fun onAttachedToWindow() {
-    super.onAttachedToWindow()
-    if (controllerReady && pendingFrozen) {
-      setBlurAutoUpdate(false)
-    }
-  }
 }
 
 class GlassViewManager : SimpleViewManager<GlassBlurView>() {
