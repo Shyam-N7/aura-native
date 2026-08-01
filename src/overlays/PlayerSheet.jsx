@@ -40,6 +40,7 @@ import { QUALITIES } from '../lib/audioQuality';
 import { getSleepState, subscribeSleep } from '../lib/sleepTimer';
 import { openSleepTimer } from '../lib/sleepTimerSheet';
 import { openAddToPlaylist } from '../lib/addToPlaylistSheet';
+import { holdGlassFrozen } from '../lib/navFreeze';
 import { openQualitySheet } from '../lib/qualitySheet';
 import { shareMoment, shareTrack } from '../lib/share';
 import {
@@ -400,6 +401,16 @@ export function PlayerSheet() {
 
   // 'closed' | 'open' | 'closing'
   const [vis, setVis] = useState('closed');
+  // Fully open, the sheet covers both glass pills — but occlusion is not
+  // clipping, so their capture guard keeps passing and they'd re-draw the
+  // whole tree (this sheet included) on every animated frame. Hold the
+  // freeze while open; release on 'closing' so the pills refresh during the
+  // slide-out. (Lyrics needs no hold of its own: it only opens over this
+  // sheet, whose hold is already active.)
+  useEffect(() => {
+    holdGlassFrozen('player', vis === 'open');
+    return () => holdGlassFrozen('player', false);
+  }, [vis]);
   // Measured rects (content coordinates) — the art cap AND the tour's
   // spotlight targets.
   const [heroRect, setHeroRect] = useState(null);

@@ -6,27 +6,49 @@
 // ~half second a transition runs, and CSS backdrop-filter never redraws
 // ancestors mid-transition either. Module bus, same idiom as scrollDepth.
 const subs = new Set();
-let frozen = false;
+const holds = new Set();
+let timerFrozen = false;
 let timer = null;
+let emitted = false;
 
 // Native-stack slide runs ~350-400ms after the JS state commit; 550ms covers
 // the bridge latency on both ends plus settle.
 const FREEZE_MS = 550;
 
-export function freezeGlass() {
-  if (!frozen) {
-    frozen = true;
-    subs.forEach(fn => fn(true));
+function emit() {
+  const now = timerFrozen || holds.size > 0;
+  if (now !== emitted) {
+    emitted = now;
+    subs.forEach(fn => fn(now));
   }
+}
+
+export function freezeGlass() {
+  timerFrozen = true;
+  emit();
   clearTimeout(timer);
   timer = setTimeout(() => {
-    frozen = false;
-    subs.forEach(fn => fn(false));
+    timerFrozen = false;
+    emit();
   }, FREEZE_MS);
+}
+
+// Held freeze for full-screen overlays (the player sheet): occlusion is not
+// clipping, so the capture guard can't tell the pills are covered — without
+// the hold they keep software-drawing the whole tree (sheet included) on
+// every animated frame, for glass nobody can see. Keyed so several holders
+// can overlap without releasing each other.
+export function holdGlassFrozen(key, on) {
+  if (on) {
+    holds.add(key);
+  } else {
+    holds.delete(key);
+  }
+  emit();
 }
 
 export function subscribeGlassFreeze(fn) {
   subs.add(fn);
-  fn(frozen);
+  fn(emitted);
   return () => subs.delete(fn);
 }

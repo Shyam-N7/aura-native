@@ -93,6 +93,11 @@ class GlassBlurController(
         // don't burn snapshot work while parked (the screen-off discipline).
         // preDraw + the visibility invalidate cover the wake-up path.
         blurView.hasWindowFocus() &&
+        // Same geometric test as updateBlur: clipped away there is nothing
+        // to refresh, and forcing invalidates would churn at 0.5Hz forever.
+        // The wedge this heals (view VISIBLE, snapshot stale) still passes.
+        blurView.isLaidOut &&
+        blurView.getGlobalVisibleRect(visibleRect) &&
         SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
       ) {
         // Re-arm defensively (add/remove is idempotent; this also re-posts
