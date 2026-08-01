@@ -57,6 +57,21 @@ export function ProgressRibbon({
   const phase = useSharedValue(0);
   const shownProgress = useSharedValue(progress);
   const drag = useSharedValue(-1); // -1 = not dragging
+  // 30Hz-sampled fill. The path builders must NOT read shownProgress
+  // directly: the 4Hz progress poll starts a 260ms withTiming every ~250ms,
+  // so shownProgress animates continuously through playback and the ~80-point
+  // path rebuilds (the heaviest per-frame worker in the app) ran at the full
+  // display rate — parking the wave phase alone changed nothing.
+  const fill = useSharedValue(Math.min(1, Math.max(0, progress)));
+  const acc = useSharedValue(1000); // large: first active frame commits now
+  const waveActive = useSharedValue(false);
+  // The frame callback's closure registers ONCE at mount — a bare `variant`
+  // in the worklet is frozen at its mount value (the same trap the old
+  // `playing` comment below describes), so it rides a shared value.
+  const isLine = useSharedValue(variant === 'line');
+  useEffect(() => {
+    isLine.value = variant === 'line';
+  }, [variant, isLine]);
 
   // Smooth the 4Hz progress ticks; a live drag wins over playback.
   useEffect(() => {
@@ -70,28 +85,55 @@ export function ProgressRibbon({
   // worklet's closure ONCE — a bare `playing` in either place is frozen at its
   // mount value (opened-while-paused = wave never moves; opened-while-playing
   // = 60fps loop through every pause). setActive() is the live control.
+  //
+  // The callback is the single ~30Hz sampler for everything the paths read:
+  // it advances the wave phase AND commits the fill, so between ticks nothing
+  // re-derives and the svg strings rebuild at 30Hz instead of 60-120.
   const wave = useFrameCallback(frame => {
     'worklet';
-    // ~30Hz like the web (each tick advances the wave one step).
-    if (
-      frame.timeSincePreviousFrame == null ||
-      frame.timeSincePreviousFrame >= 0
-    ) {
-      phase.value =
-        (phase.value + 0.044 * ((frame.timeSincePreviousFrame ?? 33) / 33)) %
-        (Math.PI * 2);
+    acc.value += frame.timeSincePreviousFrame ?? 33;
+    if (acc.value < 30) {
+      return;
     }
+    if (!isLine.value) {
+      // acc is true elapsed time, so the wave speed stays exactly the web's.
+      phase.value =
+        (phase.value + 0.044 * (acc.value / 33)) % (Math.PI * 2);
+    }
+    const p =
+      drag.value >= 0
+        ? drag.value
+        : Math.min(1, Math.max(0, shownProgress.value));
+    if (p !== fill.value) {
+      fill.value = p;
+    }
+    acc.value = 0;
   }, playing);
-  // Each tick rebuilds two ~80-point path strings on the worklet runtime and
-  // commits them as svg props — the single heaviest per-frame worker in the
-  // app, so backgrounded (screen off, still playing) it MUST park: ColorOS
-  // keeps the frame clock alive there, and this loop was a main feeder of the
-  // reports/10 native-heap leak.
+  // Backgrounded (screen off, still playing) it MUST park: ColorOS keeps the
+  // frame clock alive there, and this loop was a main feeder of the
+  // reports/10 native-heap leak. The line variant runs the callback too —
+  // its fill also needs the 30Hz sampling — but skips the phase write.
   const appActive = useAppActive();
   useEffect(() => {
-    // A flat line has no wave to advance — park the frame clock entirely.
-    wave.setActive(playing && variant !== 'line' && appActive);
-  }, [playing, variant, appActive, wave]);
+    const on = playing && appActive;
+    waveActive.value = on;
+    wave.setActive(on);
+  }, [playing, appActive, wave, waveActive]);
+
+  // With the sampler parked (paused), seeks and track changes still move
+  // shownProgress — mirror them into the fill at their own (bounded) rate.
+  useAnimatedReaction(
+    () => shownProgress.value,
+    v => {
+      if (!waveActive.value) {
+        const p = drag.value >= 0 ? drag.value : Math.min(1, Math.max(0, v));
+        if (p !== fill.value) {
+          fill.value = p;
+        }
+      }
+    },
+    [],
+  );
 
   // Scrub reporter: fires only when the DISPLAYED second changes (not per
   // frame), and once with -1 when the finger lifts.
@@ -107,12 +149,6 @@ export function ProgressRibbon({
       }
     },
     [durationSec],
-  );
-
-  const effective = useDerivedValue(() =>
-    drag.value >= 0
-      ? drag.value
-      : Math.min(1, Math.max(0, shownProgress.value)),
   );
 
   const span = Math.max(0, width - PAD * 2);
@@ -142,7 +178,9 @@ export function ProgressRibbon({
     if (span <= 0) {
       return 'M 0 0';
     }
-    const end = effective.value * SAMPLES;
+    // A live drag tracks the finger at full rate; playback fills at the
+    // sampler's 30Hz (sub-pixel steps — indistinguishable).
+    const end = (drag.value >= 0 ? drag.value : fill.value) * SAMPLES;
     const pts = [];
     for (let i = 0; i <= end; i++) {
       const x = PAD + (i / SAMPLES) * span;
@@ -165,7 +203,7 @@ export function ProgressRibbon({
   const doneProps = useAnimatedProps(() => ({ d: donePath.value }));
   const thumbProps = useAnimatedProps(() => {
     'worklet';
-    const p = effective.value;
+    const p = drag.value >= 0 ? drag.value : fill.value;
     const i = p * SAMPLES;
     const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
     const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
@@ -198,6 +236,7 @@ export function ProgressRibbon({
         // Hold the sought position (killing any in-flight smoothing) so the
         // fill doesn't flash back to the old progress while the engine seeks.
         shownProgress.value = drag.value;
+        fill.value = drag.value;
         runOnJS(commit)(drag.value);
       }
     })
@@ -211,6 +250,7 @@ export function ProgressRibbon({
     if (span > 0) {
       const p = Math.min(1, Math.max(0, (e.x - PAD) / span));
       shownProgress.value = p;
+      fill.value = p;
       runOnJS(commit)(p);
     }
   });
