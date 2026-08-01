@@ -2,6 +2,7 @@ package com.auranative
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import com.facebook.react.uimanager.SimpleViewManager
@@ -49,6 +50,28 @@ class GlassBlurView(context: Context) : BlurView(context) {
       invalidate()
     }
   }
+
+  // Detail pushes re-parent this view routinely (react-native-screens), and
+  // the library's attach hook re-arms captures ONLY when a transient
+  // isHardwareAccelerated() read says true — when it reads false the
+  // controller stays disarmed forever (the transparent-pill wedge,
+  // 2026-08-02). Re-arm from JS intent instead, and log both edges so any
+  // future lifecycle churn is diagnosable from logcat.
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    Log.i(TAG, "view attached (ready=$controllerReady frozen=$pendingFrozen)")
+    controller?.resyncArm()
+    invalidate()
+  }
+
+  override fun onDetachedFromWindow() {
+    super.onDetachedFromWindow()
+    Log.i(TAG, "view detached")
+  }
+
+  private companion object {
+    const val TAG = "GlassBlur"
+  }
 }
 
 class GlassViewManager : SimpleViewManager<GlassBlurView>() {
@@ -88,8 +111,9 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
           controller
             .setFrameClearDrawable(activity.window.decorView.background)
             .setBlurRadius(blurView.pendingRadius)
-            .setBlurAutoUpdate(!blurView.pendingFrozen)
           controller.setClearColor(blurView.pendingClearColor)
+          // Intent entry — arms/disarms the capture loop as a side effect.
+          controller.setDesired(!blurView.pendingFrozen)
           blurView.controller = controller
           blurView.controllerReady = true
         }
@@ -127,9 +151,10 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
   @ReactProp(name = "frozen", defaultBoolean = false)
   fun setFrozen(view: GlassBlurView, frozen: Boolean) {
     view.pendingFrozen = frozen
-    if (view.controllerReady) {
-      view.setBlurAutoUpdate(!frozen)
-    }
+    // Intent, not mechanics: setDesired records what JS wants so the
+    // heartbeat and attach-resync can restore the armed state after any
+    // library-lifecycle stranding.
+    view.controller?.setDesired(!frozen)
   }
 
   companion object {

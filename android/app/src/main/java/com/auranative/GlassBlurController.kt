@@ -84,58 +84,64 @@ class GlassBlurController(
   private var frameClearDrawable: Drawable? = null
   private var clearColor: Int? = null
 
-  // Self-heal state. The theme-switch re-render storm wedged the top bar's
-  // controller once (snapshot updates dead while the page moved on — the
-  // pill kept a stale midnight frame on the bloom page, owner-visible).
-  // Whatever the exact wedge path, the controller must not be able to STAY
-  // wedged: repeated caught failures force a re-init, and a heartbeat
-  // re-arms the listeners + refreshes whenever no successful snapshot has
-  // landed in a while.
-  private var autoUpdateWanted = true
+  // Self-heal state. The controller must not be able to STAY wedged, no
+  // matter which path wedged it: repeated caught failures force a re-init,
+  // and the immortal heartbeat below restores everything else.
+  //
+  // desiredAutoUpdate is the JS intent (the frozen prop), set ONLY through
+  // setDesired(). It is deliberately SEPARATE from the armed state:
+  // BlurView's own lifecycle calls setBlurAutoUpdate directly — detach
+  // disarms unconditionally, but attach re-arms ONLY when a transient
+  // isHardwareAccelerated() read says true (bytecode-verified), so around
+  // react-native-screens fragment re-parenting the armed state is
+  // STRANDABLE. The old design gated the heartbeat on the same flag that
+  // stranded — the watchdog died with its patient (owner-visible as the
+  // transparent top bar after a Liked round-trip, 2026-08-02).
+  private var desiredAutoUpdate = true
+  private var dead = false
   private var consecutiveFailures = 0
   private var lastSuccessUptime = 0L
   private var lastCaptureUptime = 0L
 
+  // Immortal: posted at construction, always re-posts, only destroy() stops
+  // it. A no-op tick every 2s is free; what it buys is that NO interleaving
+  // of library lifecycle, rns re-parenting, or freeze-timer ordering can
+  // permanently silence captures — any stranded state heals in ≤2s while a
+  // legitimate freeze (desired=false) stays frozen.
   private val heartbeat = object : Runnable {
     override fun run() {
-      if (!autoUpdateWanted) {
+      if (dead) {
         return
       }
-      // Complete the self-heal: init() during a transient zero-size layout
-      // leaves initialized=false with NOTHING scheduled to retry — captures
-      // no-op forever while the view sits on screen (owner-visible as the
-      // top bar stuck on a stale flat snapshot). If the view has a real size
-      // now, re-init; onSizeChanged can't be relied on because the size may
-      // never "change" again.
-      if (!initialized && blurView.isLaidOut && blurView.width > 0) {
-        Log.w(TAG, "heartbeat: reviving uninitialized controller")
-        updateBlurViewSize()
-        blurView.invalidate()
-        blurView.postDelayed(this, HEARTBEAT_MS)
-        return
-      }
-      if (
-        initialized &&
-        // Screen off / behind another window: no one can see the glass —
-        // don't burn snapshot work while parked (the screen-off discipline).
-        // preDraw + the visibility invalidate cover the wake-up path.
-        blurView.hasWindowFocus() &&
-        // Same geometric test as updateBlur: clipped away there is nothing
-        // to refresh, and forcing invalidates would churn at 0.5Hz forever.
-        // The wedge this heals (view VISIBLE, snapshot stale) still passes.
-        blurView.isLaidOut &&
-        blurView.getGlobalVisibleRect(visibleRect) &&
-        SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
-      ) {
-        // Re-arm defensively (add/remove is idempotent; this also re-posts
-        // the heartbeat, so return instead of double-posting) and refresh.
-        // force: a stale snapshot is exactly what the throttle must not
-        // block.
-        Log.w(TAG, "heartbeat: stale snapshot, re-arming capture loop")
-        setBlurAutoUpdate(true)
-        updateBlur(force = true)
-        blurView.invalidate()
-        return
+      if (desiredAutoUpdate) {
+        if (!initialized && blurView.isLaidOut && blurView.width > 0) {
+          // init() during a transient zero-size layout leaves
+          // initialized=false with nothing scheduled to retry —
+          // onSizeChanged may never fire again (the size returns to its
+          // old value), and draw() contributes nothing (the transparent
+          // pill). Re-init now that the view has a real size.
+          Log.w(TAG, "heartbeat: reviving uninitialized controller")
+          updateBlurViewSize()
+          blurView.invalidate()
+        } else if (
+          initialized &&
+          // Screen off / behind another window: no one can see the glass —
+          // don't burn snapshot work while parked. Clipped away: nothing to
+          // refresh, and forcing invalidates would churn at 0.5Hz forever.
+          // The wedges this heals (view VISIBLE, snapshot stale or capture
+          // loop disarmed) still pass both tests.
+          blurView.hasWindowFocus() &&
+          blurView.isLaidOut &&
+          blurView.getGlobalVisibleRect(visibleRect) &&
+          SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
+        ) {
+          // force: a stale snapshot is exactly what the throttle must not
+          // block.
+          Log.w(TAG, "heartbeat: stale snapshot, re-arming capture loop")
+          setBlurAutoUpdate(true)
+          updateBlur(force = true)
+          blurView.invalidate()
+        }
       }
       blurView.postDelayed(this, HEARTBEAT_MS)
     }
@@ -146,13 +152,14 @@ class GlassBlurController(
       blurAlgorithm.setContext(blurView.context)
     }
     init(blurView.measuredWidth, blurView.measuredHeight)
+    // On a detached view this parks in the run queue and starts on attach.
+    blurView.postDelayed(heartbeat, HEARTBEAT_MS)
   }
 
   private fun init(measuredWidth: Int, measuredHeight: Int) {
-    // Respect the CURRENT armed state — a resize during a freeze window
-    // must not silently re-enable captures (the stock controller forces
-    // true here).
-    setBlurAutoUpdate(autoUpdateWanted)
+    // Respect the JS intent — a resize during a freeze window must not
+    // silently re-enable captures (the stock controller forces true here).
+    setBlurAutoUpdate(desiredAutoUpdate)
     val sizeScaler = SizeScaler(blurAlgorithm.scaleFactor())
     if (sizeScaler.isZeroSized(measuredWidth, measuredHeight)) {
       // Will be initialized later when the View reports a size change.
@@ -311,6 +318,8 @@ class GlassBlurController(
   }
 
   override fun destroy() {
+    dead = true
+    blurView.removeCallbacks(heartbeat)
     setBlurAutoUpdate(false)
     blurAlgorithm.destroy()
     initialized = false
@@ -339,20 +348,33 @@ class GlassBlurController(
     return this
   }
 
+  // Mechanical arm/disarm of the capture listeners. The LIBRARY's
+  // attach/detach lifecycle calls this directly — it must never carry
+  // intent, and it no longer touches the heartbeat (which self-schedules).
   override fun setBlurAutoUpdate(enabled: Boolean): BlurViewFacade {
-    autoUpdateWanted = enabled
     rootView.viewTreeObserver.removeOnPreDrawListener(drawListener)
     blurView.viewTreeObserver.removeOnPreDrawListener(drawListener)
-    blurView.removeCallbacks(heartbeat)
     if (enabled) {
       rootView.viewTreeObserver.addOnPreDrawListener(drawListener)
       // Track changes in the blurView window too (dialog windows).
       if (rootView.windowId != blurView.windowId) {
         blurView.viewTreeObserver.addOnPreDrawListener(drawListener)
       }
-      blurView.postDelayed(heartbeat, HEARTBEAT_MS)
     }
     return this
+  }
+
+  // JS intent (the frozen prop) — the only writer of desiredAutoUpdate.
+  fun setDesired(on: Boolean) {
+    desiredAutoUpdate = on
+    setBlurAutoUpdate(on)
+  }
+
+  // Reassert the armed state from intent. Called from the view's attach
+  // hook: the library's own attach re-arm is conditional on a transient
+  // isHardwareAccelerated() read and can leave the listeners stranded.
+  fun resyncArm() {
+    setBlurAutoUpdate(desiredAutoUpdate)
   }
 
   private companion object {
