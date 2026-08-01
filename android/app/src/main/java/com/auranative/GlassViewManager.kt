@@ -8,6 +8,7 @@ import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
 import eightbitlab.com.blurview.BlurView
 import eightbitlab.com.blurview.GlassSaturatingBlur
+import eightbitlab.com.blurview.installGlassController
 
 /**
  * True backdrop blur for the glass chrome — the one thing RN styles can't do
@@ -57,7 +58,12 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
             // Web recipe is blur(40px) saturate(180%): the saturating
             // algorithm chains the missing saturate — without it the pill
             // washes out against vivid content and its edge reads as a line.
-            .setupWith(root, GlassSaturatingBlur(activity, WEB_SATURATION))
+            // installGlassController = the stock controller with the crash
+            // shield (ScreenStack draw-op races; see GlassBlurController).
+            .installGlassController(
+              root,
+              GlassSaturatingBlur(activity, WEB_SATURATION),
+            )
             .setFrameClearDrawable(activity.window.decorView.background)
             .setBlurRadius(blurView.pendingRadius)
             .setBlurAutoUpdate(!blurView.pendingFrozen)
