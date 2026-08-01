@@ -9,6 +9,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
 import android.util.Log
@@ -52,6 +53,7 @@ class GlassBlurController(
 
   private val rootLocation = IntArray(2)
   private val blurViewLocation = IntArray(2)
+  private val visibleRect = Rect()
 
   // Full-replace composite for promoting staging → internal (SRC ignores
   // whatever the last blur left in the destination).
