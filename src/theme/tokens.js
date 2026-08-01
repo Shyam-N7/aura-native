@@ -145,11 +145,6 @@ export const glass = {
   blurShimmerTo: 0.02,
   border: 'rgba(255,255,255,0.18)',
   insetLight: 'rgba(255,255,255,0.35)',
-  // Top bevel for the BLUR register only — web-exact (`inset 0 1px 0` alpha).
-  // The tint register's straight insetLight bar runs hotter and reads fine
-  // over the tint, but over tintless blur on dark content it floats as a
-  // visible line (owner report, survived both shade fixes).
-  topLight: 0.25,
   // Light glass gets its depth from brightness (bevel + shimmer), NOT a dark
   // edge — the web's light mode carries no shade band (owner's reference).
   // Whisper values here; midnight is where the slab shows its dark under-edge.
@@ -164,7 +159,6 @@ export const glass = {
     blurShimmerTo: 0.015,
     border: 'rgba(255,255,255,0.14)',
     insetLight: 'rgba(255,255,255,0.20)',
-    topLight: 0.12,
     insetShade: 'rgba(0,0,0,0.30)',
     underShade: 0.2,
   },

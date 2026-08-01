@@ -85,15 +85,6 @@ export function Glass({
             <Stop offset="0" stopColor="#000000" stopOpacity={g.underShade} />
             <Stop offset="1" stopColor="#000000" stopOpacity={0} />
           </LinearGradient>
-          {/* Web's `inset 0 1px 0` top bevel for the blur register: the ends
-              melt out horizontally the way the CSS shadow follows the corner
-              arc — a hard-terminated bar floats as a line over dark blur. */}
-          <LinearGradient id="topLight" x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0" stopColor="#ffffff" stopOpacity={0} />
-            <Stop offset="0.08" stopColor="#ffffff" stopOpacity={g.topLight} />
-            <Stop offset="0.92" stopColor="#ffffff" stopOpacity={g.topLight} />
-            <Stop offset="1" stopColor="#ffffff" stopOpacity={0} />
-          </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#shimmer)" />
         {/* The dark under-edge belongs to the TINT register only: over the
@@ -109,15 +100,11 @@ export function Glass({
             fill="url(#underShade)"
           />
         )}
-        {blurOn && (
-          <Rect x="0" y="1" width="100%" height="1.25" fill="url(#topLight)" />
-        )}
       </Svg>
-      {/* The straight insetLight bar is tint-register only: over tintless
-          blur its blunt ends + extra brightness read as a floating line
-          across the pill (the owner's line, root-caused by pixel sampling —
-          124 white vs the 86 rim over a dark card). Blur gets the SVG
-          topLight bevel above instead, at the web's exact alpha. */}
+      {/* The inset top-light is tint-register only. The blur register carries
+          NO bevel at all — even the web-exact end-faded 0.25 read as a line
+          over dark content (owner's call, three reports): rim + shimmer are
+          the whole glass over blur. */}
       {!blurOn && (
         <View
           pointerEvents="none"

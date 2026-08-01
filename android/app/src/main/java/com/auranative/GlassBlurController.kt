@@ -10,6 +10,8 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
+import android.os.SystemClock
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -67,6 +69,37 @@ class GlassBlurController(
   private var initialized = false
   private var frameClearDrawable: Drawable? = null
 
+  // Self-heal state. The theme-switch re-render storm wedged the top bar's
+  // controller once (snapshot updates dead while the page moved on — the
+  // pill kept a stale midnight frame on the bloom page, owner-visible).
+  // Whatever the exact wedge path, the controller must not be able to STAY
+  // wedged: repeated caught failures force a re-init, and a heartbeat
+  // re-arms the listeners + refreshes whenever no successful snapshot has
+  // landed in a while.
+  private var autoUpdateWanted = true
+  private var consecutiveFailures = 0
+  private var lastSuccessUptime = 0L
+
+  private val heartbeat = object : Runnable {
+    override fun run() {
+      if (!autoUpdateWanted) {
+        return
+      }
+      if (
+        initialized &&
+        SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
+      ) {
+        // Re-arm defensively (add/remove is idempotent; this also re-posts
+        // the heartbeat, so return instead of double-posting) and refresh.
+        setBlurAutoUpdate(true)
+        updateBlur()
+        blurView.invalidate()
+        return
+      }
+      blurView.postDelayed(this, HEARTBEAT_MS)
+    }
+  }
+
   init {
     if (blurAlgorithm is RenderEffectBlur) {
       blurAlgorithm.setContext(blurView.context)
@@ -75,7 +108,10 @@ class GlassBlurController(
   }
 
   private fun init(measuredWidth: Int, measuredHeight: Int) {
-    setBlurAutoUpdate(true)
+    // Respect the CURRENT armed state — a resize during a freeze window
+    // must not silently re-enable captures (the stock controller forces
+    // true here).
+    setBlurAutoUpdate(autoUpdateWanted)
     val sizeScaler = SizeScaler(blurAlgorithm.scaleFactor())
     if (sizeScaler.isZeroSized(measuredWidth, measuredHeight)) {
       // Will be initialized later when the View reports a size change.
@@ -114,13 +150,23 @@ class GlassBlurController(
     } catch (e: RuntimeException) {
       // Mid-mutation hierarchy (ScreenStack draw ops) — skip this frame,
       // the last good blur stays on screen and next preDraw retries.
+      Log.w(TAG, "snapshot skipped: ${e.javaClass.simpleName}")
       false
     } finally {
       stagingCanvas.restore()
     }
     if (!ok) {
+      consecutiveFailures++
+      if (consecutiveFailures >= REINIT_AFTER_FAILURES) {
+        // Something is persistently wrong with this controller's state —
+        // rebuild it (fresh bitmaps, fresh listeners) outside this pass.
+        consecutiveFailures = 0
+        blurView.post { updateBlurViewSize() }
+      }
       return
     }
+    consecutiveFailures = 0
+    lastSuccessUptime = SystemClock.uptimeMillis()
 
     internalCanvas.drawBitmap(stagingBitmap, 0f, 0f, promotePaint)
     blurAndSave()
@@ -199,16 +245,25 @@ class GlassBlurController(
   }
 
   override fun setBlurAutoUpdate(enabled: Boolean): BlurViewFacade {
+    autoUpdateWanted = enabled
     rootView.viewTreeObserver.removeOnPreDrawListener(drawListener)
     blurView.viewTreeObserver.removeOnPreDrawListener(drawListener)
+    blurView.removeCallbacks(heartbeat)
     if (enabled) {
       rootView.viewTreeObserver.addOnPreDrawListener(drawListener)
       // Track changes in the blurView window too (dialog windows).
       if (rootView.windowId != blurView.windowId) {
         blurView.viewTreeObserver.addOnPreDrawListener(drawListener)
       }
+      blurView.postDelayed(heartbeat, HEARTBEAT_MS)
     }
     return this
+  }
+
+  private companion object {
+    const val TAG = "GlassBlur"
+    const val REINIT_AFTER_FAILURES = 3
+    const val HEARTBEAT_MS = 2000L
   }
 
   override fun setOverlayColor(overlayColor: Int): BlurViewFacade {
