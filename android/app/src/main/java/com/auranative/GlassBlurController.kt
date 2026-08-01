@@ -89,6 +89,10 @@ class GlassBlurController(
       }
       if (
         initialized &&
+        // Screen off / behind another window: no one can see the glass —
+        // don't burn snapshot work while parked (the screen-off discipline).
+        // preDraw + the visibility invalidate cover the wake-up path.
+        blurView.hasWindowFocus() &&
         SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
       ) {
         // Re-arm defensively (add/remove is idempotent; this also re-posts
