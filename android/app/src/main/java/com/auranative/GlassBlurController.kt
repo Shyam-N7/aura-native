@@ -101,6 +101,19 @@ class GlassBlurController(
       if (!autoUpdateWanted) {
         return
       }
+      // Complete the self-heal: init() during a transient zero-size layout
+      // leaves initialized=false with NOTHING scheduled to retry — captures
+      // no-op forever while the view sits on screen (owner-visible as the
+      // top bar stuck on a stale flat snapshot). If the view has a real size
+      // now, re-init; onSizeChanged can't be relied on because the size may
+      // never "change" again.
+      if (!initialized && blurView.isLaidOut && blurView.width > 0) {
+        Log.w(TAG, "heartbeat: reviving uninitialized controller")
+        updateBlurViewSize()
+        blurView.invalidate()
+        blurView.postDelayed(this, HEARTBEAT_MS)
+        return
+      }
       if (
         initialized &&
         // Screen off / behind another window: no one can see the glass —
@@ -118,6 +131,7 @@ class GlassBlurController(
         // the heartbeat, so return instead of double-posting) and refresh.
         // force: a stale snapshot is exactly what the throttle must not
         // block.
+        Log.w(TAG, "heartbeat: stale snapshot, re-arming capture loop")
         setBlurAutoUpdate(true)
         updateBlur(force = true)
         blurView.invalidate()
