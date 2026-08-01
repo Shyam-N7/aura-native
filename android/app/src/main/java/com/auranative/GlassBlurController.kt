@@ -134,12 +134,14 @@ class GlassBlurController(
     if (!blurEnabled || !initialized) {
       return
     }
-    // Hidden or not-yet-laid-out instances (each tab mounts its own top bar;
-    // inactive tabs are hidden) report garbage coordinates — the snapshot
-    // lands on the dark window background and the bar arrives BLACK on tab
-    // switch (owner report). Keep the last good frame instead; the view
-    // invalidates on becoming visible and the next pass captures for real.
-    if (!blurView.isShown || !blurView.isLaidOut) {
+    // Hidden instances (each tab mounts its own top bar; inactive tabs are
+    // hidden) report garbage coordinates — the snapshot lands on the dark
+    // window background and the bar arrives BLACK on tab switch (owner
+    // report). Geometric test, NOT isShown: react-native-screens containers
+    // report visibility flags that read hidden for on-screen content, which
+    // silenced captures entirely (the bar went fully transparent — owner
+    // caught it live). An empty global visible rect is the honest signal.
+    if (!blurView.isLaidOut || !blurView.getGlobalVisibleRect(visibleRect)) {
       return
     }
 

@@ -19,7 +19,8 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
-import { TopBar } from '../components/nav/TopBar';
+import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { talk } from '../api/talk';
@@ -79,8 +80,9 @@ function ThinkingDot({ index, inkFaint, reduced }) {
   );
 }
 
-export default function TalkScreen({ navigation }) {
+export default function TalkScreen() {
   const { t } = useTheme();
+  const insets = useSafeAreaInsets();
   const player = usePlayer();
   const reduced = useReducedMotion();
   const { messages } = useTalkHistory();
@@ -194,8 +196,14 @@ export default function TalkScreen({ navigation }) {
   const chips = latest?.suggestions ?? SUGGESTIONS;
 
   return (
-    <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <TopBar navigation={navigation} />
+    <View
+      style={[
+        styles.root,
+        // Clearance for the single floating top bar (TopBarHost) — the
+        // per-screen in-flow bar is gone.
+        { backgroundColor: t.bg, paddingTop: insets.top + TOPBAR_CLEARANCE },
+      ]}
+    >
       <View style={styles.headerRow}>
         <Text style={[styles.heading, { color: t.ink }]}>talk</Text>
         {messages.length > 1 && (

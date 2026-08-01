@@ -53,6 +53,19 @@ export function closeSearch() {
   emit();
 }
 
+// Submit ("search" key) travels the same bus: the single top bar emits,
+// SearchScreen remembers the query as a recent search.
+const submitSubs = new Set();
+
+export function emitSearchSubmit() {
+  submitSubs.forEach(fn => fn());
+}
+
+export function subscribeSearchSubmit(fn) {
+  submitSubs.add(fn);
+  return () => submitSubs.delete(fn);
+}
+
 export function useSearchQuery() {
   const [snap, setSnap] = useState({ query, open, instant });
   useEffect(() => {

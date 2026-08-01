@@ -26,7 +26,7 @@ import {
 } from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
-import { TopBar, TOPBAR_CLEARANCE } from '../components/nav/TopBar';
+import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { SectionHeader } from '../components/home/SectionHeader';
@@ -442,7 +442,6 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <TopBar navigation={navigation} float />
       <ScreenFade>
         <BounceScrollView
           ref={scrollRef}

@@ -1,10 +1,4 @@
-import React, {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -25,7 +19,13 @@ import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
 import { getUser } from '../../lib/auth';
 import { openModeSheet } from '../../lib/modeSheet';
-import { closeSearch, openSearch, useSearchQuery } from '../../lib/searchQuery';
+import {
+  closeSearch,
+  emitSearchSubmit,
+  openSearch,
+  useSearchQuery,
+} from '../../lib/searchQuery';
+import { usePlayer } from '../../playback/PlayerContext';
 import { themes, type, radii, label, fonts } from '../../theme/tokens';
 import { EASE, SPRING } from '../../theme/motion';
 
@@ -40,17 +40,15 @@ const THEME_ORDER = [...Object.keys(themes), 'auto'];
 const THEME_ICON = { dusk: 'sun', midnight: 'moon', bloom: 'cat' };
 
 // The web's glass top bar: wordmark left, controls right.
-// `navigation` comes from the hosting screen's props (screens render standalone
-// in tests, so no useNavigation here).
-// `float` pins the bar over the screen's scroller (web: position fixed) so
-// content slides beneath the glass — the host pads its content by
-// TOPBAR_CLEARANCE + insets.top instead of stacking below the bar.
+// ONE instance for the whole app, floated over the tab navigator by
+// TopBarHost (per-tab instances lived inside the screen containers, where
+// hidden copies snapshotted the dark window and arrived black on tab switch).
+// Screens pad their content by TOPBAR_CLEARANCE + insets.top.
+// `activeTab`/`goTab` come from the host — screens render standalone in
+// tests, so both stay optional.
 export const TOPBAR_CLEARANCE = 68; // 10 above + 52 bar + 6 below
 
-export const TopBar = forwardRef(function TopBar(
-  { navigation, float = false, onSubmitSearch },
-  ref,
-) {
+export function TopBar({ activeTab, goTab }) {
   const { name, pref, t, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const user = getUser();
@@ -93,15 +91,15 @@ export const TopBar = forwardRef(function TopBar(
     );
   }, [aura, reduced]);
 
+  // Mount + every tab arrival replays the bloom (the per-tab instances used
+  // their screen's focus event; the single bar watches the active tab).
   useEffect(() => {
     bloom();
-    const unsub = navigation?.addListener?.('focus', bloom);
     return () => {
       cancelAnimation(aura);
       cancelAnimation(squish);
-      unsub?.();
     };
-  }, [navigation, bloom, aura, squish]);
+  }, [activeTab, bloom, aura, squish]);
 
   // Tapping the wordmark squashes it like jelly; the release springs it back
   // and squeezes out a fresh aura pulse. Purely tactile — hidden from
@@ -136,12 +134,20 @@ export const TopBar = forwardRef(function TopBar(
   // here.
   const { query, open: searching, instant, setQuery } = useSearchQuery();
   const searchInputRef = useRef(null);
-  useImperativeHandle(ref, () => ({
-    // SearchScreen calls this right before the player opens over an open
-    // search: dismissing the keyboard alone leaves a lingering layout inset
-    // on some ROMs unless the field also drops logical focus.
-    blurSearch: () => searchInputRef.current?.blur(),
-  }));
+
+  // The player opening over an open search drops the field's focus HERE (was
+  // SearchScreen's job via ref): dismissing the keyboard alone leaves a
+  // lingering layout inset on some ROMs unless the field also drops logical
+  // focus, and the full-screen player then opens into a keyboard-short
+  // window. Catches every open path — tapped result, dock disc, deep link.
+  const player = usePlayer();
+  const playerOpen = player?.ui?.playerOpen;
+  useEffect(() => {
+    if (playerOpen && searching) {
+      searchInputRef.current?.blur();
+      Keyboard.dismiss();
+    }
+  }, [playerOpen, searching]);
 
   const barOpacity = useSharedValue(1);
   const barScale = useSharedValue(1);
@@ -177,25 +183,23 @@ export const TopBar = forwardRef(function TopBar(
   }, [searching, instant, reduced, barOpacity, barScale, fieldOpacity, fieldScale]);
 
   // Autofocus on open (120ms — a same-tick focus can miss right after a tab
-  // switch on some ROMs); dismiss on close. Skipped when this instance isn't
-  // the focused screen — Home/Talk/You keep their own mounted TopBar once
-  // visited, and only the one actually on screen should grab the keyboard.
-  // Instant (tab-entry) opens don't grab it either: the keyboard rises when
-  // the person taps the field, not because they switched tabs.
+  // switch on some ROMs); dismiss on close. Instant (tab-entry) opens don't
+  // grab the keyboard — it rises when the person taps the field, not because
+  // they switched tabs. The chip-tap open lands before the tab flips, so the
+  // gate accepts either Search-already-active or a host that hasn't said.
   useEffect(() => {
     if (!searching) {
       Keyboard.dismiss();
       return undefined;
     }
     if (instant) return undefined;
-    if (!(navigation?.isFocused?.() ?? true)) return undefined;
     const id = setTimeout(() => searchInputRef.current?.focus(), 120);
     return () => clearTimeout(id);
-  }, [searching, instant, navigation]);
+  }, [searching, instant]);
 
   const onSearchPress = () => {
     openSearch();
-    navigation?.navigate('Search');
+    goTab?.('Search');
   };
 
   const barLayerStyle = useAnimatedStyle(() => ({
@@ -208,13 +212,7 @@ export const TopBar = forwardRef(function TopBar(
   }));
 
   return (
-    <View
-      style={[
-        styles.wrap,
-        float ? styles.float : null,
-        { marginTop: insets.top + 10 },
-      ]}
-    >
+    <View style={[styles.wrap, styles.float, { marginTop: insets.top + 10 }]}>
       {/* soft = the dock capsule's exact tint register, so the two pieces of
           floating chrome read as the same glass (the ask that landed this:
           "top bar background same as bottom bar"). blur = the real backdrop
@@ -312,7 +310,7 @@ export const TopBar = forwardRef(function TopBar(
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="open profile"
-            onPress={() => navigation?.navigate('You')}
+            onPress={() => goTab?.('You')}
             style={[styles.profile, { backgroundColor: t.accentSoft }]}
           >
             <Text style={[styles.profileText, { color: t.accent }]}>
@@ -350,7 +348,7 @@ export const TopBar = forwardRef(function TopBar(
             autoCorrect={false}
             inputMode="search"
             returnKeyType="search"
-            onSubmitEditing={onSubmitSearch}
+            onSubmitEditing={emitSearchSubmit}
             cursorColor={t.accent}
             selectionColor={t.accent}
           />
@@ -372,7 +370,7 @@ export const TopBar = forwardRef(function TopBar(
       </Glass>
     </View>
   );
-});
+}
 
 const styles = StyleSheet.create({
   // zIndex keeps the bar painting above the screen's scroller: the rubber-band

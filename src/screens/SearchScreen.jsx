@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
   Pressable,
@@ -11,14 +11,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
-import { TopBar, TOPBAR_CLEARANCE } from '../components/nav/TopBar';
+import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
 import { searchCatalog } from '../api/catalog';
 import { LANGUAGES } from '../data/languages';
 import { getUser, getActiveExplicitOff } from '../lib/auth';
 import { dropExplicit } from '../lib/explicit';
-import { closeSearch, openSearch, useSearchQuery } from '../lib/searchQuery';
+import {
+  closeSearch,
+  openSearch,
+  subscribeSearchSubmit,
+  useSearchQuery,
+} from '../lib/searchQuery';
 import { TrackRow, TrackArt } from '../components/TrackRow';
 import {
   useRecentSearches,
@@ -78,11 +83,9 @@ export default function SearchScreen({ navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  // The floating top bar is this screen's one input surface (its search chip
-  // morphs into the field in place) — the ref reaches its imperative blur,
-  // and the query itself rides the same shared bus the field writes to.
-  const topBarRef = useRef(null);
-
+  // The single floating top bar (TopBarHost) is this screen's input surface —
+  // the query rides the shared bus its field writes to, and the bar itself
+  // owns dropping field focus when the player opens.
   const { query: q, setQuery: setQ } = useSearchQuery();
   const [debouncedQ, setDebouncedQ] = useState('');
   const [lang, setLang] = useState(lastLang);
@@ -105,21 +108,6 @@ export default function SearchScreen({ navigation }) {
     const id = setTimeout(() => setDebouncedQ(q), 600);
     return () => clearTimeout(id);
   }, [q]);
-
-  // Whenever the player opens over an open search — a tapped result OR the
-  // now-playing disc in the dock (which keeps the source, e.g. a radio) — drop
-  // the search field's focus. On this ROM the keyboard's layout inset lingers
-  // while the input stays focused even after the keyboard hides, so the full-
-  // screen player opens into a keyboard-short window and leaves a pale strip
-  // where the keyboard had been. Blurring releases the inset so the window
-  // restores to full height. This catches every open path, not just playSong.
-  const playerOpen = player.ui?.playerOpen;
-  useEffect(() => {
-    if (playerOpen) {
-      topBarRef.current?.blurSearch();
-      Keyboard.dismiss();
-    }
-  }, [playerOpen]);
 
   // This tab IS the morphed search field: landing here (the dock's search
   // icon, or the top bar's chip from elsewhere) opens the shared morph so the
@@ -195,21 +183,21 @@ export default function SearchScreen({ navigation }) {
   // keyboard's search key — never on the auto-fired as-you-type queries.
   // (Field report: slow typing left "mar", "marand", "marandhu" as three
   // recents on the way to "marandhu poche".)
-  const remember = () => {
+  const remember = useCallback(() => {
     if (trimmed) {
       pushRecentSearch(trimmed);
     }
-  };
+  }, [trimmed]);
+
+  // The keyboard's search key commits from the single top bar's field — the
+  // submit travels the bus (the bar has no per-screen props anymore).
+  useEffect(() => subscribeSearchSubmit(remember), [remember]);
 
   const playSong = track => {
     remember();
-    // Fully release the search field before the player opens. On this ROM the
-    // keyboard's layout inset lingers while the input keeps focus (dismissing
-    // the keyboard alone isn't enough), so the full-screen player would open
-    // into a keyboard-short window and leave a pale strip where the keyboard
-    // had been. Blurring the input drops the inset so the window restores to
-    // full height first.
-    topBarRef.current?.blurSearch();
+    // The top bar drops the field's focus itself when the player opens (the
+    // ROM's lingering keyboard inset); the early dismiss here just starts
+    // the keyboard down a frame sooner.
     Keyboard.dismiss();
     // Web labels a direct search pick 'your pick' (auto-radio still continues
     // it at queue end and flips the source when the batch applies).
@@ -235,12 +223,6 @@ export default function SearchScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <TopBar
-        ref={topBarRef}
-        navigation={navigation}
-        float
-        onSubmitSearch={remember}
-      />
       <View
         style={[styles.header, { paddingTop: insets.top + TOPBAR_CLEARANCE }]}>
         <ScrollView overScrollMode="always"

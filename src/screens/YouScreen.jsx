@@ -54,7 +54,8 @@ import { useLikes } from '../hooks/useLikes';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { getLastCrash, clearLastCrash } from '../lib/crashLog';
 import { readSnapshot, snapshotOwner, writeSnapshot } from '../lib/snapshot';
-import { TopBar } from '../components/nav/TopBar';
+import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
@@ -190,6 +191,7 @@ function SeeAll({ what, onPress }) {
 
 export default function YouScreen({ navigation }) {
   const { t } = useTheme();
+  const insets = useSafeAreaInsets();
   const player = usePlayer();
   // Subscribed (not just read) so an avatar change repaints the chip at once.
   const [user, setUser] = useState(getUser);
@@ -521,8 +523,14 @@ export default function YouScreen({ navigation }) {
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <TopBar navigation={navigation} />
+    <View
+      style={[
+        styles.root,
+        // Clearance for the single floating top bar (TopBarHost) — the
+        // per-screen in-flow bar is gone.
+        { backgroundColor: t.bg, paddingTop: insets.top + TOPBAR_CLEARANCE },
+      ]}
+    >
       <ScreenFade>
         <BounceScrollView
           contentContainerStyle={styles.content}

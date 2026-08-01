@@ -1,6 +1,8 @@
 import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { TopBarHost } from '../components/nav/TopBarHost';
 
 const Tabs = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -14,30 +16,40 @@ const noTabBar = () => null;
 // focus, so feature agents can rewrite them without touching this file.
 function TabsNavigator() {
   return (
-    <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={noTabBar}>
-      <Tabs.Screen
-        name="Home"
-        getComponent={() => require('../screens/HomeScreen').default}
-        options={{ tabBarLabel: 'home' }}
-      />
-      <Tabs.Screen
-        name="Search"
-        getComponent={() => require('../screens/SearchScreen').default}
-        options={{ tabBarLabel: 'search' }}
-      />
-      <Tabs.Screen
-        name="Talk"
-        getComponent={() => require('../screens/TalkScreen').default}
-        options={{ tabBarLabel: 'talk' }}
-      />
-      <Tabs.Screen
-        name="You"
-        getComponent={() => require('../screens/YouScreen').default}
-        options={{ tabBarLabel: 'you' }}
-      />
-    </Tabs.Navigator>
+    // The single TopBar floats over the whole TAB layer (not per-screen):
+    // stack pushes slide it away with the tabs, detail pages never wear it,
+    // and no hidden per-tab copy exists to snapshot garbage.
+    <View style={styles.fill}>
+      <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={noTabBar}>
+        <Tabs.Screen
+          name="Home"
+          getComponent={() => require('../screens/HomeScreen').default}
+          options={{ tabBarLabel: 'home' }}
+        />
+        <Tabs.Screen
+          name="Search"
+          getComponent={() => require('../screens/SearchScreen').default}
+          options={{ tabBarLabel: 'search' }}
+        />
+        <Tabs.Screen
+          name="Talk"
+          getComponent={() => require('../screens/TalkScreen').default}
+          options={{ tabBarLabel: 'talk' }}
+        />
+        <Tabs.Screen
+          name="You"
+          getComponent={() => require('../screens/YouScreen').default}
+          options={{ tabBarLabel: 'you' }}
+        />
+      </Tabs.Navigator>
+      <TopBarHost />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+});
 
 // Root stack wraps the tabs for the detail screens. The queue is NOT here:
 // it lives as an overlay sheet above the player (overlays/QueueSheet), so

@@ -1,12 +1,11 @@
 import React from 'react';
-import { TextInput } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import SearchScreen from '../src/screens/SearchScreen';
 import { searchCatalog } from '../src/api/catalog';
 import { LANGUAGES } from '../src/data/languages';
 import { clearRecentSearches } from '../src/hooks/useRecentSearches';
-import { closeSearch } from '../src/lib/searchQuery';
+import { closeSearch, setSearchQuery } from '../src/lib/searchQuery';
 
 const mockPlayTrack = jest.fn();
 const mockOpenPlayer = jest.fn();
@@ -97,10 +96,9 @@ afterEach(() => {
 
 test('debounces, fetches categorized results and plays a song pick', async () => {
   const tree = render();
-  const input = tree.root.findByType(TextInput);
 
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('song');
+    setSearchQuery('song');
   });
   expect(searchCatalog).not.toHaveBeenCalled();
 
@@ -128,10 +126,9 @@ test('debounces, fetches categorized results and plays a song pick', async () =>
 
 test('language pill refetches with the lang filter', async () => {
   const tree = render();
-  const input = tree.root.findByType(TextInput);
 
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('song');
+    setSearchQuery('song');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
@@ -167,9 +164,8 @@ test('offers every catalog language as a pill, not just onboarded ones', async (
   ];
   expect(pillLabels).toEqual(['all', ...LANGUAGES].map(L => `language ${L}`));
 
-  const input = tree.root.findByType(TextInput);
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('song');
+    setSearchQuery('song');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
@@ -191,18 +187,17 @@ test('offers every catalog language as a pill, not just onboarded ones', async (
 
 test('remembers only committed queries and re-runs them from recents', async () => {
   const tree = render();
-  const input = tree.root.findByType(TextInput);
 
   // An auto-fired as-you-type query alone leaves NO trace in recents —
   // that's what kept "mar"/"marand"/"marandhu" out of the list.
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('song');
+    setSearchQuery('song');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
   });
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('');
+    setSearchQuery('');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
@@ -211,7 +206,7 @@ test('remembers only committed queries and re-runs them from recents', async () 
 
   // Committing — tapping a result — is what records the query.
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('song');
+    setSearchQuery('song');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
@@ -220,7 +215,7 @@ test('remembers only committed queries and re-runs them from recents', async () 
     byLabel(tree, 'play Song One').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('');
+    setSearchQuery('');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
@@ -237,7 +232,7 @@ test('remembers only committed queries and re-runs them from recents', async () 
   expect(searchCatalog).toHaveBeenCalledTimes(3);
 
   await ReactTestRenderer.act(async () => {
-    input.props.onChangeText('');
+    setSearchQuery('');
   });
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);

@@ -26,12 +26,12 @@ function layerPointerEvents(node) {
   return n?.props.pointerEvents;
 }
 
-function render(navigation) {
+function render(goTab) {
   let tree;
   ReactTestRenderer.act(() => {
     tree = ReactTestRenderer.create(
       <ThemeProvider>
-        <TopBar navigation={navigation} />
+        <TopBar activeTab="Home" goTab={goTab} />
       </ThemeProvider>,
     );
   });
@@ -44,11 +44,8 @@ beforeEach(() => {
 });
 
 test('the search chip morphs the pill into the field and navigates to Search', () => {
-  const navigation = {
-    navigate: jest.fn(),
-    addListener: jest.fn(() => jest.fn()),
-  };
-  const tree = render(navigation);
+  const goTab = jest.fn();
+  const tree = render(goTab);
 
   // Resting: the bar layer is interactive, the field layer is not.
   expect(layerPointerEvents(byLabel(tree, 'open search'))).toBe('auto');
@@ -58,7 +55,7 @@ test('the search chip morphs the pill into the field and navigates to Search', (
     byLabel(tree, 'open search').props.onPress();
   });
 
-  expect(navigation.navigate).toHaveBeenCalledWith('Search');
+  expect(goTab).toHaveBeenCalledWith('Search');
   expect(layerPointerEvents(byLabel(tree, 'open search'))).toBe('none');
   expect(layerPointerEvents(byLabel(tree, 'close search'))).toBe('auto');
 
@@ -66,11 +63,7 @@ test('the search chip morphs the pill into the field and navigates to Search', (
 });
 
 test('typing in the morphed field lands on the shared query bus', () => {
-  const navigation = {
-    navigate: jest.fn(),
-    addListener: jest.fn(() => jest.fn()),
-  };
-  const tree = render(navigation);
+  const tree = render(jest.fn());
 
   ReactTestRenderer.act(() => {
     byLabel(tree, 'open search').props.onPress();
@@ -86,11 +79,7 @@ test('typing in the morphed field lands on the shared query bus', () => {
 });
 
 test('‹ restores the bar and clears the query', () => {
-  const navigation = {
-    navigate: jest.fn(),
-    addListener: jest.fn(() => jest.fn()),
-  };
-  const tree = render(navigation);
+  const tree = render(jest.fn());
 
   ReactTestRenderer.act(() => {
     byLabel(tree, 'open search').props.onPress();
