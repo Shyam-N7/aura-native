@@ -63,10 +63,20 @@ export function Glass({
       <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
         <Defs>
           {/* Solid stopColor + numeric stopOpacity — rn-svg renders rgba() stop
-              strings opaque on Android, which painted the whole pill white. */}
+              strings opaque on Android, which painted the whole pill white.
+              Blur register runs the web-exact (cooler) gradient — the tint
+              register's thick shimmer over real blur reads as white wash. */}
           <LinearGradient id="shimmer" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#ffffff" stopOpacity={g.shimmerFrom} />
-            <Stop offset="1" stopColor="#ffffff" stopOpacity={g.shimmerTo} />
+            <Stop
+              offset="0"
+              stopColor="#ffffff"
+              stopOpacity={blurOn ? g.blurShimmerFrom : g.shimmerFrom}
+            />
+            <Stop
+              offset="1"
+              stopColor="#ffffff"
+              stopOpacity={blurOn ? g.blurShimmerTo : g.shimmerTo}
+            />
           </LinearGradient>
           {/* The slab's dark under-edge: light entering thick glass dies at
               the bottom. A short fade, not a hairline — the height is what

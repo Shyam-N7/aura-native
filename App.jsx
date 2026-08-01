@@ -36,6 +36,7 @@ import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { getUser, subscribeAuth, showSensing, hasOnboarded, fetchMe } from './src/lib/auth';
 import { initPush, setPushLinkHandler } from './src/lib/push';
+import { freezeGlass } from './src/lib/navFreeze';
 import { initEqualizer } from './src/lib/equalizer';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
 import { invalidateHomeCache } from './src/lib/homeCache';
@@ -242,6 +243,9 @@ function Shell() {
     content = (
       <NavigationContainer
         ref={navRef}
+        // Every push/pop/tab change: freeze the glass capture loop for the
+        // transition window (see lib/navFreeze — the exit-glitch fix).
+        onStateChange={freezeGlass}
         onReady={() =>
           Linking.getInitialURL()
             .then(u => {

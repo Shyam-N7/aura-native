@@ -7,6 +7,7 @@ import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
 import eightbitlab.com.blurview.BlurView
+import eightbitlab.com.blurview.GlassSaturatingBlur
 
 /**
  * True backdrop blur for the glass chrome — the one thing RN styles can't do
@@ -30,6 +31,7 @@ import eightbitlab.com.blurview.BlurView
  */
 class GlassBlurView(context: Context) : BlurView(context) {
   var pendingRadius = GlassViewManager.DEFAULT_RADIUS
+  var pendingFrozen = false
   var controllerReady = false
 }
 
@@ -52,10 +54,13 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
           // the bare white window instead of the content behind (the failure
           // that sank the first capture-blur trial).
           blurView
-            .setupWith(root)
+            // Web recipe is blur(40px) saturate(180%): the saturating
+            // algorithm chains the missing saturate — without it the pill
+            // washes out against vivid content and its edge reads as a line.
+            .setupWith(root, GlassSaturatingBlur(activity, WEB_SATURATION))
             .setFrameClearDrawable(activity.window.decorView.background)
             .setBlurRadius(blurView.pendingRadius)
-            .setBlurAutoUpdate(true)
+            .setBlurAutoUpdate(!blurView.pendingFrozen)
           blurView.controllerReady = true
         }
 
@@ -73,9 +78,25 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
     }
   }
 
+  // Frozen = keep drawing the LAST snapshot instead of re-capturing each
+  // frame. JS freezes the glass for the navigation-transition window: the
+  // per-frame root redraw the capture forces was interfering with the stack's
+  // pop animation (the outgoing screen froze while the incoming one wiped
+  // over it), and CSS backdrop-filter never redraws ancestors mid-transition.
+  @ReactProp(name = "frozen", defaultBoolean = false)
+  fun setFrozen(view: GlassBlurView, frozen: Boolean) {
+    view.pendingFrozen = frozen
+    if (view.controllerReady) {
+      view.setBlurAutoUpdate(!frozen)
+    }
+  }
+
   companion object {
     // BlurView's RenderEffect path applies this at snapshot resolution;
     // the JS side passes the web-matched value (tokens glass.backdropRadius).
     const val DEFAULT_RADIUS = 20f
+
+    // Web glass: backdrop-filter saturate(180%).
+    const val WEB_SATURATION = 1.8f
   }
 }

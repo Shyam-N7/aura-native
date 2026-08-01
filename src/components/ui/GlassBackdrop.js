@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { requireNativeComponent, UIManager } from 'react-native';
+import { subscribeGlassFreeze } from '../../lib/navFreeze';
 
 // True backdrop blur behind the glass chrome — the app-local GlassView
 // component (android/.../GlassViewManager.kt, Dimezis BlurView underneath).
@@ -34,11 +35,15 @@ const NativeGlassView = cache.component;
 // binaries built before that.
 function RadiusAsserted({ blurRadius, ...rest }) {
   const [radius, setRadius] = useState(undefined);
+  // Navigation transitions freeze the capture loop (lib/navFreeze) so the
+  // per-frame root redraw can't disturb the stack animation.
+  const [frozen, setFrozen] = useState(false);
+  useEffect(() => subscribeGlassFreeze(setFrozen), []);
   useEffect(() => {
     const id = requestAnimationFrame(() => setRadius(blurRadius));
     return () => cancelAnimationFrame(id);
   }, [blurRadius]);
-  return <NativeGlassView {...rest} blurRadius={radius} />;
+  return <NativeGlassView {...rest} blurRadius={radius} frozen={frozen} />;
 }
 
 export const GlassBackdrop = NativeGlassView ? RadiusAsserted : null;

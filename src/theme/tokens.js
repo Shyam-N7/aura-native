@@ -137,6 +137,12 @@ export const glass = {
   backdropRadius: 40,
   shimmerFrom: 0.14,
   shimmerTo: 0.035,
+  // Blur register runs the web's exact shimmer (MobileDock.css gradient):
+  // the tint register's hotter "thick" values over real blur read as extra
+  // white wash — with saturate(180%) now live, web-exact keeps the backdrop
+  // colour rich instead of milky.
+  blurShimmerFrom: 0.09,
+  blurShimmerTo: 0.02,
   border: 'rgba(255,255,255,0.18)',
   insetLight: 'rgba(255,255,255,0.35)',
   // Top bevel for the BLUR register only — web-exact (`inset 0 1px 0` alpha).
@@ -154,6 +160,8 @@ export const glass = {
   midnight: {
     shimmerFrom: 0.11,
     shimmerTo: 0.025,
+    blurShimmerFrom: 0.07,
+    blurShimmerTo: 0.015,
     border: 'rgba(255,255,255,0.14)',
     insetLight: 'rgba(255,255,255,0.20)',
     topLight: 0.12,
