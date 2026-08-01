@@ -6,6 +6,8 @@ package eightbitlab.com.blurview
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
@@ -42,6 +44,7 @@ class GlassBlurController(
   private val rootView: ViewGroup,
   private var overlayColor: Int,
   private val blurAlgorithm: BlurAlgorithm,
+  saturation: Float,
 ) : BlurController {
 
   private var blurRadius = BlurController.DEFAULT_BLUR_RADIUS
@@ -56,9 +59,18 @@ class GlassBlurController(
   private val visibleRect = Rect()
 
   // Full-replace composite for promoting staging → internal (SRC ignores
-  // whatever the last blur left in the destination).
+  // whatever the last blur left in the destination). The color filter is the
+  // web glass saturate(180%): a paint filters SOURCE pixels before the
+  // xfermode composites them, so the saturation rides the copy we already
+  // pay for — saturation is a linear per-pixel transform, so pre-blur
+  // placement is visually identical to CSS's after-blur order. (This
+  // replaced GlassSaturatingBlur's per-capture saveLayer, which allocated a
+  // fresh offscreen layer and two more full-bitmap passes every frame.)
   private val promotePaint = Paint().apply {
     xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
+    colorFilter = ColorMatrixColorFilter(
+      ColorMatrix().apply { setSaturation(saturation) },
+    )
   }
 
   private val drawListener = ViewTreeObserver.OnPreDrawListener {
@@ -301,6 +313,7 @@ class GlassBlurController(
 fun BlurView.installGlassController(
   rootView: ViewGroup,
   algorithm: BlurAlgorithm,
+  saturation: Float,
 ): BlurViewFacade {
   blurController.destroy()
   val controller = GlassBlurController(
@@ -308,6 +321,7 @@ fun BlurView.installGlassController(
     rootView,
     PreDrawBlurController.TRANSPARENT,
     algorithm,
+    saturation,
   )
   blurController = controller
   return controller

@@ -1,13 +1,15 @@
 package com.auranative
 
 import android.content.Context
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
 import eightbitlab.com.blurview.BlurView
-import eightbitlab.com.blurview.GlassSaturatingBlur
+import eightbitlab.com.blurview.RenderEffectBlur
+import eightbitlab.com.blurview.RenderScriptBlur
 import eightbitlab.com.blurview.installGlassController
 
 /**
@@ -65,14 +67,21 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
           // the bare white window instead of the content behind (the failure
           // that sank the first capture-blur trial).
           blurView
-            // Web recipe is blur(40px) saturate(180%): the saturating
-            // algorithm chains the missing saturate — without it the pill
-            // washes out against vivid content and its edge reads as a line.
-            // installGlassController = the stock controller with the crash
-            // shield (ScreenStack draw-op races; see GlassBlurController).
+            // Web recipe is blur(40px) saturate(180%): the saturate rides
+            // the controller's promote copy — without it the pill washes out
+            // against vivid content and its edge reads as a line. Blur takes
+            // the GPU RenderEffect path on 31+ (controller wires its context
+            // in init), RenderScript below. installGlassController = the
+            // stock controller with the crash shield (ScreenStack draw-op
+            // races; see GlassBlurController).
             .installGlassController(
               root,
-              GlassSaturatingBlur(activity, WEB_SATURATION),
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                RenderEffectBlur()
+              } else {
+                RenderScriptBlur(activity)
+              },
+              WEB_SATURATION,
             )
             .setFrameClearDrawable(activity.window.decorView.background)
             .setBlurRadius(blurView.pendingRadius)
