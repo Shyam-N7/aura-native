@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { processColor, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme/ThemeContext';
 import { GlassBackdrop } from './GlassBackdrop';
@@ -25,7 +25,7 @@ export function Glass({
   blur = false,
   children,
 }) {
-  const { name } = useTheme();
+  const { t, name } = useTheme();
   const g = name === 'midnight' ? { ...glass, ...glass.midnight } : glass;
   // Mounting and the visual register are SPLIT: unmounting the native
   // backdrop on every goo window destroyed and rebuilt the whole blur
@@ -66,6 +66,10 @@ export function Glass({
           collapsable={false}
           blurRadius={g.backdropRadius}
           suspended={solid}
+          // Theme background as the capture clear coat: a capture that
+          // under-paints then shows the app's own color instead of the dark
+          // decorView background (the black-shade class, Android 15 report).
+          clearColor={processColor(t.bg) ?? 0}
         />
       )}
       <Svg style={StyleSheet.absoluteFill} pointerEvents="none">

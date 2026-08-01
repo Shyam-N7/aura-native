@@ -82,6 +82,7 @@ class GlassBlurController(
   private var blurEnabled = true
   private var initialized = false
   private var frameClearDrawable: Drawable? = null
+  private var clearColor: Int? = null
 
   // Self-heal state. The theme-switch re-render storm wedged the top bar's
   // controller once (snapshot updates dead while the page moved on — the
@@ -187,11 +188,21 @@ class GlassBlurController(
     // frames never delay the first capture after the view returns.
     lastCaptureUptime = now
 
-    val clear = frameClearDrawable
-    if (clear == null) {
-      stagingBitmap.eraseColor(Color.TRANSPARENT)
+    // Theme-colored clear coat when JS provided one: the decorView background
+    // is DARK on many devices, so any capture that under-paints reads as a
+    // black shade on the pill (field report, Android 15) — with the app's own
+    // background the same failure is invisible. eraseColor is also a memset
+    // vs a (possibly layered) drawable draw.
+    val cc = clearColor
+    if (cc != null) {
+      stagingBitmap.eraseColor(cc)
     } else {
-      clear.draw(stagingCanvas)
+      val clear = frameClearDrawable
+      if (clear == null) {
+        stagingBitmap.eraseColor(Color.TRANSPARENT)
+      } else {
+        clear.draw(stagingCanvas)
+      }
     }
 
     stagingCanvas.save()
@@ -289,6 +300,12 @@ class GlassBlurController(
     return this
   }
 
+  // Not part of BlurViewFacade — the manager talks to the concrete
+  // controller for this one. null = fall back to the frame-clear drawable.
+  fun setClearColor(color: Int?) {
+    clearColor = color
+  }
+
   override fun setBlurEnabled(enabled: Boolean): BlurViewFacade {
     this.blurEnabled = enabled
     setBlurAutoUpdate(enabled)
@@ -334,7 +351,7 @@ fun BlurView.installGlassController(
   rootView: ViewGroup,
   algorithm: BlurAlgorithm,
   saturation: Float,
-): BlurViewFacade {
+): GlassBlurController {
   blurController.destroy()
   val controller = GlassBlurController(
     this,

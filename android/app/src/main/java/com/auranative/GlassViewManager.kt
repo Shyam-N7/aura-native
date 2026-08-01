@@ -8,6 +8,7 @@ import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
 import eightbitlab.com.blurview.BlurView
+import eightbitlab.com.blurview.GlassBlurController
 import eightbitlab.com.blurview.RenderEffectBlur
 import eightbitlab.com.blurview.RenderScriptBlur
 import eightbitlab.com.blurview.installGlassController
@@ -35,7 +36,9 @@ import eightbitlab.com.blurview.installGlassController
 class GlassBlurView(context: Context) : BlurView(context) {
   var pendingRadius = GlassViewManager.DEFAULT_RADIUS
   var pendingFrozen = false
+  var pendingClearColor: Int? = null
   var controllerReady = false
+  var controller: GlassBlurController? = null
 
   // Arriving on screen (tab switch): force a draw pass so the armed preDraw
   // captures a fresh snapshot now that coordinates are real — the controller
@@ -77,26 +80,28 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
           // snapshot starts from an undefined buffer and the blur can paint
           // the bare white window instead of the content behind (the failure
           // that sank the first capture-blur trial).
-          blurView
-            // Web recipe is blur(40px) saturate(180%): the saturate rides
-            // the controller's promote copy — without it the pill washes out
-            // against vivid content and its edge reads as a line. Blur takes
-            // the GPU RenderEffect path on 31+ (controller wires its context
-            // in init), RenderScript below. installGlassController = the
-            // stock controller with the crash shield (ScreenStack draw-op
-            // races; see GlassBlurController).
-            .installGlassController(
-              root,
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                RenderEffectBlur()
-              } else {
-                RenderScriptBlur(activity)
-              },
-              WEB_SATURATION,
-            )
+          // Web recipe is blur(40px) saturate(180%): the saturate rides
+          // the controller's promote copy — without it the pill washes out
+          // against vivid content and its edge reads as a line. Blur takes
+          // the GPU RenderEffect path on 31+ (controller wires its context
+          // in init), RenderScript below. installGlassController = the
+          // stock controller with the crash shield (ScreenStack draw-op
+          // races; see GlassBlurController).
+          val controller = blurView.installGlassController(
+            root,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+              RenderEffectBlur()
+            } else {
+              RenderScriptBlur(activity)
+            },
+            WEB_SATURATION,
+          )
+          controller
             .setFrameClearDrawable(activity.window.decorView.background)
             .setBlurRadius(blurView.pendingRadius)
             .setBlurAutoUpdate(!blurView.pendingFrozen)
+          controller.setClearColor(blurView.pendingClearColor)
+          blurView.controller = controller
           blurView.controllerReady = true
         }
 
@@ -112,6 +117,17 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
     if (view.controllerReady) {
       view.setBlurRadius(radius)
     }
+  }
+
+  // Theme background for the staging clear coat (see GlassBlurController).
+  // JS passes processColor(t.bg) — opaque, so 0 is a safe "unset" sentinel
+  // that falls back to the decorView drawable. Same pending-prop parking as
+  // blurRadius: props land before the controller exists.
+  @ReactProp(name = "clearColor", defaultInt = 0)
+  fun setClearColor(view: GlassBlurView, color: Int) {
+    val c = if (color == 0) null else color
+    view.pendingClearColor = c
+    view.controller?.setClearColor(c)
   }
 
   // Frozen = keep drawing the LAST snapshot instead of re-capturing each
