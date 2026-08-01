@@ -16,6 +16,32 @@ class MainActivity : ReactActivity() {
    */
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(null)
+    requestFullRefreshRate()
+  }
+
+  /**
+   * The OS picks the refresh rate PER APP, and ColorOS parks non-allowlisted
+   * apps at 60Hz (measured live: launcher at 120, AURA at 60 on the same
+   * panel). preferredDisplayModeId is the request OEMs honor: ask for the
+   * highest-refresh mode at the current resolution and let the OS keep its
+   * right to downshift (thermals, battery saver). The glass capture throttle
+   * is time-based, so 120Hz makes scroll/gestures smoother without
+   * re-inflating blur cost.
+   */
+  private fun requestFullRefreshRate() {
+    val display = windowManager.defaultDisplay ?: return
+    val current = display.mode ?: return
+    val best = display.supportedModes
+      .filter {
+        it.physicalWidth == current.physicalWidth &&
+          it.physicalHeight == current.physicalHeight
+      }
+      .maxByOrNull { it.refreshRate } ?: return
+    if (best.modeId != current.modeId) {
+      window.attributes = window.attributes.apply {
+        preferredDisplayModeId = best.modeId
+      }
+    }
   }
 
   /**
