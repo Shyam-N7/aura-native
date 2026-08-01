@@ -178,15 +178,24 @@ export function Dock({ navRef }) {
   // it: a track first appearing (the bead buds out of the capsule) and the
   // back-to-top flip (the capsule contracts, items melt to centre).
   const prevTrack = useRef(hasTrack);
+  const prevBtt = useRef(btt);
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       prevTrack.current = hasTrack;
+      prevBtt.current = btt;
       return;
     }
     const trackFlipped = prevTrack.current !== hasTrack;
+    const bttFlipped = prevBtt.current !== btt;
     prevTrack.current = hasTrack;
-    if ((hasTrack || btt) && !reduced) {
+    prevBtt.current = btt;
+    // bttFlipped keeps the RETURN morph covered with no track loaded:
+    // (hasTrack || btt) alone goes false on that flip, so the capsule
+    // re-expanded with the blur LIVE mid-resize — BlurView re-crops per
+    // layout pass and printed a displaced pill outline (owner's ghost,
+    // the no-disc crops). Solid + goo must ride every geometry change.
+    if ((hasTrack || btt || bttFlipped) && !reduced) {
       setGooActive(true);
       // The bud animation belongs to the track appearing — a back-to-top flip
       // reuses the window but must not re-bud a bead that was already out
@@ -205,8 +214,18 @@ export function Dock({ navRef }) {
   // Bead: buds with budR, retracts with btt. Capsule: narrows to the centered
   // pill. Item blobs: the four tabs' masses converging on centre so the
   // metaball fuses them into the contracting capsule (web --btt ::before).
-  const beadSilR = useDerivedValue(() =>
-    Math.max(0, budR.value * (1 - bttV.value)),
+  // No track = NO bead blob: budR idles at full size, so an unguarded
+  // radius painted a phantom bead into every no-track goo window (the
+  // owner's left-edge lines — and with a track, padL shifts the item
+  // blobs 56px right, which is why the lines "moved" with the disc).
+  // Min-cap: the liquid clock dips below 0 on return, and (1 - bttV)
+  // past 1 would inflate the blob beyond the real bead.
+  const beadSilR = useDerivedValue(
+    () =>
+      hasTrack
+        ? Math.min(BEAD_SIZE / 2, Math.max(0, budR.value * (1 - bttV.value)))
+        : 0,
+    [hasTrack],
   );
   const capSilW = useDerivedValue(() =>
     interpolate(bttV.value, [0, 1], [width, BTT_WIDTH], 'clamp'),
@@ -214,6 +233,9 @@ export function Dock({ navRef }) {
   const capSilX = useDerivedValue(
     () => GOO_PAD + (width - capSilW.value) / 2,
   );
+  // 2px-inset twins for the drawn silhouette (see the RoundedRect note).
+  const capSilWIn = useDerivedValue(() => Math.max(0, capSilW.value - 4));
+  const capSilXIn = useDerivedValue(() => capSilX.value + 2);
   const itemCxAt = i => {
     'worklet';
     const padL = hasTrack ? 60 : 4;
@@ -353,12 +375,17 @@ export function Dock({ navRef }) {
               { left: -GOO_PAD, right: -GOO_PAD, top: -GOO_PAD, bottom: -GOO_PAD },
             ]}
           >
+            {/* Inset 2px under the chrome: the metaball threshold (σ5 blur →
+                alpha boost) inflates edges ~2-3px, and a full-size silhouette
+                printed a lighter ghost outline AROUND the pill for the whole
+                window (owner crops). The fusion seams stay visible; the
+                perimeter hides under the real glass. */}
             <RoundedRect
-              x={capSilX}
-              y={GOO_PAD}
-              width={capSilW}
-              height={52}
-              r={radii.dock}
+              x={capSilXIn}
+              y={GOO_PAD + 2}
+              width={capSilWIn}
+              height={48}
+              r={radii.dock - 2}
               color={gooFill[name]}
             />
             <Circle
@@ -378,7 +405,7 @@ export function Dock({ navRef }) {
                 key={tab.name}
                 cx={itemSilCx[i]}
                 cy={GOO_PAD + 26}
-                r={16}
+                r={15}
                 color={gooFill[name]}
               />
             ))}

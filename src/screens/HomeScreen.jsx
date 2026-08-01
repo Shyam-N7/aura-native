@@ -40,13 +40,13 @@ import { PlaylistGrid } from '../components/home/PlaylistGrid';
 import { Skeleton } from '../components/ui/Skeleton';
 import { ModeMixCard } from '../components/home/ModeMixCard';
 import { NowPlayingBanner } from '../components/home/NowPlayingBanner';
-import { OtterToggle } from '../components/ui/OtterToggle';
+import { BgPlayRail } from '../components/home/BgPlayRail';
 import { QuietPanelBell } from '../components/home/QuietPanelBell';
 import { PressScale } from '../components/ui/PressScale';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
 import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
 import { storage } from '../storage/mmkv';
-import { fonts } from '../theme/tokens';
+import { fonts, label } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
 import { partOfDay } from '../utils/daypart';
@@ -470,22 +470,23 @@ export default function HomeScreen({ navigation }) {
               <Text style={[styles.tagline, { color: t.inkSoft }]}>
                 music that gets your mood
               </Text>
+              {/* The 2b status line: recolors with the switch. */}
+              <Text
+                style={[
+                  label(9.5),
+                  styles.bgStatus,
+                  { color: bgPlay ? t.accent : t.inkFaint },
+                ]}
+              >
+                {bgPlay ? 'plays in background' : 'stops when you leave'}
+              </Text>
             </View>
-            {/* The corner stack (owner's call): the bell owns the greeting
-                block's top-right corner, the toggle sits beneath it — one
-                right-edge column instead of chips floating mid-row. */}
+            {/* The 2b rail (owner's reference): bell on top, then the full-
+                height vertical switch — the rail IS the toggle, its knob
+                travels the greeting block's height. */}
             <View style={styles.headActions}>
               <QuietPanelBell />
-              {/* The box caps the column at the pill's width so the label
-                  wraps to two small lines — a one-line "background play" was
-                  what squeezed the greeting into wrapping. */}
-              <View style={styles.bgToggleBox}>
-                <OtterToggle
-                  value={bgPlay}
-                  onPress={onBgToggle}
-                  label="background play"
-                />
-              </View>
+              <BgPlayRail value={bgPlay} onPress={onBgToggle} />
             </View>
           </View>
 
@@ -764,10 +765,11 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 22, gap: 4 },
   // flex-start so the corner stack's bell tops out level with the greeting's
   // first line — the block's true corner, not its vertical middle.
-  greetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  // stretch: the rail switch fills the greeting block's height (2b).
+  greetRow: { flexDirection: 'row', alignItems: 'stretch', gap: 16 },
   greetCol: { flex: 1, gap: 4 },
-  headActions: { alignItems: 'center', gap: 10 },
-  bgToggleBox: { width: 84, alignItems: 'center' },
+  headActions: { width: 36, alignItems: 'center', gap: 10 },
+  bgStatus: { marginTop: 10 },
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
   tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
   wheelWrap: { alignItems: 'center', paddingTop: 6 },

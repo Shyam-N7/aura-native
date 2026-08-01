@@ -188,10 +188,11 @@ test("home greets and begins tonight's set from the hero band", async () => {
 
 test('background play: the greeting-row switch confirms, then flips the engine', async () => {
   const tree = await render(<HomeScreen />);
-  // On the greeting row, on by default, captioned.
+  // The 2b rail: on by default; the visible caption is the status line
+  // (the switch itself is named by its accessibility label).
   const toggle = byLabel(tree, 'background play');
   expect(toggle.props.accessibilityState).toEqual({ checked: true });
-  expect(texts(tree.toJSON())).toContain('background play');
+  expect(texts(tree.toJSON())).toContain('plays in background');
 
   // Tap → the confirm POPUP asks; cancel changes nothing.
   await ReactTestRenderer.act(async () => {
