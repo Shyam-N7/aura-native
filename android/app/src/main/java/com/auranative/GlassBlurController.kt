@@ -93,6 +93,7 @@ class GlassBlurController(
   private var autoUpdateWanted = true
   private var consecutiveFailures = 0
   private var lastSuccessUptime = 0L
+  private var lastCaptureUptime = 0L
 
   private val heartbeat = object : Runnable {
     override fun run() {
@@ -114,8 +115,10 @@ class GlassBlurController(
       ) {
         // Re-arm defensively (add/remove is idempotent; this also re-posts
         // the heartbeat, so return instead of double-posting) and refresh.
+        // force: a stale snapshot is exactly what the throttle must not
+        // block.
         setBlurAutoUpdate(true)
-        updateBlur()
+        updateBlur(force = true)
         blurView.invalidate()
         return
       }
@@ -153,8 +156,21 @@ class GlassBlurController(
     updateBlur()
   }
 
-  private fun updateBlur() {
+  private fun updateBlur(force: Boolean = false) {
     if (!blurEnabled || !initialized) {
+      return
+    }
+    // ~30Hz capture cap. preDraw fires for EVERY window frame, and each
+    // capture software-draws the whole tree per glass view — at 60-120Hz
+    // display rates that cost starves the UI thread (field lag on two
+    // devices). Under blur(40)+saturate at 1/6 scale a half-rate backdrop is
+    // imperceptible; skipped frames keep the last blur and cost nothing
+    // downstream (no re-record → no damage). 30ms not 33: locks cleanly to
+    // every 2nd frame at 60Hz / 4th at 120Hz instead of beating against the
+    // frame clock. A skip is neither success nor failure — the self-heal
+    // counters stay untouched. The heartbeat forces past it.
+    val now = SystemClock.uptimeMillis()
+    if (!force && now - lastCaptureUptime < CAPTURE_MIN_INTERVAL_MS) {
       return
     }
     // Hidden instances (each tab mounts its own top bar; inactive tabs are
@@ -167,6 +183,9 @@ class GlassBlurController(
     if (!blurView.isLaidOut || !blurView.getGlobalVisibleRect(visibleRect)) {
       return
     }
+    // Stamped only when a capture is genuinely attempted, so guard-skipped
+    // frames never delay the first capture after the view returns.
+    lastCaptureUptime = now
 
     val clear = frameClearDrawable
     if (clear == null) {
@@ -297,6 +316,7 @@ class GlassBlurController(
     const val TAG = "GlassBlur"
     const val REINIT_AFTER_FAILURES = 3
     const val HEARTBEAT_MS = 2000L
+    const val CAPTURE_MIN_INTERVAL_MS = 30L
   }
 
   override fun setOverlayColor(overlayColor: Int): BlurViewFacade {
