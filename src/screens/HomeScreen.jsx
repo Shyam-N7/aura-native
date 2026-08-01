@@ -767,7 +767,9 @@ const styles = StyleSheet.create({
   // first line — the block's true corner, not its vertical middle.
   // stretch: the rail switch fills the greeting block's height (2b).
   greetRow: { flexDirection: 'row', alignItems: 'stretch', gap: 16 },
-  greetCol: { flex: 1, gap: 4 },
+  // Centered against the rail column's height (2b: the text block floats
+  // mid-height beside the full-height switch).
+  greetCol: { flex: 1, gap: 4, justifyContent: 'center' },
   headActions: { width: 36, alignItems: 'center', gap: 10 },
   bgStatus: { marginTop: 10 },
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
