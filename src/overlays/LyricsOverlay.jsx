@@ -84,8 +84,12 @@ const BARS = [
 
 function GapBar({ h, d, accent, reduced }) {
   const v = useSharedValue(0);
+  // Lyrics open + screen locked mid-listen must park the bounce, or it ticks
+  // invisibly all listen long (the reports/10 class).
+  const active = useAppActive();
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !active) {
+      cancelAnimation(v);
       v.value = 0.57; // scaleY ≈ 0.7 static
       return undefined;
     }
@@ -100,7 +104,7 @@ function GapBar({ h, d, accent, reduced }) {
       ),
     );
     return () => cancelAnimation(v);
-  }, [d, reduced, v]);
+  }, [d, reduced, active, v]);
   const style = useAnimatedStyle(() => ({
     opacity: 0.65 + v.value * 0.35,
     transform: [{ scaleY: 0.3 + v.value * 0.7 }],
@@ -411,8 +415,9 @@ function CountdownDot({ on, accent }) {
 // learned. Decorative wrapper — layout and labels pass through untouched.
 function HintPulse({ active, children }) {
   const v = useSharedValue(1);
+  const appActive = useAppActive();
   useEffect(() => {
-    if (active) {
+    if (active && appActive) {
       v.value = withRepeat(
         withSequence(
           withTiming(1.07, {
@@ -427,7 +432,7 @@ function HintPulse({ active, children }) {
     }
     v.value = withTiming(1, { duration: 200 });
     return undefined;
-  }, [active, v]);
+  }, [active, appActive, v]);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: v.value }],
   }));
@@ -930,8 +935,10 @@ export function LyricsOverlay() {
 
   // Ken Burns — slow zoom + subtle drift while cinematic, seamlessly
   // reversing (the web's 30s alternate keyframes, collapsed to two poses).
+  // appActive: cinematic + screen locked would otherwise drift unseen for
+  // the whole listen.
   useEffect(() => {
-    if (cinematic && !reduced) {
+    if (cinematic && !reduced && appActive) {
       kb.value = withRepeat(
         withTiming(1, { duration: 15000, easing: Easing.inOut(Easing.ease) }),
         -1,
@@ -941,7 +948,7 @@ export function LyricsOverlay() {
     }
     kb.value = withTiming(0, { duration: 600 });
     return undefined;
-  }, [cinematic, reduced, kb]);
+  }, [cinematic, reduced, appActive, kb]);
 
   const isMidnight = name === 'midnight';
   const tintIdle = isMidnight ? 0.4 : 0.28;

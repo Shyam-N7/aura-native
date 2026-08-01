@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -9,9 +9,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { NavigationContext } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAppActive } from '../../hooks/useAppActive';
+import { useNavFocused } from '../../hooks/useNavFocused';
 import { label } from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
@@ -61,22 +61,8 @@ export function BgPlayRail({ value, onPress }) {
   const { t } = useTheme();
   // Both gates or the loop runs invisibly: app-active covers screen-off,
   // focus covers Home parked behind another tab (tabs keep screens mounted).
-  // Context read instead of useIsFocused: outside a navigator (tests) there
-  // is no screen to be blurred by, so focused defaults true.
   const active = useAppActive();
-  const navigation = useContext(NavigationContext);
-  const [focused, setFocused] = useState(() => navigation?.isFocused?.() ?? true);
-  useEffect(() => {
-    if (!navigation) {
-      return undefined;
-    }
-    const onFocus = navigation.addListener('focus', () => setFocused(true));
-    const onBlur = navigation.addListener('blur', () => setFocused(false));
-    return () => {
-      onFocus();
-      onBlur();
-    };
-  }, [navigation]);
+  const focused = useNavFocused();
   const [railH, setRailH] = useState(0);
 
   const pos = useSharedValue(value ? 0 : 1);

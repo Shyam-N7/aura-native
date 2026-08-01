@@ -13,6 +13,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAppActive } from '../../hooks/useAppActive';
+import { useNavFocused } from '../../hooks/useNavFocused';
 import { Goo } from '../ui/Goo';
 import { Icon } from '../Icon';
 import { fonts, label } from '../../theme/tokens';
@@ -55,9 +57,16 @@ export function ListTools({ query, onQuery, sort, onSort, sorts }) {
   const open = useSharedValue(0); // 0 slider · 1 search field
   const lastW = useRef(0);
 
-  // Idle breathing so the pill feels liquid even at rest.
+  // Idle breathing so the pill feels liquid even at rest — but only while it
+  // can be seen: the native stack keeps parked detail screens mounted, so an
+  // unfocused/backgrounded breathe would keep the window (and the glass
+  // captures) hot every frame under whatever covers it.
+  const appActive = useAppActive();
+  const focused = useNavFocused();
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !appActive || !focused) {
+      cancelAnimation(pulse);
+      pulse.value = withTiming(0, { duration: 200 });
       return undefined;
     }
     pulse.value = withRepeat(
@@ -66,7 +75,7 @@ export function ListTools({ query, onQuery, sort, onSort, sorts }) {
       true,
     );
     return () => cancelAnimation(pulse);
-  }, [reduced, pulse]);
+  }, [reduced, appActive, focused, pulse]);
 
   // Move the indicator to the active segment: instant on first layout / width
   // change, spring otherwise (so a re-sort glides, a rotate snaps).

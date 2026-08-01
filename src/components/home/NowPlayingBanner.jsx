@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAppActive } from '../../hooks/useAppActive';
+import { useNavFocused } from '../../hooks/useNavFocused';
 import { PressScale } from '../ui/PressScale';
 import { TrackArt } from '../TrackRow';
 import { fonts, label } from '../../theme/tokens';
@@ -46,8 +47,11 @@ function AuraDance({ id, playing, reduced }) {
   const { t } = useTheme();
   // These loops are gated on `playing`, so with the screen off they'd dance
   // unseen for the whole listen — one of the reports/10 leak drivers. Settle
-  // whenever the app isn't visible, same as a pause.
+  // whenever the app isn't visible, same as a pause — and whenever Home is
+  // parked behind another tab, where the dance would invisibly keep the
+  // window (and the glass captures) hot every frame.
   const active = useAppActive();
+  const focused = useNavFocused();
   const w0 = useSharedValue(0); // outer ring sway, -1..1
   const w1 = useSharedValue(0); // inner ring sway, offset phase
   const beat = useSharedValue(0); // core pulse, 0..1
@@ -55,7 +59,7 @@ function AuraDance({ id, playing, reduced }) {
 
   useEffect(() => {
     const waves = [w0, w1];
-    if (reduced || !playing || !active) {
+    if (reduced || !playing || !active || !focused) {
       // Settle to the resting mark — the logo, holding its breath.
       [...waves, beat].forEach(v => {
         cancelAnimation(v);
@@ -99,7 +103,7 @@ function AuraDance({ id, playing, reduced }) {
       -1,
       true,
     );
-  }, [lanes, playing, reduced, active, w0, w1, beat]);
+  }, [lanes, playing, reduced, active, focused, w0, w1, beat]);
 
   const a0 = 0.05 + lanes[0] * 0.05;
   const a1 = 0.08 + lanes[1] * 0.06;

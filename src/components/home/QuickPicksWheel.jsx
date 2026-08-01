@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withDecay,
@@ -17,6 +18,8 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { TrackArt } from '../TrackRow';
+import { useAppActive } from '../../hooks/useAppActive';
+import { useNavFocused } from '../../hooks/useNavFocused';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts, label } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
@@ -115,11 +118,24 @@ export function QuickPicksWheel({ tracks, currentId, onPick }) {
   const hint = useSharedValue(1);
 
   useEffect(() => {
-    if (!reduced) {
-      breathe.value = withRepeat(withTiming(1.1, { duration: 1400 }), -1, true);
-    }
     hint.value = withDelay(HINT_MS, withTiming(0, { duration: 600 }));
-  }, [breathe, hint, reduced]);
+  }, [hint]);
+
+  // The hub breathes only while it can be seen: Home parked behind another
+  // tab (tabs keep screens mounted) or the app backgrounded would otherwise
+  // keep the window invalidating every frame — and every frame forces both
+  // glass views to re-capture the whole tree (the reports/10 class).
+  const active = useAppActive();
+  const focused = useNavFocused();
+  useEffect(() => {
+    if (!reduced && active && focused) {
+      breathe.value = withRepeat(withTiming(1.1, { duration: 1400 }), -1, true);
+      return () => cancelAnimation(breathe);
+    }
+    cancelAnimation(breathe);
+    breathe.value = withTiming(0.85, { duration: 200 });
+    return undefined;
+  }, [breathe, reduced, active, focused]);
 
   // Grab-and-turn: track the touch's polar angle around the ring center and
   // add each delta to the rotation; on release, coast with the tangential

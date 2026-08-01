@@ -321,8 +321,13 @@ function MetaGlide({ id, dir, delay = 0, reduced, children }) {
 // horizontal swipe it's teaching.
 function HintFloat({ reduced, children }) {
   const v = useSharedValue(0);
+  // appActive: sheet open + unlearned hints + screen locked mid-listen would
+  // otherwise bob invisibly all listen long (the reports/10 class).
+  const active = useAppActive();
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !active) {
+      cancelAnimation(v);
+      v.value = withTiming(0, { duration: 200 });
       return undefined;
     }
     v.value = withRepeat(
@@ -334,7 +339,7 @@ function HintFloat({ reduced, children }) {
       true,
     );
     return () => cancelAnimation(v);
-  }, [reduced, v]);
+  }, [reduced, active, v]);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: v.value }],
   }));
@@ -344,8 +349,11 @@ function HintFloat({ reduced, children }) {
 // A gentle upward bob for the "swipe up" queue hint.
 function HintFloatUp({ reduced, children }) {
   const v = useSharedValue(0);
+  const active = useAppActive();
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !active) {
+      cancelAnimation(v);
+      v.value = withTiming(0, { duration: 200 });
       return undefined;
     }
     v.value = withRepeat(
@@ -356,7 +364,7 @@ function HintFloatUp({ reduced, children }) {
       -1,
     );
     return () => cancelAnimation(v);
-  }, [reduced, v]);
+  }, [reduced, active, v]);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateY: v.value }, { rotate: '180deg' }],
   }));
