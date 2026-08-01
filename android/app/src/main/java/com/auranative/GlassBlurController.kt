@@ -134,6 +134,14 @@ class GlassBlurController(
     if (!blurEnabled || !initialized) {
       return
     }
+    // Hidden or not-yet-laid-out instances (each tab mounts its own top bar;
+    // inactive tabs are hidden) report garbage coordinates — the snapshot
+    // lands on the dark window background and the bar arrives BLACK on tab
+    // switch (owner report). Keep the last good frame instead; the view
+    // invalidates on becoming visible and the next pass captures for real.
+    if (!blurView.isShown || !blurView.isLaidOut) {
+      return
+    }
 
     val clear = frameClearDrawable
     if (clear == null) {

@@ -10,10 +10,14 @@ import { useEffect, useState } from 'react';
 // no single persistent bar node to morph in place across screens).
 let query = '';
 let open = false;
+// One-shot: an `instant` open presents the field with no morph animation —
+// tab-entering Search replays no theatre (owner report: the bar flashed
+// white mid-crossfade on every tab entry). The chip tap keeps the morph.
+let instant = false;
 const subs = new Set();
 
 function emit() {
-  const snap = { query, open };
+  const snap = { query, open, instant };
   subs.forEach(fn => fn(snap));
 }
 
@@ -29,10 +33,13 @@ export function setSearchQuery(v) {
 }
 
 // Idempotent — re-tapping the search chip while already open is a no-op,
-// same guard as the web's openSearch.
-export function openSearch() {
+// same guard as the web's openSearch. A chip-tap open that then lands on the
+// Search tab keeps its animated morph: the focus listener's instant open
+// no-ops against the already-open state.
+export function openSearch(opts) {
   if (open) return;
   open = true;
+  instant = !!opts?.instant;
   emit();
 }
 
@@ -42,14 +49,20 @@ export function closeSearch() {
   if (!open && query === '') return;
   open = false;
   query = '';
+  instant = false;
   emit();
 }
 
 export function useSearchQuery() {
-  const [snap, setSnap] = useState({ query, open });
+  const [snap, setSnap] = useState({ query, open, instant });
   useEffect(() => {
     subs.add(setSnap);
     return () => subs.delete(setSnap);
   }, []);
-  return { query: snap.query, open: snap.open, setQuery: setSearchQuery };
+  return {
+    query: snap.query,
+    open: snap.open,
+    instant: snap.instant,
+    setQuery: setSearchQuery,
+  };
 }

@@ -134,7 +134,7 @@ export const TopBar = forwardRef(function TopBar(
   // tapped from and the Search tab's own TopBar instance agree on one state;
   // the query itself rides the same bus so SearchScreen reads what's typed
   // here.
-  const { query, open: searching, setQuery } = useSearchQuery();
+  const { query, open: searching, instant, setQuery } = useSearchQuery();
   const searchInputRef = useRef(null);
   useImperativeHandle(ref, () => ({
     // SearchScreen calls this right before the player opens over an open
@@ -149,7 +149,14 @@ export const TopBar = forwardRef(function TopBar(
   const fieldScale = useSharedValue(0.78);
 
   useEffect(() => {
-    if (reduced) {
+    if (instant) {
+      // Tab-entry open: the field is simply THERE — no crossfade to replay
+      // (and no half-ghost frame) on a plain tab switch.
+      barOpacity.value = searching ? 0 : 1;
+      fieldOpacity.value = searching ? 1 : 0;
+      barScale.value = 1;
+      fieldScale.value = 1;
+    } else if (reduced) {
       barOpacity.value = withTiming(searching ? 0 : 1, { duration: 160 });
       fieldOpacity.value = withTiming(searching ? 1 : 0, { duration: 160 });
       barScale.value = 1;
@@ -167,21 +174,24 @@ export const TopBar = forwardRef(function TopBar(
       fieldOpacity.value = withTiming(0, { duration: 200, easing: EASE.settle });
       fieldScale.value = withTiming(0.78, { duration: 380, easing: EASE.liquid });
     }
-  }, [searching, reduced, barOpacity, barScale, fieldOpacity, fieldScale]);
+  }, [searching, instant, reduced, barOpacity, barScale, fieldOpacity, fieldScale]);
 
   // Autofocus on open (120ms — a same-tick focus can miss right after a tab
   // switch on some ROMs); dismiss on close. Skipped when this instance isn't
   // the focused screen — Home/Talk/You keep their own mounted TopBar once
   // visited, and only the one actually on screen should grab the keyboard.
+  // Instant (tab-entry) opens don't grab it either: the keyboard rises when
+  // the person taps the field, not because they switched tabs.
   useEffect(() => {
     if (!searching) {
       Keyboard.dismiss();
       return undefined;
     }
+    if (instant) return undefined;
     if (!(navigation?.isFocused?.() ?? true)) return undefined;
     const id = setTimeout(() => searchInputRef.current?.focus(), 120);
     return () => clearTimeout(id);
-  }, [searching, navigation]);
+  }, [searching, instant, navigation]);
 
   const onSearchPress = () => {
     openSearch();

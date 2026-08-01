@@ -34,6 +34,16 @@ class GlassBlurView(context: Context) : BlurView(context) {
   var pendingRadius = GlassViewManager.DEFAULT_RADIUS
   var pendingFrozen = false
   var controllerReady = false
+
+  // Arriving on screen (tab switch): force a draw pass so the armed preDraw
+  // captures a fresh snapshot now that coordinates are real — the controller
+  // deliberately skips captures while hidden.
+  override fun onVisibilityAggregated(isVisible: Boolean) {
+    super.onVisibilityAggregated(isVisible)
+    if (isVisible) {
+      invalidate()
+    }
+  }
 }
 
 class GlassViewManager : SimpleViewManager<GlassBlurView>() {

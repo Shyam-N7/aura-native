@@ -130,7 +130,12 @@ export default function SearchScreen({ navigation }) {
     if (!navigation?.addListener) {
       return undefined;
     }
-    const offFocus = navigation.addListener('focus', openSearch);
+    // Tab entry presents the field settled — the morph is the chip tap's
+    // theatre; replayed on every tab switch it read as a white flash with a
+    // ghosted double-exposure mid-frame (owner report).
+    const offFocus = navigation.addListener('focus', () =>
+      openSearch({ instant: true }),
+    );
     const offBlur = navigation.addListener('blur', closeSearch);
     return () => {
       offFocus();
