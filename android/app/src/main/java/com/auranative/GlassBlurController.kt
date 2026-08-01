@@ -219,6 +219,14 @@ class GlassBlurController(
       }
     }
 
+    // A mid-mutation child can UNBALANCE the canvas either way: eat our save
+    // (plain restore() then threw Underflow OUTSIDE the shield — field fatal
+    // 2026-08-02 01:47) or leave extra saves, silently drifting the matrix so
+    // every later capture painted off-bitmap and the pill promoted pure clear
+    // coat while counting as success (the owner's flat top bar). Bracketing
+    // with restoreToCount self-cleans drift every frame; the restore itself
+    // is shielded so the cleanup can never become the crash.
+    val base = stagingCanvas.saveCount
     stagingCanvas.save()
     setupInternalCanvasMatrix()
     val ok = try {
@@ -230,7 +238,11 @@ class GlassBlurController(
       Log.w(TAG, "snapshot skipped: ${e.javaClass.simpleName}")
       false
     } finally {
-      stagingCanvas.restore()
+      try {
+        stagingCanvas.restoreToCount(base)
+      } catch (e: IllegalStateException) {
+        Log.w(TAG, "restore skipped: canvas unbalanced by hierarchy draw")
+      }
     }
     if (!ok) {
       consecutiveFailures++
