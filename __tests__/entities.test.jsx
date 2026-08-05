@@ -135,6 +135,46 @@ test('album: movie eyebrow, first artist only, rows play the sequence', async ()
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
+// This screen mapped its whole tracklist into a plain ScrollView, mounting a
+// TrackArt image per row with no cap from the server, while its three sibling
+// detail screens all render through a windowed list. A long soundtrack paid for
+// every row up front.
+test('album: a long tracklist mounts windowed, not all at once', async () => {
+  const many = Array.from({ length: 60 }, (_, i) => ({
+    ...TRACK,
+    id: `t${i}`,
+    title: `Song ${i}`,
+  }));
+  getAlbum.mockResolvedValue({
+    id: 'al2',
+    name: 'Compilation',
+    isMovie: false,
+    artist: 'A',
+    tracks: many,
+  });
+
+  const tree = await render(
+    <AlbumScreen
+      route={{ params: { id: 'al2' } }}
+      navigation={{ goBack: jest.fn() }}
+    />,
+  );
+
+  // Rows carry an accessibilityLabel of `play <title>`; count how many exist.
+  const mounted = many.filter(
+    tk => tree.root.findAllByProps({ accessibilityLabel: `play ${tk.title}` })
+      .length > 0,
+  ).length;
+
+  // The header still renders from the full set...
+  expect(texts(tree.toJSON())).toContain('60 tracks');
+  // ...but the rows are windowed. Pre-fix this was all 60.
+  expect(mounted).toBeGreaterThan(0);
+  expect(mounted).toBeLessThan(many.length);
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
 test('language hub: shelves render, tiles pick live or open playlists', async () => {
   getDiscoverHome.mockResolvedValue({
     trending: [TRACK],

@@ -72,9 +72,10 @@ function persistUser(user) {
     return;
   }
   storage.setItem(USER_KEY, JSON.stringify(user));
-  if (user.hasOnboarded !== undefined) {
-    storage.setItem('aura.hasOnboarded', user.hasOnboarded ? '1' : '');
-  }
+  // No 'aura.hasOnboarded' mirror. It was written here and by markOnboarded,
+  // cleared on sign-out, and read by NOTHING — hasOnboarded() below reads
+  // getUser()?.hasOnboarded, i.e. the authUser blob written on the line above,
+  // so the flag was pure write amplification pretending to be a cache.
   if (user.seedArtists) {
     storage.setItem('aura.seedArtists', JSON.stringify(user.seedArtists));
   }
@@ -100,7 +101,6 @@ export function clearSession() {
   [
     TOKEN_KEY,
     USER_KEY,
-    'aura.hasOnboarded',
     'aura.seedArtists',
     'aura.seedLanguages',
     'aura.seedMood',

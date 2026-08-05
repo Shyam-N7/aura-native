@@ -135,6 +135,11 @@ let unavailableReason = null;
 let boostMode = 'none'; // 'limiter' (DynamicsProcessing) | 'plain' | 'none'
 let output = 'speaker';
 let attached = false;
+// WHICH session `attached` refers to. Held so a foreground can tell "still the
+// same player" from "the service rebuilt it underneath us" — attached alone
+// cannot, and every recovery path is gated on !attached, so a stale true would
+// leave the panel switched on over audio nothing is processing.
+let attachedSession = 0;
 const subs = new Set();
 
 function emit() {
@@ -216,6 +221,7 @@ function reasonFor(e) {
 // enable, or control-granted event re-attaches and clears this.
 function lostControl(reason) {
   attached = false;
+  attachedSession = 0;
   available = false;
   unavailableReason = reason;
   crumb('eq', 'lost', { reason });
@@ -241,13 +247,21 @@ async function attachToSession() {
   try {
     session = await player.getAudioSessionId();
   } catch {
-    return false; // player isn't up yet — nothing to confess, just not now
+    // The player isn't up yet — not a failure, just not now. Breadcrumbed
+    // because the SILENCE here is what made the cold-start hole invisible: on
+    // a launch with the EQ already on, this rejects (the service has not bound
+    // yet), attached stays false, and nothing retries until the user toggles
+    // something. notePlayerReady() is the retry; this is how we see it.
+    crumb('eq', 'attach-skip', { reason: 'player-not-ready' });
+    return false;
   }
   if (!session) {
+    crumb('eq', 'attach-skip', { reason: 'no-session' });
     return false; // no real session — stay off, never touch session 0
   }
   try {
     attached = await native.attach(session);
+    attachedSession = attached ? session : 0;
     crumb('eq', 'attach', { session, ok: attached });
     return attached;
   } catch (e) {
@@ -404,12 +418,57 @@ export async function initEqualizer() {
     }
     if (state.enabled && !attached) {
       await applyAll();
+      return;
+    }
+    // Attached — but to WHICH session? The service can rebuild the player while
+    // we're away, and the new one carries a new session id, leaving this effect
+    // bound to a dead one with the switch still reading on. Only a definite
+    // answer that definitely differs counts: a rejection or a 0 means "don't
+    // know", and tearing down a working effect on "don't know" would be worse
+    // than the bug. Re-attaching is not free (it rebuilds Equalizer, BassBoost
+    // and the limiter), so this must never fire speculatively.
+    if (state.enabled && attached && player?.getAudioSessionId) {
+      try {
+        const live = await player.getAudioSessionId();
+        if (live && live !== attachedSession) {
+          crumb('eq', 'session-moved', { from: attachedSession, to: live });
+          attached = false;
+          await applyAll();
+        }
+      } catch {
+        // no answer — leave the working effect exactly as it is
+      }
     }
   });
   if (deviceEq) {
     await settle();
   }
   emit();
+}
+
+/**
+ * The player just finished setting up, so an audio session now exists.
+ *
+ * initEqualizer runs from the app shell, which is well before the playback
+ * service has bound — so on a launch with the EQ already ON, its attach asks
+ * for a session id, gets `player_not_initialized`, and gives up. Nothing
+ * retried: the AppState handler needs a foreground TRANSITION (a cold start is
+ * not one), the route callback early-returns when the route hasn't changed, the
+ * control-granted event cannot fire when no effect exists, and the panel only
+ * subscribes on mount. The switch read ON with live faders over completely
+ * unprocessed audio, for the whole first session.
+ *
+ * Called from engine.setupPlayer, deliberately un-awaited: a device that
+ * refuses audio effects must never delay or fail player setup.
+ */
+export async function notePlayerReady() {
+  // Cheapest guard first — this runs inside the playback engine's boot, and on
+  // a device with no equalizer module (and in every playback test) it must cost
+  // nothing and touch nothing.
+  if (!native || !deviceEq || !state.enabled || attached) {
+    return;
+  }
+  await applyAll();
 }
 
 // ── actions ──────────────────────────────────────────────────────────────
@@ -425,6 +484,7 @@ export async function setEnabled(on) {
       // nothing to recover — the effect is going away either way
     }
     attached = false;
+    attachedSession = 0;
     return;
   }
   await applyAll();

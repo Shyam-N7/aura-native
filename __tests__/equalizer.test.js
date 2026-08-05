@@ -317,3 +317,89 @@ describe('session 0 is not the last word on availability', () => {
     expect(store.getEqualizer().available).toBe(true);
   });
 });
+
+// The attach is asked for at app-shell time, long before the playback service
+// binds. On a launch with the EQ already ON, getAudioSessionId rejects with
+// player_not_initialized, attach gives up, and NOTHING retried: the AppState
+// handler needs a foreground transition (a cold start is not one), the route
+// callback early-returns when the route is unchanged, the control-granted event
+// cannot fire when no effect exists, and the panel only subscribes on mount. The
+// switch read ON with live faders over completely unprocessed audio, all session.
+describe('the attach survives losing the race with the playback service', () => {
+  const notReady = () =>
+    Object.assign(new Error('player_not_initialized'), {
+      code: 'player_not_initialized',
+    });
+
+  it('re-attaches once the player reports a session', async () => {
+    const { store, native, RN } = loadStore();
+    // Launch: the service has not bound, so the id read throws.
+    RN.NativeModules.TrackPlayerModule.getAudioSessionId.mockImplementation(
+      async () => {
+        throw notReady();
+      },
+    );
+
+    await store.initEqualizer();
+    await store.setEnabled(true);
+    expect(native.attach).not.toHaveBeenCalled(); // nothing to attach to yet
+
+    // engine.setupPlayer finishes: an audio session now exists.
+    RN.NativeModules.TrackPlayerModule.getAudioSessionId.mockImplementation(
+      async () => 77,
+    );
+    await store.notePlayerReady();
+
+    expect(native.attach).toHaveBeenCalledWith(77);
+  });
+
+  it('does nothing when the switch is off, or when already attached', async () => {
+    const { store, native } = loadStore();
+    await store.initEqualizer();
+
+    // Off: the user has not asked for any of this.
+    await store.notePlayerReady();
+    expect(native.attach).not.toHaveBeenCalled();
+
+    // On and attached: re-attaching rebuilds every effect, so it must not fire
+    // speculatively.
+    await store.setEnabled(true);
+    expect(native.attach).toHaveBeenCalledTimes(1);
+    await store.notePlayerReady();
+    expect(native.attach).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-attaches when the player comes back on a different session', async () => {
+    const { store, native, RN } = loadStore({ session: 77 });
+    await store.initEqualizer();
+    await store.setEnabled(true);
+    expect(native.attach).toHaveBeenCalledWith(77);
+
+    // The service rebuilt the player while we were away.
+    RN.NativeModules.TrackPlayerModule.getAudioSessionId.mockImplementation(
+      async () => 88,
+    );
+    const onAppState = RN.AppState.addEventListener.mock.calls.at(-1)[1];
+    await onAppState('active');
+
+    expect(native.attach).toHaveBeenCalledWith(88);
+  });
+
+  it('leaves a working effect alone when the session id is unknown', async () => {
+    const { store, native, RN } = loadStore({ session: 77 });
+    await store.initEqualizer();
+    await store.setEnabled(true);
+    expect(native.attach).toHaveBeenCalledTimes(1);
+
+    // "Don't know" must never cost a working effect its attachment.
+    RN.NativeModules.TrackPlayerModule.getAudioSessionId.mockImplementation(
+      async () => {
+        throw notReady();
+      },
+    );
+    const onAppState = RN.AppState.addEventListener.mock.calls.at(-1)[1];
+    await onAppState('active');
+
+    expect(native.attach).toHaveBeenCalledTimes(1);
+  });
+});
