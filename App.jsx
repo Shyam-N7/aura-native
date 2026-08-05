@@ -34,7 +34,14 @@ import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
 import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
-import { getUser, subscribeAuth, showSensing, hasOnboarded, fetchMe } from './src/lib/auth';
+import {
+  API_BASE,
+  getUser,
+  subscribeAuth,
+  showSensing,
+  hasOnboarded,
+  fetchMe,
+} from './src/lib/auth';
 import { initPush, setPushLinkHandler } from './src/lib/push';
 import { freezeGlass } from './src/lib/navFreeze';
 import { initEqualizer } from './src/lib/equalizer';
@@ -55,6 +62,25 @@ import './src/api/impressions';
 // playlist invite, /p/PUBLIC_ID opens a public playlist read-only. Tokens are
 // remembered per session so a re-fired intent can't double-accept.
 const handledTokens = new Set();
+
+// Only OUR links are actionable. Both hosts the manifest declares an intent
+// filter for — www (autoVerify) and the apex (chooser) — derived from the one
+// origin the app talks to rather than restated.
+const LINK_HOSTS = new Set([
+  new URL(API_BASE).hostname,
+  new URL(API_BASE).hostname.replace(/^www\./, ''),
+]);
+
+// `new URL` parses anything, so pathname/searchParams alone say nothing about
+// WHO sent the link — and both feeds into handleLink are untrusted. MainActivity
+// is exported and singleTask, so any installed app can send an explicit-component
+// ACTION_VIEW carrying an arbitrary URI and bypass the manifest's host filter
+// entirely; and push data.link is free text typed in the admin console. The
+// branch that actually costs something is `join`, which POSTs an invite
+// acceptance under the signed-in user — a link from anywhere could enrol them
+// in a stranger's playlist. Scheme is pinned too: http:// and app:// forms of
+// our own host must not count.
+const isOwnLink = u => u.protocol === 'https:' && LINK_HOSTS.has(u.hostname);
 
 // Post-auth gate order (web parity): a signed-in user sees the ~6s sensing
 // welcome at most once a day, then the first-run onboarding if they haven't set
@@ -152,6 +178,9 @@ function Shell() {
         // where a throw kills the app. A malformed link is dropped instead.
         params = parsed.searchParams;
       } catch {
+        return;
+      }
+      if (!isOwnLink(parsed)) {
         return;
       }
       const join = params.get('join');

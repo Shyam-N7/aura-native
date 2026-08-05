@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, {
   Easing,
   runOnJS,
@@ -16,13 +16,46 @@ import { useAppActive } from '../../hooks/useAppActive';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedLine = Animated.createAnimatedComponent(Line);
 
 const SAMPLES = 80;
 // The wave is inset from the canvas edges so the thumb (r9 halo) and the
 // round line caps draw whole at 0% and 100% instead of getting chopped by
 // the svg bounds (field report: the start looked squared-off).
 const PAD = 10;
+
+// The one sampler every stroke in this file draws through: the track, the
+// played stretch and the loaded-ahead stretch all trace the SAME sine, so they
+// must agree to the pixel or they visibly separate.
+//
+// `from`/`to` are sample indices and may be fractional, so a stretch can start
+// and stop mid-sample (the played one ends exactly under the thumb; the
+// buffered one starts exactly where the played one stopped).
+export function ribbonPath(from, to, phase, span, height, amp, freq) {
+  'worklet';
+  if (span <= 0 || to < from) {
+    return 'M 0 0';
+  }
+  const pts = [];
+  const at = i => {
+    const x = PAD + (i / SAMPLES) * span;
+    const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase;
+    const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
+    const y = height / 2 + Math.sin(tt) * amp * height * env;
+    return `${pts.length === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  };
+  if (from > Math.floor(from)) {
+    pts.push(at(from));
+  }
+  for (let i = Math.ceil(from); i <= to; i++) {
+    pts.push(at(i));
+  }
+  // Fractional tail, or a zero-length stretch — the latter still emits its
+  // second point so the round cap draws a dot rather than nothing.
+  if (to > Math.floor(to) || pts.length < 2) {
+    pts.push(at(to));
+  }
+  return pts.join(' ');
+}
 
 // Direct port of the web ProgressRibbon: a per-track seeded sine ribbon whose
 // phase drifts at ~30Hz while playing; the accent stroke is clipped to
@@ -33,12 +66,17 @@ const PAD = 10;
 // 60fps JS storm.
 export function ProgressRibbon({
   progress = 0,
-  // How far ahead the stream has actually loaded, 0..1. Drawn as a FLAT line,
-  // deliberately not as a second sine path: the wave builders read `phase`, so
-  // a matching ribbon would rebuild ~80 points every sampler tick and double
-  // the heaviest per-frame worker in the app. A straight rule is both free
-  // (two animated numbers, no string building) and the shape people already
-  // read as "loaded up to here" from every video player.
+  // How far ahead the stream has actually loaded, 0..1. Drawn ON the wave,
+  // as a third stroke through the same sampler.
+  //
+  // This used to be a flat rule on the centreline, on the theory that the
+  // centreline is where the wave crosses so it would read as part of the
+  // ribbon. It doesn't: it cuts straight across the crests and reads as a
+  // separate bar laid over the ribbon. The cost of doing it properly is much
+  // smaller than the old comment feared, because this stroke only spans
+  // playhead → buffered head — everything behind the playhead is already
+  // painted over by the accent stroke, so there is nothing to draw there.
+  // Typical extra: a handful of points per sampler tick, not a second ~80.
   buffered = 0,
   playing,
   seed = 'x',
@@ -175,18 +213,7 @@ export function ProgressRibbon({
 
   const wavePath = useDerivedValue(() => {
     'worklet';
-    if (span <= 0) {
-      return 'M 0 0';
-    }
-    const pts = [];
-    for (let i = 0; i <= SAMPLES; i++) {
-      const x = PAD + (i / SAMPLES) * span;
-      const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
-      const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
-      const y = height / 2 + Math.sin(tt) * amp * height * env;
-      pts.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`);
-    }
-    return pts.join(' ');
+    return ribbonPath(0, SAMPLES, phase.value, span, height, amp, freq);
   });
 
   // The completed stretch is its own live path up to the progress point
@@ -195,36 +222,27 @@ export function ProgressRibbon({
   // on this rn-svg/Fabric combo — the fill was invisible in the field.
   const donePath = useDerivedValue(() => {
     'worklet';
-    if (span <= 0) {
-      return 'M 0 0';
-    }
     // A live drag tracks the finger at full rate; playback fills at the
     // sampler's 30Hz (sub-pixel steps — indistinguishable).
     const end = (drag.value >= 0 ? drag.value : fill.value) * SAMPLES;
-    const pts = [];
-    for (let i = 0; i <= end; i++) {
-      const x = PAD + (i / SAMPLES) * span;
-      const tt = (i / SAMPLES) * Math.PI * 2 * freq + phase.value;
-      const env = Math.sin((i / SAMPLES) * Math.PI) * 0.7 + 0.3;
-      const y = height / 2 + Math.sin(tt) * amp * height * env;
-      pts.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`);
-    }
-    if (end > Math.floor(end) || end === 0) {
-      const x = PAD + (end / SAMPLES) * span;
-      const tt = (end / SAMPLES) * Math.PI * 2 * freq + phase.value;
-      const env = Math.sin((end / SAMPLES) * Math.PI) * 0.7 + 0.3;
-      const y = height / 2 + Math.sin(tt) * amp * height * env;
-      pts.push(`${pts.length === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`);
-    }
-    return pts.join(' ');
+    return ribbonPath(0, end, phase.value, span, height, amp, freq);
+  });
+
+  // Loaded-ahead stretch: playhead → buffered head, on the same curve. Starts
+  // at the playhead rather than at 0 because the accent stroke already covers
+  // everything behind it — drawing that part would be invisible work. When the
+  // buffer falls behind the playhead (a stall) `to < from` and this collapses
+  // to an empty path, which is the honest picture.
+  const bufferedPath = useDerivedValue(() => {
+    'worklet';
+    const start = (drag.value >= 0 ? drag.value : fill.value) * SAMPLES;
+    const end = Math.min(1, Math.max(0, bufferedFill.value)) * SAMPLES;
+    return ribbonPath(start, end, phase.value, span, height, amp, freq);
   });
 
   const pathProps = useAnimatedProps(() => ({ d: wavePath.value }));
   const doneProps = useAnimatedProps(() => ({ d: donePath.value }));
-  // Two numbers per frame, no path string — the whole point of the flat rule.
-  const bufferedProps = useAnimatedProps(() => ({
-    x2: PAD + span * Math.min(1, Math.max(0, bufferedFill.value)),
-  }));
+  const bufferedProps = useAnimatedProps(() => ({ d: bufferedPath.value }));
   const thumbProps = useAnimatedProps(() => {
     'worklet';
     const p = drag.value >= 0 ? drag.value : fill.value;
@@ -298,19 +316,18 @@ export function ProgressRibbon({
               fill="none"
               strokeLinecap="round"
             />
-            {/* Loaded-ahead rule, under the played stroke so the accent
-                always wins where they overlap. Sits on the centreline, which
-                is where the wave crosses, so it reads as part of the ribbon
-                rather than a bar bolted underneath it. */}
+            {/* Loaded-ahead stretch, riding the wave. Drawn before the played
+                stroke so the accent always wins where they overlap, and a
+                touch heavier/brighter than the 0.1 track so "loaded" is
+                legible against "not loaded" without competing with the
+                accent. */}
             {buffered > 0 && (
-              <AnimatedLine
+              <AnimatedPath
                 animatedProps={bufferedProps}
-                x1={PAD}
-                y1={height / 2}
-                y2={height / 2}
                 stroke={dim}
                 strokeOpacity={0.28}
                 strokeWidth={1.8}
+                fill="none"
                 strokeLinecap="round"
               />
             )}

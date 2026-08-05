@@ -119,6 +119,62 @@ test('a failed launch-intent lookup is not left as an unhandled rejection', asyn
   expect(seen).not.toContain(boom);
 });
 
+// handleLink acted on pathname/searchParams without ever asking WHO sent the
+// link. Both feeds are untrusted: MainActivity is exported + singleTask, so any
+// installed app can send an explicit-component ACTION_VIEW with an arbitrary
+// URI and bypass the manifest's host filter; and push data.link is free text.
+// The expensive branch is `join`, which POSTs an invite acceptance under the
+// signed-in user — a link from anywhere could enrol them in a stranger's
+// playlist.
+test('a link from another origin is ignored', async () => {
+  await mount();
+  const onUrl = urlListener();
+
+  await ReactTestRenderer.act(async () => {
+    onUrl({ url: 'https://evil.example.com/playlists?join=stolen-token' });
+    onUrl({ url: 'https://evil.example.com/t/some-track' });
+    await new Promise(r => setTimeout(r, 0));
+  });
+
+  const urls = global.fetch.mock.calls.map(c => String(c[0]));
+  expect(urls.some(u => u.includes('/invite/'))).toBe(false);
+  expect(urls.some(u => u.includes('/api/catalog/track/'))).toBe(false);
+});
+
+// A lookalike host must not pass by prefix/suffix accident.
+test('a host that merely contains ours is ignored', async () => {
+  await mount();
+  const onUrl = urlListener();
+
+  await ReactTestRenderer.act(async () => {
+    onUrl({ url: 'https://aurafm.live.evil.com/t/nope' });
+    onUrl({ url: 'https://notaurafm.live/t/nope2' });
+    await new Promise(r => setTimeout(r, 0));
+  });
+
+  const urls = global.fetch.mock.calls.map(c => String(c[0]));
+  expect(urls.some(u => u.includes('/api/catalog/track/'))).toBe(false);
+});
+
+// http:// on our own host is still not our link — the manifest only declares
+// https, and an attacker who can force plaintext should not get the join path.
+test('a plaintext link to our own host is ignored', async () => {
+  await mount();
+  const onUrl = urlListener();
+
+  await ReactTestRenderer.act(async () => {
+    // A token this file has not used elsewhere: handledTokens is module-level
+    // and de-dupes for the life of the process, so a repeat would be skipped
+    // for the wrong reason and the test would pass without the guard.
+    onUrl({ url: 'http://aurafm.live/playlists?join=plaintext-token' });
+    await new Promise(r => setTimeout(r, 0));
+  });
+
+  expect(
+    global.fetch.mock.calls.some(c => String(c[0]).includes('/invite/')),
+  ).toBe(false);
+});
+
 test('a good song link still routes after a malformed one', async () => {
   await mount();
   const onUrl = urlListener();

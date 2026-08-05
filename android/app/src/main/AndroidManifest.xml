@@ -21,13 +21,15 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
-      <!-- Lets shell profilers (heapprofd/Perfetto) attach to RELEASE builds —
-           Google-sanctioned for production; exposes profiling only to adb
-           shell, nothing to other apps. Added to name the native-heap leak:
-           ~33MB/min during screen-off playback on ColorOS 14, category-fenced
-           in reports/10-leak-and-kill.md, allocator unknown until a heapprofd
-           capture can read malloc stacks from a real device. -->
-      <profileable android:shell="true" tools:targetApi="29" />
+      <!-- `<profileable android:shell="true">` used to live HERE, so it shipped
+           in release. It was added to name the native-heap leak (~33MB/min
+           during screen-off playback on ColorOS 14, reports/10-leak-and-kill.md)
+           and that hunt is finished. It is Google-sanctioned for production and
+           exposes profiling only to adb shell rather than to other apps — but it
+           does let anyone with an ADB-authorised host capture the shipping app's
+           native heap, and the bearer JWT lives in memory. It now lives in
+           src/debug/AndroidManifest.xml, so profiling still works on every debug
+           build and the release APK stops offering it. -->
       <!-- FCM notification branding: the white aura mark as the status-bar
            icon (the launcher's monochrome layer) and the accent as its tint,
            for every push the OS renders on our behalf. -->
