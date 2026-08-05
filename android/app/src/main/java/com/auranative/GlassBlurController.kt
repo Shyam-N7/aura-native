@@ -162,7 +162,21 @@ class GlassBlurController(
     setBlurAutoUpdate(desiredAutoUpdate)
     val sizeScaler = SizeScaler(blurAlgorithm.scaleFactor())
     if (sizeScaler.isZeroSized(measuredWidth, measuredHeight)) {
-      // Will be initialized later when the View reports a size change.
+      // Will be initialized later when the View reports a size change — or,
+      // if that never comes, by the heartbeat's revive branch.
+      //
+      // That branch is gated on !initialized, so a controller that had ALREADY
+      // initialized once must be knocked back down here. Leaving the flag true
+      // strands it: WILL_NOT_DRAW is set, draw() contributes nothing, and every
+      // route back is closed — onSizeChanged doesn't fire when the size returns
+      // to its previous value (the case this comment's first line assumes), the
+      // revive branch is skipped because initialized is true, and the stale-
+      // snapshot branch only re-arms captures and invalidates, none of which
+      // clears WILL_NOT_DRAW. It refreshes bitmaps forever into a view that
+      // never draws them. Owner-visible as the transparent top bar after a
+      // detail-screen round-trip — the same symptom as the armed-state
+      // stranding above, reached by a second, independent path.
+      initialized = false
       blurView.setWillNotDraw(true)
       return
     }
