@@ -103,6 +103,24 @@ class GlassBlurController(
   private var lastSuccessUptime = 0L
   private var lastCaptureUptime = 0L
 
+  // When the platform last actually PAINTED us. A capture succeeding proves
+  // the snapshot was taken; only this proves anything reached the screen. The
+  // two diverge in both directions — WILL_NOT_DRAW or a parent that skips us
+  // gives captures with no paint, and a blank promote gives paint with no
+  // content — so the heartbeat watches the older of the pair.
+  private var lastDrawUptime = 0L
+  private var lastPaintLogUptime = 0L
+  private var lastReviveUptime = 0L
+
+  // The last value handed to setBlurAutoUpdate. The library writes that method
+  // directly on attach/detach, so this is the only way to know from a log
+  // whether the preDraw listener is actually registered right now — the single
+  // most useful fact that was missing when diagnosing the transparent bar.
+  private var armed = false
+
+  // When desiredAutoUpdate last went false, for the leaked-hold warning.
+  private var desiredFalseSince = 0L
+
   // Immortal: posted at construction, always re-posts, only destroy() stops
   // it. A no-op tick every 2s is free; what it buys is that NO interleaving
   // of library lifecycle, rns re-parenting, or freeze-timer ordering can
@@ -144,40 +162,111 @@ class GlassBlurController(
       blurView.measuredWidth > 0 &&
       blurView.measuredHeight > 0
 
+  /**
+   * One-line dump of everything that decides whether this view paints.
+   *
+   * Every field here was needed at least once to tell the wedges apart, and
+   * none of them was observable before. Edge-triggered only — attach/detach,
+   * a heartbeat branch, a re-init — never per frame.
+   */
+  private fun state(): String {
+    val now = SystemClock.uptimeMillis()
+    return "[init=$initialized desired=$desiredAutoUpdate armed=$armed " +
+      "enabled=$blurEnabled dead=$dead willNotDraw=${blurView.willNotDraw()} " +
+      "w=${blurView.width} h=${blurView.height} " +
+      "mw=${blurView.measuredWidth} mh=${blurView.measuredHeight} " +
+      "bmp=${if (initialized) "${internalBitmap.width}x${internalBitmap.height}" else "none"} " +
+      "rect=${blurView.getGlobalVisibleRect(visibleRect)}$visibleRect " +
+      "focus=${blurView.hasWindowFocus()} attached=${blurView.isAttachedToWindow} " +
+      "sinceCapture=${now - lastSuccessUptime} sinceDraw=${now - lastDrawUptime}]"
+  }
+
   private val heartbeat = object : Runnable {
     override fun run() {
       if (dead) {
         return
       }
       if (desiredAutoUpdate) {
-        if (!initialized && hasUsableSize()) {
+        // A HEAL MUST NOT BE GATED ON THE SYMPTOM.
+        //
+        // Both branches below used to require hasUsableSize(), which is one of
+        // the very things that goes wrong — so the states that most needed
+        // healing were exactly the ones the watchdog refused to touch. Two
+        // survived every fix: a controller whose width/height read 0 while its
+        // MEASURED pair does not (init() succeeds off the measured pair, so it
+        // looks initialized, but the capture guard and draw()'s scale both
+        // collapse), and a controller capturing happily into a bitmap nothing
+        // ever paints. Attachment is the only precondition a heal needs;
+        // init() and updateBlur() already bail safely on their own.
+        //
+        // The two checks are also independent now. As an else-if, an
+        // initialized controller could never reach the re-init path, which is
+        // the only thing that re-reads geometry.
+        val attached = blurView.isAttachedToWindow
+        val nowMs = SystemClock.uptimeMillis()
+        if (
+          attached &&
+          !initialized &&
+          // Retry AT ONCE when the size looks usable — that is the healing
+          // case. When it does not, still retry, just slowly: a size test can
+          // gate the CADENCE but must never gate the attempt away entirely,
+          // which is precisely what left these states stranded. init() is
+          // cheap and judges the geometry itself; the backoff only exists so a
+          // legitimately 0x0 view cannot churn the preDraw listener and flood
+          // logcat at 0.5Hz forever.
+          (hasUsableSize() || nowMs - lastReviveUptime > REVIVE_RETRY_MS)
+        ) {
+          lastReviveUptime = nowMs
           // init() during a transient zero-size layout leaves
           // initialized=false with nothing scheduled to retry —
           // onSizeChanged may never fire again (the size returns to its
           // old value), and draw() contributes nothing (the transparent
-          // pill). Re-init now that the view has a real size.
-          Log.w(TAG, "heartbeat: reviving uninitialized controller")
+          // pill). Re-init and let init() judge the size itself.
+          Log.w(TAG, "heartbeat: reviving uninitialized controller ${state()}")
           updateBlurViewSize()
           blurView.invalidate()
-        } else if (
+        }
+        // Stale means "nothing has reached the SCREEN recently", not "no
+        // capture succeeded recently". rootView.draw() not throwing was the
+        // old definition, and it is satisfied by a capture that promotes pure
+        // clear coat — or by one that lands perfectly in a bitmap the platform
+        // never asks us to paint. Both read to the user as a blank bar while
+        // the controller reports itself healthy. Taking the OLDER of the two
+        // stamps means either one going quiet is enough to act.
+        val quietSince = SystemClock.uptimeMillis() -
+          minOf(lastSuccessUptime, lastDrawUptime)
+        if (
+          attached &&
           initialized &&
           // Screen off / behind another window: no one can see the glass —
-          // don't burn snapshot work while parked. Clipped away: nothing to
-          // refresh, and forcing invalidates would churn at 0.5Hz forever.
-          // The wedges this heals (view VISIBLE, snapshot stale or capture
-          // loop disarmed) still pass both tests.
+          // don't burn snapshot work while parked.
           blurView.hasWindowFocus() &&
-          hasUsableSize() &&
           blurView.getGlobalVisibleRect(visibleRect) &&
-          SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
+          quietSince > HEARTBEAT_MS
         ) {
-          // force: a stale snapshot is exactly what the throttle must not
-          // block.
-          Log.w(TAG, "heartbeat: stale snapshot, re-arming capture loop")
+          // Re-read geometry FIRST: on the wedges above, re-arming and forcing
+          // a capture accomplish nothing until init() has run again. It is
+          // cheap — init() keeps its buffers when the scaled size is unchanged.
+          Log.w(TAG, "heartbeat: quiet ${quietSince}ms, re-initing ${state()}")
+          updateBlurViewSize()
           setBlurAutoUpdate(true)
           updateBlur(force = true)
           blurView.invalidate()
         }
+      } else if (
+        // Frozen is a legitimate state with no native recovery: the heartbeat
+        // is gated on intent, so a hold that is never released (lib/navFreeze
+        // keys them, and a screen that unmounts without releasing its own
+        // leaves one behind) pins the glass off for the rest of the process,
+        // silently. Nothing can heal that from here — but it should not be
+        // invisible.
+        blurView.isAttachedToWindow &&
+        blurView.hasWindowFocus() &&
+        blurView.getGlobalVisibleRect(visibleRect) &&
+        SystemClock.uptimeMillis() - desiredFalseSince > FROZEN_WARN_MS
+      ) {
+        desiredFalseSince = SystemClock.uptimeMillis() // re-arm the warning
+        Log.w(TAG, "heartbeat: visible but frozen for >${FROZEN_WARN_MS}ms — leaked hold? ${state()}")
       }
       blurView.postDelayed(this, HEARTBEAT_MS)
     }
@@ -368,8 +457,32 @@ class GlassBlurController(
       return false
     }
 
+    // Reached the screen. Stamped BEFORE the scale is computed so a zero-scale
+    // paint still counts as "the platform called us" — the heartbeat needs to
+    // distinguish "never asked to draw" from "asked, but drew nothing", and
+    // only the first is a lifecycle wedge.
+    val drawAt = SystemClock.uptimeMillis()
+    val paintGap = drawAt - lastDrawUptime
+    lastDrawUptime = drawAt
+
     val scaleFactorH = blurView.height.toFloat() / internalBitmap.height
     val scaleFactorW = blurView.width.toFloat() / internalBitmap.width
+
+    // Painting again after a visible gap, or painting at a degenerate scale,
+    // are the two things worth a line here — a run of ordinary frames is not.
+    // scale=0 is the direct signature of the width/height-vs-measured split.
+    //
+    // Rate-limited on its own clock, not just the gap: a wedged view paints at
+    // scale 0 on EVERY frame, and logging that per frame would bury the very
+    // trace it exists to produce.
+    val degenerate = scaleFactorW <= 0f || scaleFactorH <= 0f
+    if (
+      (paintGap > PAINT_LOG_GAP_MS || degenerate) &&
+      drawAt - lastPaintLogUptime > PAINT_LOG_GAP_MS
+    ) {
+      lastPaintLogUptime = drawAt
+      Log.i(TAG, "paint gap=${paintGap}ms scale=${scaleFactorW}x$scaleFactorH ${state()}")
+    }
 
     canvas.save()
     canvas.scale(scaleFactorW, scaleFactorH)
@@ -427,6 +540,7 @@ class GlassBlurController(
   // attach/detach lifecycle calls this directly — it must never carry
   // intent, and it no longer touches the heartbeat (which self-schedules).
   override fun setBlurAutoUpdate(enabled: Boolean): BlurViewFacade {
+    armed = enabled
     rootView.viewTreeObserver.removeOnPreDrawListener(drawListener)
     blurView.viewTreeObserver.removeOnPreDrawListener(drawListener)
     if (enabled) {
@@ -441,6 +555,10 @@ class GlassBlurController(
 
   // JS intent (the frozen prop) — the only writer of desiredAutoUpdate.
   fun setDesired(on: Boolean) {
+    if (!on && desiredAutoUpdate) {
+      // Start the clock for the leaked-hold warning in the heartbeat.
+      desiredFalseSince = SystemClock.uptimeMillis()
+    }
     desiredAutoUpdate = on
     setBlurAutoUpdate(on)
   }
@@ -449,6 +567,7 @@ class GlassBlurController(
   // hook: the library's own attach re-arm is conditional on a transient
   // isHardwareAccelerated() read and can leave the listeners stranded.
   fun resyncArm() {
+    Log.i(TAG, "resyncArm ${state()}")
     setBlurAutoUpdate(desiredAutoUpdate)
   }
 
@@ -457,6 +576,16 @@ class GlassBlurController(
     const val REINIT_AFTER_FAILURES = 3
     const val HEARTBEAT_MS = 2000L
     const val CAPTURE_MIN_INTERVAL_MS = 30L
+    // Only log a paint that follows a real gap — a run of ordinary frames is
+    // noise. Comfortably above one heartbeat so a healed wedge always logs.
+    const val PAINT_LOG_GAP_MS = 500L
+    // How long a VISIBLE view may stay frozen before we call it out. The
+    // 550ms nav-transition freeze must never trip this.
+    const val FROZEN_WARN_MS = 5000L
+    // Backoff for re-initing a view whose size still reads unusable. Slow
+    // enough not to churn the preDraw listener, fast enough that a view which
+    // becomes usable without a layout event is never stranded for long.
+    const val REVIVE_RETRY_MS = 10000L
   }
 
   override fun setOverlayColor(overlayColor: Int): BlurViewFacade {
