@@ -328,24 +328,46 @@ export function skipToIndex(i, positionSec) {
 // Swap one queue entry for its hydrated version (fresh streamUrl) without
 // touching the rest. Reloads in place when it is the active track.
 export async function replaceTrack(index, track) {
-  const [rQueue, active] = await Promise.all([
-    TrackPlayer.getQueue(),
-    TrackPlayer.getActiveTrackIndex(),
-  ]);
-  if (index < 0 || index >= rQueue.length) {
-    return;
-  }
-  const mapped = toRntpTrack(track);
-  if (active === index) {
-    const wasPlaying = await TrackPlayer.getPlayWhenReady();
-    await TrackPlayer.load(mapped);
-    if (wasPlaying) {
-      await TrackPlayer.play();
+  // Rides the queue lock like every other native-queue rewrite. It used to be
+  // the one that did not, which left it interleaving with the auto-quality
+  // sampler's remapQueue — a 5s timer outside the op chain that runs for
+  // everyone, since 'auto' is the default. Each removes against indices the
+  // other has already invalidated.
+  return withQueueLock(async () => {
+    const [rQueue, active] = await Promise.all([
+      TrackPlayer.getQueue(),
+      TrackPlayer.getActiveTrackIndex(),
+    ]);
+    if (index < 0 || index >= rQueue.length) {
+      return;
     }
-  } else {
-    await TrackPlayer.remove([index]);
-    await TrackPlayer.add([mapped], index);
-  }
+    // The slot must still hold the track we were asked to hydrate. Callers
+    // resolve `index` against the MODEL before enqueuing, and a bounds check
+    // alone cannot tell a valid index from one whose row has since moved —
+    // its siblings loadOntoActive and loadAndResume both re-check the id here
+    // and this was the outlier.
+    if (rQueue[index]?.id !== track.id) {
+      return;
+    }
+    const mapped = toRntpTrack(track);
+    if (active === index) {
+      const wasPlaying = await TrackPlayer.getPlayWhenReady();
+      // load() replaces whatever is current AT CALL TIME, and the await above
+      // is long enough for a gapless advance to move it — which would stamp
+      // this track's url and metadata onto the song that just started. Confirm
+      // the active row is still ours immediately before committing.
+      if ((await TrackPlayer.getActiveTrackIndex()) !== index) {
+        return;
+      }
+      await TrackPlayer.load(mapped);
+      if (wasPlaying) {
+        await TrackPlayer.play();
+      }
+    } else {
+      await TrackPlayer.remove([index]);
+      await TrackPlayer.add([mapped], index);
+    }
+  });
 }
 
 // Repeat-one is the one mode RNTP must own natively — a mid-queue track loops

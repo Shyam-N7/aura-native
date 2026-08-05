@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.RatingCompat
@@ -117,6 +118,17 @@ class NotificationManager internal constructor(
     private var internalNotificationManager: PlayerNotificationManager? = null
     private val scope = MainScope()
     private val buttons = mutableSetOf<NotificationButton?>()
+
+    // AURA fork extension: custom-action key ⇄ icon bookkeeping.
+    // createCustomActions runs ONCE per manager (PlayerNotificationManager
+    // caches its result at construction), so every icon a custom button can
+    // ever wear is registered there under its own key. getCustomActions then
+    // returns the key whose icon matches the LIVE button — that selection is
+    // what repaints the classic action row without a rebuild.
+    // aliasToBaseAction maps the extra keys back, so a tap on either variant
+    // still reports the action string JS registered ("like").
+    private val iconToActionKey = mutableMapOf<Int, String>()
+    private val aliasToBaseAction = mutableMapOf<String, String>()
     private var invalidateThrottleCount = 0
     private var iconPlaceholder = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
 
@@ -432,7 +444,12 @@ class NotificationManager internal constructor(
     private fun createNotificationAction(
         drawable: Int,
         action: String,
-        instanceId: Int
+        instanceId: Int,
+        // AURA: the label is what TalkBack reads. It defaults to the action
+        // string (upstream behaviour), but a custom button's alternate-icon
+        // key is an internal name — that variant passes the real title so the
+        // heart never announces itself as "like_alt".
+        title: String = action
     ): NotificationCompat.Action {
         val intent: Intent = Intent(action).setPackage(context.packageName)
         val pendingIntent = PendingIntent.getBroadcast(
@@ -445,7 +462,22 @@ class NotificationManager internal constructor(
                 PendingIntent.FLAG_CANCEL_CURRENT
             }
         )
-        return NotificationCompat.Action.Builder(drawable, action, pendingIntent).build()
+        return NotificationCompat.Action.Builder(drawable, title, pendingIntent).build()
+    }
+
+    // AURA fork extension: register one icon variant of a custom button under
+    // its own action key, remembering both directions of the mapping.
+    private fun registerCustomAction(
+        actions: MutableMap<String, NotificationCompat.Action>,
+        baseAction: String,
+        key: String,
+        drawable: Int,
+        title: String,
+        instanceId: Int
+    ) {
+        actions[key] = createNotificationAction(drawable, key, instanceId, title)
+        iconToActionKey[drawable] = key
+        aliasToBaseAction[key] = baseAction
     }
 
     private fun handlePlayerAction(action: String) {
@@ -461,9 +493,19 @@ class NotificationManager internal constructor(
             }
             else -> {
                 // AURA fork extension: any other action string is an
-                // app-defined NotificationButton.CUSTOM — hand it through
-                // as-is for the service layer to route.
-                playerEventHolder.updateOnPlayerActionTriggeredExternally(MediaSessionCallback.CUSTOM(action))
+                // app-defined NotificationButton.CUSTOM. Resolve alternate-icon
+                // keys back to the action JS registered first, so a tap on the
+                // filled heart reports "like" exactly like the outline one —
+                // both notification-row and media-session taps land here.
+                val base = aliasToBaseAction[action] ?: action
+                // Logged unconditionally: this is the FIRST point a heart tap
+                // becomes observable, and "the lock-screen like does nothing"
+                // could not be localised without knowing whether the tap ever
+                // reaches native dispatch at all. One line per tap, no loop.
+                Log.w(AURA_TAG, "custom action: $action -> $base")
+                playerEventHolder.updateOnPlayerActionTriggeredExternally(
+                    MediaSessionCallback.CUSTOM(base)
+                )
             }
         }
     }
@@ -496,12 +538,27 @@ class NotificationManager internal constructor(
             // ColorOS included) build their media cards from notification
             // actions, not PlaybackState custom actions, even on Android 13+
             // — without this the heart exists in the session but never shows.
-            // PlayerNotificationManager CACHES this map at construction, so
-            // an icon change must rebuild the manager — see
-            // isNotificationButtonsChanged's CUSTOM branch.
+            //
+            // PlayerNotificationManager CACHES this map at construction, so a
+            // later icon swap cannot reach the row. Rather than rebuild the
+            // manager for it (which tears down a live foreground notification
+            // — see isNotificationButtonsChanged's CUSTOM branch), register
+            // EVERY icon the button can wear, each under its own key.
+            // getCustomActions() below then simply picks the matching one.
             buttons.filterIsInstance<NotificationButton.CUSTOM>().forEach {
-                actions[it.action] =
-                    createNotificationAction(it.icon, it.action, instanceId)
+                registerCustomAction(
+                    actions, it.action, it.action, it.icon, it.title, instanceId
+                )
+                it.altIcon?.let { alt ->
+                    registerCustomAction(
+                        actions,
+                        it.action,
+                        it.action + ALT_SUFFIX,
+                        alt,
+                        it.title,
+                        instanceId
+                    )
+                }
             }
             return actions
         }
@@ -518,8 +575,13 @@ class NotificationManager internal constructor(
                     }
                 }
             }
+            // AURA fork extension: the key whose REGISTERED icon matches this
+            // button's current icon. Swapping the heart flips which of the two
+            // pre-registered actions is shown, so the row repaints with no
+            // manager rebuild. Falls back to the base action for a button with
+            // no altIcon (or before the cache is warm).
             buttons.filterIsInstance<NotificationButton.CUSTOM>().forEach {
-                names.add(it.action)
+                names.add(iconToActionKey[it.icon] ?: it.action)
             }
             return names
         }
@@ -674,28 +736,30 @@ class NotificationManager internal constructor(
                 // button (a different action) is worth a rebuild. An icon swap
                 // is not.
                 //
-                // This used to compare the icon too, on the belief that a
-                // rebuild was the only way a filled ⇄ outline heart reached the
-                // action row. It isn't: updateMediaSessionPlaybackActions()
-                // re-registers setCustomActionProviders on EVERY
-                // createNotification call, and the connector invalidates the
-                // playback state on set — see the comment at that call, which
-                // says exactly this. The two claims contradicted each other and
-                // this was the stale one.
-                //
-                // The cost of believing it was real: every heart toggle, and
-                // every track change where the liked state differs, ran
+                // This used to compare the icon too, and dropping that was
+                // right for the reason recorded here: every heart toggle ran
                 // hideNotification() against a LIVE foreground-service
                 // notification — setPlayer(null), manager dropped, rebuilt —
                 // while the service's own collector only reacts to POSTED and
                 // ignores CANCELLED. Tearing down the notification a foreground
                 // service is holding is not something a heart tap should do.
                 //
-                // Unverified on API ≤ 12, where the notification's own action
-                // row (rather than the system media card) may need a track
-                // change before it repaints. That is a far smaller cost than
-                // the teardown, and 13+ is session-driven where the providers
-                // above are the channel.
+                // But the justification given at the time only covered ONE of
+                // the two channels this fork feeds. updateMediaSessionPlayback-
+                // Actions() does re-register the providers on every
+                // createNotification, so the SESSION (stock Android 13+ media
+                // card) repaints fine. The classic notification action row does
+                // not: PlayerNotificationManager caches those Actions at
+                // construction, so with the rebuild gone the heart froze at
+                // whatever icon it wore when the manager was built — invisible
+                // on stock, but the ColorOS-class media cards read exactly that
+                // row (see createCustomActions), so on this device the heart
+                // never flipped.
+                //
+                // Both are covered now without a rebuild: createCustomActions
+                // registers BOTH icons under separate keys and getCustomActions
+                // selects between them, so an icon swap is genuinely not a
+                // structural change and this branch stays action-only.
                 is NotificationButton.CUSTOM -> {
                     (currentNotificationButtonsMapByType[NotificationButton.CUSTOM::class] as? NotificationButton.CUSTOM).let { currentButton ->
                         newButton.action != currentButton?.action
@@ -882,6 +946,13 @@ class NotificationManager internal constructor(
         private const val REWIND = "rewind"
         private const val FORWARD = "forward"
         private const val STOP = "stop"
+        // AURA: suffix for a custom button's alternate-icon action key. Never
+        // reaches JS — handlePlayerAction maps it back to the base action.
+        private const val ALT_SUFFIX = "__alt"
+        // AURA: logcat tag for fork-specific diagnostics (JS console output
+        // does not reach logcat in release builds, so the native side is the
+        // only channel that always works).
+        private const val AURA_TAG = "AuraNotificationMgr"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "kotlin_audio_player"
         private val DEFAULT_STOP_ICON =

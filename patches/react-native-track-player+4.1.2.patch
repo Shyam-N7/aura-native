@@ -437,7 +437,7 @@ index b2409a0..d0a447b 100644
 +    } }
  }
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
-index afa6b0f..c2c313c 100644
+index afa6b0f..f30788a 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/doublesymmetry/trackplayer/service/MusicService.kt
 @@ -120,9 +120,18 @@ class MusicService : HeadlessJsTaskService() {
@@ -462,7 +462,7 @@ index afa6b0f..c2c313c 100644
      }
  
      @MainThread
-@@ -223,6 +232,18 @@ class MusicService : HeadlessJsTaskService() {
+@@ -223,6 +232,36 @@ class MusicService : HeadlessJsTaskService() {
              }
          }
  
@@ -470,18 +470,36 @@ index afa6b0f..c2c313c 100644
 +        // `android.likeButton` from JS ({ liked, likedIcon, unlikedIcon } —
 +        // icons are app drawable names). The filled/outline swap is just
 +        // another updateOptions call with `liked` flipped.
++        //
++        // BOTH icons are handed down, not just the current one: the classic
++        // notification action row (which OEM media cards read) caches its
++        // Actions when the notification manager is constructed, so the fork
++        // pre-registers every icon the button can wear and selects between
++        // them per notification. Sending only the live icon would leave that
++        // row frozen at whatever state it was built in.
 +        val likeButton = androidOptions?.getBundle("likeButton")?.let { likeOptions ->
-+            val iconName = likeOptions.getString(
-+                if (likeOptions.getBoolean("liked")) "likedIcon" else "unlikedIcon"
-+            )
-+            val icon = iconName?.let { resources.getIdentifier(it, "drawable", packageName) } ?: 0
-+            if (icon != 0) NotificationButton.CUSTOM(LIKE_ACTION, icon, "like") else null
++            val liked = likeOptions.getBoolean("liked")
++            fun drawable(key: String): Int =
++                likeOptions.getString(key)
++                    ?.let { resources.getIdentifier(it, "drawable", packageName) } ?: 0
++            val icon = drawable(if (liked) "likedIcon" else "unlikedIcon")
++            val altIcon = drawable(if (liked) "unlikedIcon" else "likedIcon")
++            if (icon != 0) {
++                NotificationButton.CUSTOM(
++                    LIKE_ACTION,
++                    icon,
++                    "like",
++                    if (altIcon != 0) altIcon else null
++                )
++            } else {
++                null
++            }
 +        }
 +
          val openAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
              flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
              // Add the Uri data so apps can identify that it was a notification click
-@@ -233,7 +254,7 @@ class MusicService : HeadlessJsTaskService() {
+@@ -233,7 +272,7 @@ class MusicService : HeadlessJsTaskService() {
          val accentColor = BundleUtils.getIntOrNull(options, "color")
          val smallIcon = BundleUtils.getIconOrNull(this, options, "icon")
          val pendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, getPendingIntentFlags())
@@ -490,7 +508,7 @@ index afa6b0f..c2c313c 100644
  
          player.notificationManager.createNotification(notificationConfig)
  
-@@ -386,6 +407,13 @@ class MusicService : HeadlessJsTaskService() {
+@@ -386,6 +425,13 @@ class MusicService : HeadlessJsTaskService() {
      @MainThread
      fun getRate(): Float = player.playbackSpeed
  
@@ -504,7 +522,7 @@ index afa6b0f..c2c313c 100644
      @MainThread
      fun setRate(value: Float) {
          player.playbackSpeed = value
-@@ -668,6 +696,10 @@ class MusicService : HeadlessJsTaskService() {
+@@ -668,6 +714,10 @@ class MusicService : HeadlessJsTaskService() {
                              emit(MusicEvents.BUTTON_JUMP_BACKWARD, this)
                          }
                      }
@@ -515,7 +533,7 @@ index afa6b0f..c2c313c 100644
                  }
              }
          }
-@@ -739,9 +771,19 @@ class MusicService : HeadlessJsTaskService() {
+@@ -739,9 +789,19 @@ class MusicService : HeadlessJsTaskService() {
          return bundle
      }
  
@@ -536,7 +554,7 @@ index afa6b0f..c2c313c 100644
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, data?.let { Arguments.fromBundle(it) })
      }
-@@ -751,7 +793,7 @@ class MusicService : HeadlessJsTaskService() {
+@@ -751,7 +811,7 @@ class MusicService : HeadlessJsTaskService() {
          val payload = Arguments.createArray()
          data.forEach { payload.pushMap(Arguments.fromBundle(it)) }
  
@@ -545,7 +563,7 @@ index afa6b0f..c2c313c 100644
              ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
              ?.emit(event, payload)
      }
-@@ -850,5 +892,8 @@ class MusicService : HeadlessJsTaskService() {
+@@ -850,5 +910,8 @@ class MusicService : HeadlessJsTaskService() {
  
          const val DEFAULT_JUMP_INTERVAL = 15.0
          const val DEFAULT_STOP_FOREGROUND_GRACE_PERIOD = 5

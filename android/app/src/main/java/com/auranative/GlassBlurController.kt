@@ -162,13 +162,48 @@ class GlassBlurController(
     setBlurAutoUpdate(desiredAutoUpdate)
     val sizeScaler = SizeScaler(blurAlgorithm.scaleFactor())
     if (sizeScaler.isZeroSized(measuredWidth, measuredHeight)) {
-      // Will be initialized later when the View reports a size change.
+      // Will be initialized later when the View reports a size change — or,
+      // if that never comes, by the heartbeat's revive branch.
+      //
+      // That branch is gated on !initialized, so a controller that had ALREADY
+      // initialized once must be knocked back down here. Leaving the flag true
+      // strands it: WILL_NOT_DRAW is set, draw() contributes nothing, and every
+      // route back is closed — onSizeChanged doesn't fire when the size returns
+      // to its previous value (the case this comment's first line assumes), the
+      // revive branch is skipped because initialized is true, and the stale-
+      // snapshot branch only re-arms captures and invalidates, none of which
+      // clears WILL_NOT_DRAW. It refreshes bitmaps forever into a view that
+      // never draws them. Owner-visible as the transparent top bar after a
+      // detail-screen round-trip — the same symptom as the armed-state
+      // stranding above, reached by a second, independent path.
+      initialized = false
       blurView.setWillNotDraw(true)
       return
     }
 
     blurView.setWillNotDraw(false)
     val bitmapSize = sizeScaler.scale(measuredWidth, measuredHeight)
+
+    // Already running at exactly this bitmap size: keep the buffers.
+    //
+    // BlurView routes EVERY size change through here, and the dock's
+    // back-to-top morph animates a LAYOUT width, so this ran once per frame of
+    // the morph — two Bitmap.createBitmap plus two BlurViewCanvas allocations,
+    // thrown away on the next frame. At ~1/6 scale a great many of those frames
+    // round to an identical bitmap size, so the allocation bought nothing at
+    // all. Captures are already throttled; the allocations were not.
+    if (
+      initialized &&
+      internalBitmap.width == bitmapSize.width &&
+      internalBitmap.height == bitmapSize.height
+    ) {
+      // The view's own dimensions may still have moved under the same scaled
+      // size — the capture matrix is recomputed per frame from them, so a
+      // refresh is all this needs.
+      updateBlur()
+      return
+    }
+
     val config = blurAlgorithm.supportedBitmapConfig
     internalBitmap = Bitmap.createBitmap(bitmapSize.width, bitmapSize.height, config)
     internalCanvas = BlurViewCanvas(internalBitmap)

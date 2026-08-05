@@ -12,7 +12,7 @@ const { Event } = require('react-native-track-player');
 const { Image } = require('react-native');
 const engine = require('./engine');
 const likes = require('../hooks/useLikes');
-const { crumb } = require('../lib/crumbs');
+const { crumb, report } = require('../lib/crumbs');
 const { mark } = require('../lib/perfMarks');
 
 const handlers = {};
@@ -64,19 +64,36 @@ module.exports = async function service() {
   // subscriber fan-out an in-app heart uses, so every mounted heart follows;
   // the icon is re-synced here directly so it also flips with no UI mounted.
   TrackPlayer.addEventListener('remote-like', async () => {
+    // The heart's trail, one crumb per hop. "The lock-screen like does
+    // nothing" was unlocalisable because every hop failed silently: the event
+    // may never arrive, the active track may carry no id, or the write may be
+    // refused. Each of those now says so, and the three are distinguishable.
+    crumb('playback', 'remote-like');
     const id = (await TrackPlayer.getActiveTrack().catch(() => null))?.id;
     if (!id) {
+      // Reached JS but there is nothing to like — a native active track that
+      // carries no originalItem (post-kill revival) looks exactly like this.
+      crumb('playback', 'remote-like-no-track');
       return;
     }
+    const wasLiked = likes.isLikedId(id);
     try {
-      if (likes.isLikedId(id)) {
+      if (wasLiked) {
         await likes.unlike(id);
       } else {
         await likes.like(id);
       }
-    } catch {
+    } catch (err) {
       // The optimistic Set already rolled itself back — the re-sync below
       // simply paints whatever state survived.
+      //
+      // But it must not roll back SILENTLY. This catch used to swallow
+      // everything, which made a failing heart indistinguishable from a
+      // working one: the icon returned to its old state, nothing was logged,
+      // and "the lock-screen like does nothing" had no evidence anywhere. A
+      // tap the user made and the server refused is a terminal failure they
+      // feel, so it earns a report.
+      report(err, 'player.remote-like-failed', { liked: !wasLiked });
     }
     engine.setLikeButton(likes.isLikedId(id)).catch(() => {});
   });

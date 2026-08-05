@@ -42,6 +42,12 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# .npmrc pins the npm cache to a Windows path (cache=D:\Android\npm-cache).
+# Any npm run on a non-Windows machine — CI, a container, a Linux checkout —
+# resolves that literally and creates a directory of that name in the repo
+# root instead. It is a cache, never source.
+D:\\Android\\npm-cache/
+
 # fastlane
 #
 # It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the

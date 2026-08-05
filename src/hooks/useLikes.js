@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listLikedIds, likeTrack, unlikeTrack } from '../api/likes';
+import { onSessionReset } from '../lib/sessionReset';
 
 // Ported from web src/hooks/useLikes.js: one module-level Set of liked track
 // ids as the single source of truth, booted once per app session from
@@ -83,6 +84,8 @@ export function resetLikesStore() {
   ready = false;
   queueMicrotask(notify);
 }
+
+onSessionReset(resetLikesStore);
 
 export function useLikes() {
   const [, force] = useState(0);

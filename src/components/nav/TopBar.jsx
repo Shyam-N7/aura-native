@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -17,7 +17,7 @@ import { Glass } from '../ui/Glass';
 import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
-import { getUser } from '../../lib/auth';
+import { getUser, subscribeAuth } from '../../lib/auth';
 import { openModeSheet } from '../../lib/modeSheet';
 import {
   closeSearch,
@@ -51,7 +51,14 @@ export const TOPBAR_CLEARANCE = 68; // 10 above + 52 bar + 6 below
 export function TopBar({ activeTab, goTab }) {
   const { name, pref, t, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
-  const user = getUser();
+  // Identity has to be SUBSCRIBED, not just read. getUser() is a synchronous
+  // MMKV read, so reading it inline looks live but only re-runs when something
+  // else re-renders the bar — a mode switch notifies auth and nothing here was
+  // listening, so the pill kept the old mode until an unrelated render (theme
+  // cycle, search morph, a player update) happened to refresh it. Same staleness
+  // reached the avatar initial after a profile edit.
+  const [user, setUser] = useState(getUser);
+  useEffect(() => subscribeAuth(() => setUser(getUser())), []);
   const initial = (user?.name || 'a').trim()[0]?.toLowerCase();
   const mode = user?.activeMode ?? 'everyday';
   const modeLabel = (

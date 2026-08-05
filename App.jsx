@@ -39,8 +39,17 @@ import { initPush, setPushLinkHandler } from './src/lib/push';
 import { freezeGlass } from './src/lib/navFreeze';
 import { initEqualizer } from './src/lib/equalizer';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
-import { invalidateHomeCache } from './src/lib/homeCache';
-import { resetLikesStore } from './src/hooks/useLikes';
+import { resetSessionState } from './src/lib/sessionReset';
+// Imported for their side effect: each registers its own session teardown with
+// the registry above. Without a reference here a store that no mounted screen
+// has imported yet would never register — and Home/likes are exactly the ones
+// whose stale state is visible on the first screen after a switch.
+import './src/lib/homeCache';
+import './src/hooks/useLikes';
+import './src/hooks/useRecentSearches';
+import './src/hooks/useTalkHistory';
+import './src/lib/privateSession';
+import './src/api/impressions';
 
 // Share links the app answers (web parity): /playlists?join=TOKEN joins a
 // playlist invite, /p/PUBLIC_ID opens a public playlist read-only. Tokens are
@@ -88,13 +97,17 @@ function Shell() {
           const next = computeFlow(u);
           if (uid !== lastUid.current) {
             lastUid.current = uid; // real login / logout / switch — reset the gate
-            // Module caches are per-process, not per-account: without this,
-            // the next account inherits the previous one's Home sections (a
-            // cache hit even suppresses the refetch) and liked-song hearts
-            // until the app is killed. Disk snapshots are owner-stamped
-            // already; these two live in plain module state.
-            invalidateHomeCache();
-            resetLikesStore();
+            // Module caches are per-process, not per-account: without this the
+            // next account inherits the previous one's state until the app is
+            // killed. Disk snapshots are owner-stamped already; module scope is
+            // not, and clearSession only reaches the disk.
+            //
+            // This used to name the two stores it knew about, which is exactly
+            // why recent searches, talk history, the impression guard and the
+            // push token all leaked — nobody thought to come back here. Stores
+            // now register their own teardown (lib/sessionReset) and the shell
+            // just fires them.
+            resetSessionState({ signedOut: uid == null });
             return next;
           }
           // Same user: only ever advance, so a preference refresh can't bounce a

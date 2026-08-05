@@ -1,5 +1,6 @@
 import { fetchAuthed } from '../lib/auth';
 import { isPrivateSession } from '../lib/privateSession';
+import { onSessionReset } from '../lib/sessionReset';
 
 // Fire-and-forget impression logger, ported from web src/api/impressions.js:
 // records that these tracks were SHOWN on a surface, so the server ranker can
@@ -34,7 +35,12 @@ export function logImpressions(surface, trackIds) {
   });
 }
 
-// Test seam — the guard is module state that survives between specs.
+// The guard is keyed by (surface, day) with no account in it, so it also
+// survived an account SWITCH: the new user's first Home visit was silently
+// treated as already logged, and their impressions never reached the ranker
+// until the next calendar day.
 export function _resetImpressionGuard() {
   logged.clear();
 }
+
+onSessionReset(_resetImpressionGuard);

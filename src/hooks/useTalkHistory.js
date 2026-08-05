@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { storage } from '../storage/mmkv';
+import { onSessionReset } from '../lib/sessionReset';
 
 // Ported from web src/hooks/useTalkHistory.js. Singleton talk history in
 // module scope so any consumer sees the same conversation across mounts,
-// mirrored to storage so it survives restarts (cleared on sign-out by
-// lib/auth clearSession). One adaptation: the web hook takes a seed argument
+// mirrored to storage so it survives restarts. clearSession removes the disk
+// key on sign-out; the module array is dropped by the session-reset
+// registration below (this comment used to claim clearSession did both, which
+// is how up to 50 messages of one account's conversation reached the next).
+// One adaptation: the web hook takes a seed argument
 // because its greeting is synchronous; the native greeting waits on a mood
 // fetch, so seeding is the explicit seedTalkHistory() call instead.
 const STORAGE_KEY = 'aura.talkHistory';
@@ -57,6 +61,13 @@ export function seedTalkHistory(seed) {
     setMessages([seed]);
   }
 }
+
+// Re-read rather than setMessages([]): the disk key is already gone by the
+// time this runs, and writing an empty array back would be a pointless store.
+onSessionReset(() => {
+  messages = readStored() ?? [];
+  notify();
+});
 
 export function useTalkHistory() {
   const [snap, setSnap] = useState(messages);
