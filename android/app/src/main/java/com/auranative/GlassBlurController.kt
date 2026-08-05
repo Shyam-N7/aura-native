@@ -103,11 +103,12 @@ class GlassBlurController(
   private var lastSuccessUptime = 0L
   private var lastCaptureUptime = 0L
 
-  // When the platform last actually PAINTED us. A capture succeeding proves
-  // the snapshot was taken; only this proves anything reached the screen. The
-  // two diverge in both directions — WILL_NOT_DRAW or a parent that skips us
-  // gives captures with no paint, and a blank promote gives paint with no
-  // content — so the heartbeat watches the older of the pair.
+  // When the platform last actually PAINTED us. DIAGNOSTIC ONLY — never a
+  // health trigger. The blur render node references the snapshot bitmap's
+  // pixels live, so a refreshed capture reaches the screen without any draw()
+  // call; a bar over static content can go seconds without painting and be
+  // completely healthy. What it is good for is telling "never asked to draw"
+  // apart from "asked, but drew nothing" when reading a trace.
   private var lastDrawUptime = 0L
   private var lastPaintLogUptime = 0L
   private var lastReviveUptime = 0L
@@ -226,15 +227,22 @@ class GlassBlurController(
           updateBlurViewSize()
           blurView.invalidate()
         }
-        // Stale means "nothing has reached the SCREEN recently", not "no
-        // capture succeeded recently". rootView.draw() not throwing was the
-        // old definition, and it is satisfied by a capture that promotes pure
-        // clear coat — or by one that lands perfectly in a bitmap the platform
-        // never asks us to paint. Both read to the user as a blank bar while
-        // the controller reports itself healthy. Taking the OLDER of the two
-        // stamps means either one going quiet is enough to act.
-        val quietSince = SystemClock.uptimeMillis() -
-          minOf(lastSuccessUptime, lastDrawUptime)
+        // Staleness is measured on CAPTURES, not paints.
+        //
+        // Draw time looks like the better signal — it is what the user
+        // actually sees — but it is not one. `blurAlgorithm.render` hands the
+        // render node the bitmap's pixels LIVE, so refreshing the snapshot
+        // updates the screen with no draw() call at all; a bar over static
+        // content can legitimately go many seconds without painting. A first
+        // pass here took the older of the two stamps, which made every healthy
+        // idle bar look wedged and turned this branch into a 0.5Hz loop that
+        // forced a whole-tree software capture every 2s on a view that was
+        // fine — visible in the field trace as sinceCapture=1ms next to
+        // sinceDraw=2002ms, over and over.
+        //
+        // lastDrawUptime is kept: it is genuinely useful in the state dump,
+        // just not as a trigger.
+        val quietSince = SystemClock.uptimeMillis() - lastSuccessUptime
         if (
           attached &&
           initialized &&
