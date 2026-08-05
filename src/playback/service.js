@@ -64,8 +64,16 @@ module.exports = async function service() {
   // subscriber fan-out an in-app heart uses, so every mounted heart follows;
   // the icon is re-synced here directly so it also flips with no UI mounted.
   TrackPlayer.addEventListener('remote-like', async () => {
+    // The heart's trail, one crumb per hop. "The lock-screen like does
+    // nothing" was unlocalisable because every hop failed silently: the event
+    // may never arrive, the active track may carry no id, or the write may be
+    // refused. Each of those now says so, and the three are distinguishable.
+    crumb('playback', 'remote-like');
     const id = (await TrackPlayer.getActiveTrack().catch(() => null))?.id;
     if (!id) {
+      // Reached JS but there is nothing to like — a native active track that
+      // carries no originalItem (post-kill revival) looks exactly like this.
+      crumb('playback', 'remote-like-no-track');
       return;
     }
     const wasLiked = likes.isLikedId(id);

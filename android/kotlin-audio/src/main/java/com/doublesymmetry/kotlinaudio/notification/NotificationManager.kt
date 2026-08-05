@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.RatingCompat
@@ -496,8 +497,14 @@ class NotificationManager internal constructor(
                 // keys back to the action JS registered first, so a tap on the
                 // filled heart reports "like" exactly like the outline one —
                 // both notification-row and media-session taps land here.
+                val base = aliasToBaseAction[action] ?: action
+                // Logged unconditionally: this is the FIRST point a heart tap
+                // becomes observable, and "the lock-screen like does nothing"
+                // could not be localised without knowing whether the tap ever
+                // reaches native dispatch at all. One line per tap, no loop.
+                Log.w(AURA_TAG, "custom action: $action -> $base")
                 playerEventHolder.updateOnPlayerActionTriggeredExternally(
-                    MediaSessionCallback.CUSTOM(aliasToBaseAction[action] ?: action)
+                    MediaSessionCallback.CUSTOM(base)
                 )
             }
         }
@@ -942,6 +949,10 @@ class NotificationManager internal constructor(
         // AURA: suffix for a custom button's alternate-icon action key. Never
         // reaches JS — handlePlayerAction maps it back to the base action.
         private const val ALT_SUFFIX = "__alt"
+        // AURA: logcat tag for fork-specific diagnostics (JS console output
+        // does not reach logcat in release builds, so the native side is the
+        // only channel that always works).
+        private const val AURA_TAG = "AuraNotificationMgr"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "kotlin_audio_player"
         private val DEFAULT_STOP_ICON =
