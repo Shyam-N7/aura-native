@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 import Animated, {
   Easing,
   runOnJS,
@@ -16,6 +16,7 @@ import { useAppActive } from '../../hooks/useAppActive';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedLine = Animated.createAnimatedComponent(Line);
 
 const SAMPLES = 80;
 // The wave is inset from the canvas edges so the thumb (r9 halo) and the
@@ -32,6 +33,13 @@ const PAD = 10;
 // 60fps JS storm.
 export function ProgressRibbon({
   progress = 0,
+  // How far ahead the stream has actually loaded, 0..1. Drawn as a FLAT line,
+  // deliberately not as a second sine path: the wave builders read `phase`, so
+  // a matching ribbon would rebuild ~80 points every sampler tick and double
+  // the heaviest per-frame worker in the app. A straight rule is both free
+  // (two animated numbers, no string building) and the shape people already
+  // read as "loaded up to here" from every video player.
+  buffered = 0,
   playing,
   seed = 'x',
   accent,
@@ -80,6 +88,18 @@ export function ProgressRibbon({
       easing: Easing.linear,
     });
   }, [progress, shownProgress]);
+
+  // Buffered head. Eased over a longer window than the playhead because it
+  // advances in CHUNKS — ExoPlayer loads a block, sits at maxBuffer, then
+  // loads again — and stepping that raw would read as a twitch rather than
+  // as filling.
+  const bufferedFill = useSharedValue(Math.min(1, Math.max(0, buffered)));
+  useEffect(() => {
+    bufferedFill.value = withTiming(Math.min(1, Math.max(0, buffered)), {
+      duration: 420,
+      easing: Easing.linear,
+    });
+  }, [buffered, bufferedFill]);
 
   // useFrameCallback reads its autostart arg ONCE at mount and registers the
   // worklet's closure ONCE — a bare `playing` in either place is frozen at its
@@ -201,6 +221,10 @@ export function ProgressRibbon({
 
   const pathProps = useAnimatedProps(() => ({ d: wavePath.value }));
   const doneProps = useAnimatedProps(() => ({ d: donePath.value }));
+  // Two numbers per frame, no path string — the whole point of the flat rule.
+  const bufferedProps = useAnimatedProps(() => ({
+    x2: PAD + span * Math.min(1, Math.max(0, bufferedFill.value)),
+  }));
   const thumbProps = useAnimatedProps(() => {
     'worklet';
     const p = drag.value >= 0 ? drag.value : fill.value;
@@ -274,6 +298,22 @@ export function ProgressRibbon({
               fill="none"
               strokeLinecap="round"
             />
+            {/* Loaded-ahead rule, under the played stroke so the accent
+                always wins where they overlap. Sits on the centreline, which
+                is where the wave crosses, so it reads as part of the ribbon
+                rather than a bar bolted underneath it. */}
+            {buffered > 0 && (
+              <AnimatedLine
+                animatedProps={bufferedProps}
+                x1={PAD}
+                y1={height / 2}
+                y2={height / 2}
+                stroke={dim}
+                strokeOpacity={0.28}
+                strokeWidth={1.8}
+                strokeLinecap="round"
+              />
+            )}
             <AnimatedPath
               animatedProps={doneProps}
               stroke={accent}

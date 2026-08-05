@@ -706,6 +706,108 @@ async function waitForConnectivity(maxMs) {
   return false;
 }
 
+// ── consecutive give-up streak (CROSS-track) ─────────────────────────────
+// `recovery` above is per-track, and that is right for the ladder — but it
+// means the ceiling that stops playback and reports the network can only be
+// reached by ONE track accumulating attempts. A skip resets it. So a queue
+// where every track fails — a dead network on a cold restore, where the
+// tracks still hold the PENDING_URL placeholder and therefore have an empty
+// quality ladder — walks the ENTIRE queue at ~3 attempts each and never trips
+// it. Field report: after a crash the app silently skipped every remaining
+// song, and the per-skip toast below was invisible because showToast is
+// single-slot and each skip overwrote the last.
+//
+// This counter is what bounds that. It deliberately survives track changes,
+// and is cleared only when playback actually starts or the user asks again.
+export const MAX_CONSECUTIVE_SKIPS = 3;
+// How long to keep watching for the network after stopping. Polled on a
+// lazier cadence than the inline wait — this one runs unattended, possibly
+// with the screen off, so it must not cost a probe every 5s for minutes.
+const RESUME_WAIT_MS = 5 * 60 * 1000;
+const RESUME_PROBE_GAP_MS = 15000;
+
+let giveUpStreak = 0;
+// Bumped to invalidate an in-flight resume wait. The wait is long and nothing
+// awaits it, so cancellation is by identity rather than by abort.
+let resumeGeneration = 0;
+// The live sleep between probes, held so cancelling can CLEAR it. Without
+// this the loop keeps a timer alive for the full window even after it has
+// been superseded — which pins the process awake (and hangs jest).
+let resumeTimer = null;
+
+function cancelResumeWait() {
+  resumeGeneration += 1;
+  if (resumeTimer) {
+    clearTimeout(resumeTimer);
+    resumeTimer = null;
+  }
+}
+
+/**
+ * Playback is healthy again — either it genuinely started, or the user asked
+ * for it and has earned a fresh run of attempts. Also abandons any pending
+ * resume wait, so a user-initiated play can't be raced by an older one.
+ */
+export function notePlaybackStarted() {
+  giveUpStreak = 0;
+  cancelResumeWait();
+}
+
+// Test seam: the streak and the resume wait are module state that survives
+// between specs, and a leaked wait would hold the runner open.
+export function _resetFailureStreak() {
+  giveUpStreak = 0;
+  cancelResumeWait();
+}
+
+// Watch for the network in the background and pick the SAME track back up.
+// This is what "the music state shouldn't be lost when data is lost" means in
+// practice: the queue and position were never touched, so resuming is only a
+// play() once the origin answers again.
+//
+// Its own loop rather than waitForConnectivity's: this one runs unattended for
+// minutes with nothing awaiting it, so it needs a cancellable sleep and a
+// generation check on every pass. The inline ceiling wait has neither and does
+// not need them.
+function startResumeWait(id, url) {
+  const gen = ++resumeGeneration;
+  (async () => {
+    const deadline = Date.now() + RESUME_WAIT_MS;
+    while (Date.now() < deadline && gen === resumeGeneration) {
+      let online = false;
+      try {
+        await probeOrigin(PROBE_TIMEOUT_MS);
+        online = true;
+      } catch {
+        // still down
+      }
+      if (gen !== resumeGeneration) {
+        return;
+      }
+      if (online) {
+        // The user may have moved on while we waited; resuming would yank
+        // them back to a song they had left behind.
+        if (!(await stillOnSlot(id, url))) {
+          return;
+        }
+        // Let the ladder run again from the top for this track — `refetched`
+        // is per-track and still true from the failure, so without this the
+        // one rung that can actually fix a stale CDN url would be skipped.
+        resetRecoveryFor(id);
+        giveUpStreak = 0;
+        await TrackPlayer.play().catch(() => {});
+        return;
+      }
+      await new Promise(resolve => {
+        resumeTimer = setTimeout(() => {
+          resumeTimer = null;
+          resolve();
+        }, RESUME_PROBE_GAP_MS);
+      });
+    }
+  })();
+}
+
 export async function handlePlaybackError(err) {
   const [rQueue, active] = await Promise.all([
     TrackPlayer.getQueue(),
@@ -835,6 +937,39 @@ export async function handlePlaybackError(err) {
     attempts: recovery.attempt,
     klass,
   });
+
+  // Counted only AFTER the stillOnSlot guard above: a give-up the user
+  // outran isn't a failure they experienced, and must not push the session
+  // toward a stop.
+  giveUpStreak += 1;
+  if (giveUpStreak >= MAX_CONSECUTIVE_SKIPS) {
+    // Enough. Skipping again would keep walking the queue, which is the
+    // behaviour being fixed — several songs in a row failing is a broken
+    // SESSION, not a broken track, and it deserves an answer instead of
+    // silence.
+    //
+    // The queue and the position are deliberately left alone. Only playback
+    // pauses, so whatever the user was listening to is still exactly where
+    // they left it.
+    await TrackPlayer.pause();
+    const online = await probeOrigin(PROBE_TIMEOUT_MS).then(
+      () => true,
+      () => false,
+    );
+    if (online) {
+      // The origin answers, so this is the catalog or these particular
+      // streams — waiting for a network that is already here would be a lie.
+      showToast("couldn't play these songs — playback stopped.");
+    } else {
+      showToast('your connection dropped — waiting for it to come back.');
+      startResumeWait(cur.id, cur.url);
+    }
+    // The streak is NOT cleared here: one more failure after this should stop
+    // immediately rather than burn another three tracks. A user play (or
+    // playback actually starting) is what earns a fresh run.
+    return;
+  }
+
   showToast("couldn't play this track — skipping.");
   if (active + 1 < rQueue.length) {
     await TrackPlayer.skipToNext();

@@ -61,6 +61,16 @@ class GlassBlurView(context: Context) : BlurView(context) {
     super.onAttachedToWindow()
     Log.i(TAG, "view attached (ready=$controllerReady frozen=$pendingFrozen)")
     controller?.resyncArm()
+    // Re-run init on the way back in. A detach can have left the controller
+    // holding WILL_NOT_DRAW from a zero-size measure, and nothing else will
+    // clear it: onSizeChanged does not fire when the size returns to the value
+    // it already had, which is exactly what a stack pop restores. Waiting for
+    // the heartbeat would work eventually, but that is up to two seconds of a
+    // visibly empty bar on every back press.
+    //
+    // Cheap to call: init() keeps the existing buffers when the scaled bitmap
+    // size is unchanged, so the common case allocates nothing.
+    controller?.updateBlurViewSize()
     invalidate()
   }
 

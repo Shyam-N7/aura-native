@@ -108,13 +108,49 @@ class GlassBlurController(
   // of library lifecycle, rns re-parenting, or freeze-timer ordering can
   // permanently silence captures — any stranded state heals in ≤2s while a
   // legitimate freeze (desired=false) stays frozen.
+  /**
+   * Does this view have real geometry to capture into?
+   *
+   * Deliberately NOT `isLaidOut`. That flag is `PFLAG3_IS_LAID_OUT`, and
+   * `onDetachedFromWindowInternal()` clears it — react-native-screens detaches
+   * the ENTIRE tab subtree on a native-stack push, and the top bar lives inside
+   * the tab navigator. It never comes back: RN's `ReactViewGroup.onLayout` is a
+   * no-op and terminates `requestLayout()`, so the only thing that calls
+   * `layout()` on an RN view is Fabric's `updateLayout` mutation — emitted only
+   * when a node's computed metrics CHANGE. The bar is a fixed height at a fixed
+   * margin, so a pop restores identical metrics, no mutation is sent, and
+   * `isLaidOut` stays false for the rest of the process.
+   *
+   * Every self-heal in this file used to sit behind that one dead flag — the
+   * capture guard, the revive branch, the stale-snapshot branch — so the view
+   * ended up alive, armed, ticking, and capturing nothing. That is the
+   * transparent top bar after a Liked/Playlist round-trip, and it is why
+   * resetting `initialized` alone did not fix it: the branch that reset
+   * enables is gated on the same check.
+   *
+   * Measured size plus the geometric visible-rect test is the honest signal —
+   * the same reasoning this file already applied when it chose
+   * `getGlobalVisibleRect` over `isShown`.
+   *
+   * Both pairs are checked on purpose. The capture matrix is built from
+   * `width`/`height`, but `init()` allocates from `measuredWidth`/
+   * `measuredHeight`; if only one pair were tested and the two disagreed, the
+   * revive branch would fire on every heartbeat while `init()` kept bailing on
+   * a zero measure — a 0.5Hz log loop that never heals.
+   */
+  private fun hasUsableSize(): Boolean =
+    blurView.width > 0 &&
+      blurView.height > 0 &&
+      blurView.measuredWidth > 0 &&
+      blurView.measuredHeight > 0
+
   private val heartbeat = object : Runnable {
     override fun run() {
       if (dead) {
         return
       }
       if (desiredAutoUpdate) {
-        if (!initialized && blurView.isLaidOut && blurView.width > 0) {
+        if (!initialized && hasUsableSize()) {
           // init() during a transient zero-size layout leaves
           // initialized=false with nothing scheduled to retry —
           // onSizeChanged may never fire again (the size returns to its
@@ -131,7 +167,7 @@ class GlassBlurController(
           // The wedges this heals (view VISIBLE, snapshot stale or capture
           // loop disarmed) still pass both tests.
           blurView.hasWindowFocus() &&
-          blurView.isLaidOut &&
+          hasUsableSize() &&
           blurView.getGlobalVisibleRect(visibleRect) &&
           SystemClock.uptimeMillis() - lastSuccessUptime > HEARTBEAT_MS
         ) {
@@ -237,7 +273,11 @@ class GlassBlurController(
     // report visibility flags that read hidden for on-screen content, which
     // silenced captures entirely (the bar went fully transparent — owner
     // caught it live). An empty global visible rect is the honest signal.
-    if (!blurView.isLaidOut || !blurView.getGlobalVisibleRect(visibleRect)) {
+    //
+    // Nor isLaidOut, for the same class of reason and a worse consequence —
+    // see hasUsableSize(): a stack push clears that flag permanently, which
+    // silenced this guard for the whole rest of the process.
+    if (!hasUsableSize() || !blurView.getGlobalVisibleRect(visibleRect)) {
       return
     }
     // Stamped only when a capture is genuinely attempted, so guard-skipped
