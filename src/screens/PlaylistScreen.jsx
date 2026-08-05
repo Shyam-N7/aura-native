@@ -44,6 +44,7 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
+import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { Sheet } from '../components/ui/Sheet';
 import { Avatar } from '../components/Avatar';
 import { TrackArt } from '../components/TrackRow';
@@ -67,13 +68,9 @@ import { cleanTitle } from '../utils/title';
 const VIS_ICON = { private: 'lock', shared: 'people', public: 'globe' };
 const VIS_LABEL = { private: 'private', shared: 'shared', public: 'public' };
 
-const SORT_KEY = 'aura.sortPlaylist';
-const SORTS = [
-  { id: 'default', label: 'in order' },
-  { id: 'title', label: 'title' },
-  { id: 'artist', label: 'artist' },
-  { id: 'longest', label: 'longest' },
-];
+// Shared with CatalogPlaylistScreen — same key, so necessarily the same list.
+const SORT_KEY = PLAYLIST_SORT_KEY;
+const SORTS = PLAYLIST_SORTS;
 
 const POLL_MS = 15000;
 

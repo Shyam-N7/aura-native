@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
 import { onSessionReset } from '../lib/sessionReset';
 
 // Ported from web src/hooks/useRecentSearches.js (localStorage → MMKV).
 // Singleton recent-searches store: state lives in module scope so every
 // consumer sees the same array, mirrored to storage capped at 10 entries.
-const STORAGE_KEY = 'aura.recentSearches';
+const STORAGE_KEY = K.recentSearches;
 const MAX = 10;
 
 function read() {

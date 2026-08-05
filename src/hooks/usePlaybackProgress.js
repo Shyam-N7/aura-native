@@ -1,30 +1,25 @@
 import { useRef } from 'react';
 import { useProgress } from 'react-native-track-player';
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
+import { resumeSec } from '../playback/resumePoint';
 
 // The cold-open restore is network-gated (docs/perf/01 §2): until a catalog
 // round-trip returns fresh stream URLs, the native player has no queue and
 // useProgress reports 0:00 — which read as "my position wasn't saved". The
 // snapshot in MMKV knows better, so it seeds the display until the engine
-// reports real data for the first time. Same window/track guards as
-// storedPositionSec (PlayerContext), read from the same two keys.
+// reports real data for the first time. The window/track guard is the SAME
+// function storedPositionSec uses (playback/resumePoint), read from the same
+// two keys — it used to be a second copy of the same five conditions in a
+// different order.
 function readSeed() {
   try {
-    const pos = JSON.parse(storage.getItem('aura.position') ?? 'null');
-    const q = JSON.parse(storage.getItem('aura.queue') ?? 'null');
+    const pos = JSON.parse(storage.getItem(K.position) ?? 'null');
+    const q = JSON.parse(storage.getItem(K.queue) ?? 'null');
     const t = q?.tracks?.[q.idx];
-    if (
-      pos &&
-      t &&
-      pos.trackId === t.id &&
-      t.durationSec > 0 &&
-      pos.progress > 0.01 &&
-      pos.progress < 0.98
-    ) {
-      return {
-        position: pos.progress * t.durationSec,
-        duration: t.durationSec,
-      };
+    const sec = resumeSec(pos, t);
+    if (sec != null) {
+      return { position: sec, duration: t.durationSec };
     }
   } catch {
     // corrupt snapshot — fall through to live-only

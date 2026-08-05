@@ -1,4 +1,5 @@
 import { storage } from '../storage/mmkv';
+import { K, SESSION_KEYS } from '../storage/keys';
 
 // Port of web src/lib/auth.js. Native differences: the session is a JWT kept
 // in MMKV (not an httpOnly cookie) and injected as a Bearer header on every
@@ -9,8 +10,8 @@ import { storage } from '../storage/mmkv';
 
 export const API_BASE = 'https://www.aurafm.live';
 
-const TOKEN_KEY = 'aura.authToken';
-const USER_KEY = 'aura.authUser';
+const TOKEN_KEY = K.authToken;
+const USER_KEY = K.authUser;
 
 const subscribers = new Set();
 
@@ -108,13 +109,13 @@ function persistUser(user) {
   // getUser()?.hasOnboarded, i.e. the authUser blob written on the line above,
   // so the flag was pure write amplification pretending to be a cache.
   if (user.seedArtists) {
-    storage.setItem('aura.seedArtists', JSON.stringify(user.seedArtists));
+    storage.setItem(K.seedArtists, JSON.stringify(user.seedArtists));
   }
   if (user.seedLanguages) {
-    storage.setItem('aura.seedLanguages', JSON.stringify(user.seedLanguages));
+    storage.setItem(K.seedLanguages, JSON.stringify(user.seedLanguages));
   }
   if (user.seedMood !== undefined) {
-    storage.setItem('aura.seedMood', user.seedMood ?? '');
+    storage.setItem(K.seedMood, user.seedMood ?? '');
   }
   notify();
 }
@@ -129,21 +130,11 @@ function setSession(data) {
 }
 
 export function clearSession() {
-  [
-    TOKEN_KEY,
-    USER_KEY,
-    'aura.seedArtists',
-    'aura.seedLanguages',
-    'aura.seedMood',
-    'aura.queue',
-    'aura.position',
-    'aura.talkHistory',
-    'aura.recentSearches',
-    // A private-listening window is one account's decision — a wall-clock
-    // deadline left behind here silently suppressed the NEXT account's events,
-    // impressions and presence for up to six hours.
-    'aura.privateUntil',
-  ].forEach(k => storage.removeItem(k));
+  // The list lives in storage/keys.js beside the keys it is made of. It used
+  // to be eight string literals retyped from the eight modules that own them,
+  // which is the whole account-switch boundary for stored data resting on
+  // nobody making a typo.
+  SESSION_KEYS.forEach(k => storage.removeItem(k));
   notify();
 }
 

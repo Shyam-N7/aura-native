@@ -1,4 +1,5 @@
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
 import { updatePreferences } from './auth';
 // Ported from web src/lib/onboarding.js. Three MMKV keys mirror the web's
 // localStorage ones (persistUser also mirrors them from the server user):
@@ -9,9 +10,9 @@ import { updatePreferences } from './auth';
 // (auth.hasOnboarded reads getUser()?.hasOnboarded), which is the only thing
 // the gate consults.
 
-const SEEDS_KEY = 'aura.seedArtists';
-const LANGS_KEY = 'aura.seedLanguages';
-const MOOD_KEY = 'aura.seedMood';
+const SEEDS_KEY = K.seedArtists;
+const LANGS_KEY = K.seedLanguages;
+const MOOD_KEY = K.seedMood;
 
 export function markOnboarded() {
   // Push the snapshot to the server so a returning user (new device, cleared

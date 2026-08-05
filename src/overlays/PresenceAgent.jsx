@@ -5,6 +5,7 @@ import { usePlaybackPresence } from '../hooks/usePlaybackPresence';
 import { getResume } from '../api/playback';
 import { getTrack } from '../api/catalog';
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
 import { setPresenceFeed } from '../lib/presenceFeed';
 
 // Multi-device awareness, ported from web App.jsx + NowPlayingElsewhere —
@@ -16,7 +17,7 @@ import { setPresenceFeed } from '../lib/presenceFeed';
 
 function readSavedTrackId() {
   try {
-    const raw = storage.getItem('aura.position');
+    const raw = storage.getItem(K.position);
     return raw ? JSON.parse(raw)?.trackId ?? null : null;
   } catch {
     return null;
