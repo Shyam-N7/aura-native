@@ -20,7 +20,7 @@ import { PressScale } from '../ui/PressScale';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
 import { subscribeScrollDepth } from '../../lib/scrollDepth';
-import { gooFill, label, radii } from '../../theme/tokens';
+import { fonts, gooFill, label, radii } from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
 const TAB_ICONS = { Home: 'home', Search: 'search', Talk: 'chat', You: 'user' };
@@ -503,5 +503,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
   },
-  bttText: { fontFamily: 'HankenGrotesk-SemiBold', fontSize: 13 },
+  bttText: { fontFamily: fonts.semibold, fontSize: 13 },
 });

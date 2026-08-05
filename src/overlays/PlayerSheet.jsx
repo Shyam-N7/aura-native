@@ -1433,7 +1433,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   upNextMeta: { flex: 1, gap: 1 },
-  upNextTitle: { fontFamily: 'HankenGrotesk-Medium', fontSize: 13.5 },
+  upNextTitle: { fontFamily: fonts.medium, fontSize: 13.5 },
   // Stands in for the 28px TrackArt while auto-radio resolves the next song.
   skelArt: { width: 28 },
   chevRight: { transform: [{ rotate: '-90deg' }] },

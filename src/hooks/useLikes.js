@@ -40,10 +40,6 @@ export function isLikedId(id) {
   return likedIds.has(id);
 }
 
-export function likesReady() {
-  return ready;
-}
-
 export async function like(id) {
   likedIds.add(id);
   notify();

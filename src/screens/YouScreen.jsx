@@ -68,21 +68,18 @@ import { Icon } from '../components/Icon';
 import { fonts, label } from '../theme/tokens';
 import { EASE } from '../theme/motion';
 import { cleanTitle } from '../utils/title';
+import { PRIMARY_LANGUAGES } from '../data/languages';
 
 // The library ("you" tab), ported from web DesktopLibrary: pinned "your year"
 // stats, then a single-open accordion — liked / playlists / history /
 // languages / settings — with an identity chip signing the bottom.
 
-// Web PRIMARY_LANGUAGES (src/data/languages.js) — the language-hub entry
-// chips. The hub screens themselves arrive with the catalog-browse phase.
-const HOME_LANGS = [
-  'tamil',
-  'english',
-  'hindi',
-  'malayalam',
-  'kannada',
-  'telugu',
-];
+// The language-hub entry chips. This was a verbatim copy of
+// PRIMARY_LANGUAGES under a comment naming PRIMARY_LANGUAGES as its source —
+// so adding a language to the canonical list would have added it to
+// onboarding and silently not to here. The hub screens themselves arrive with
+// the catalog-browse phase.
+const HOME_LANGS = PRIMARY_LANGUAGES;
 
 // Which shelf is open survives player round-trips but not an app restart
 // (web keeps it in sessionStorage for the same reason: fresh visits land on

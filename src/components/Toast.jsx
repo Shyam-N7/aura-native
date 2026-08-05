@@ -13,7 +13,7 @@ import { subscribeToast } from '../lib/toast';
 import { useTheme } from '../theme/ThemeContext';
 import { Glass } from './ui/Glass';
 import { Icon } from './Icon';
-import { type } from '../theme/tokens';
+import { fonts, type } from '../theme/tokens';
 import { DUR } from '../theme/motion';
 
 // Success green — reads on all three themes; no theme has a success token.
@@ -136,5 +136,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: { fontFamily: 'HankenGrotesk-Medium', flexShrink: 1 },
+  text: { fontFamily: fonts.medium, flexShrink: 1 },
 });

@@ -147,7 +147,7 @@ function buildTiles(pool) {
   return [...fromPool, ...fill];
 }
 
-export function OnboardingScreen({ pool = [], onDone }) {
+export function OnboardingScreen({ onDone }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -183,11 +183,12 @@ export function OnboardingScreen({ pool = [], onDone }) {
     return () => ctl.abort();
   }, [reloadNonce]);
 
-  const source = useMemo(
-    () => (trending.length ? [...trending, ...pool] : pool),
-    [trending, pool],
-  );
-  const allTiles = useMemo(() => buildTiles(source), [source]);
+  // There used to be a `pool` prop merged in here as a secondary artist
+  // source. App.jsx is the only call site and never passed one, so it
+  // defaulted to [] on every render and this reduced to `trending` — the
+  // seed fallback inside buildTiles is what actually fills the grid before
+  // trending lands.
+  const allTiles = useMemo(() => buildTiles(trending), [trending]);
   const tiles = useMemo(() => {
     if (selectedLangs.size === 0) {
       return allTiles;
