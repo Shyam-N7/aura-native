@@ -14,6 +14,7 @@ import { autoTier, noteAutoSample, resetAuto } from '../lib/autoQuality';
 import { getTrack as fetchTrack } from '../api/catalog';
 import { API_BASE } from '../lib/auth';
 import { crumb, report } from '../lib/crumbs';
+import { notePlayerReady } from '../lib/equalizer';
 import {
   MAX_ATTEMPTS,
   MAX_RECOVERY_MS,
@@ -167,6 +168,17 @@ export async function setupPlayer() {
   }
   await TrackPlayer.updateOptions(baseOptions());
   ready = true;
+  // An audio session exists from here on. The equalizer is initialised by the
+  // app shell, long before this, so on a launch with the EQ already ON its
+  // attach asked for a session id the service had not created yet, gave up,
+  // and nothing retried — the panel showed the switch on over unprocessed
+  // audio for the whole session. This is that retry.
+  //
+  // Un-awaited on purpose, and swallowing: a device that refuses audio effects
+  // must never delay or fail player setup. notePlayerReady no-ops immediately
+  // when there is no equalizer module, which is also every test that boots the
+  // player.
+  notePlayerReady().catch(() => {});
   // Auto-quality sampler follows the pref from here on (guarded by `ready`,
   // so this subscription happens exactly once).
   ensureAutoSampler();

@@ -93,7 +93,10 @@ test('login sends the native client header and persists token + user', async () 
   expect(JSON.parse(opts.body)).toEqual({ email: 'a@b.c', password: 'pw' });
   expect(storage.getItem('aura.authToken')).toBe('jwt-abc');
   expect(getUser()).toEqual(user);
-  expect(storage.getItem('aura.hasOnboarded')).toBe('1');
+  // The onboarded flag is NOT mirrored to its own key. getUser() above already
+  // carries it, and the gate reads only that; a second copy was written,
+  // cleared on sign-out, and never read once.
+  expect(storage.getItem('aura.hasOnboarded')).toBe(null);
   expect(isSignedIn()).toBe(true);
 });
 

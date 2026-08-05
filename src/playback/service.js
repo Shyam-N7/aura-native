@@ -154,6 +154,19 @@ module.exports = async function service() {
         stallAnnounced = false;
       }
     }
+
+    // Delegate LAST, so the marks, the streak reset and the stall bookkeeping
+    // above can never be starved by whatever the UI does with this.
+    //
+    // This was the one delegating-shaped listener that never read its handler:
+    // PlayerContext has defined and registered onPlaybackState since it was
+    // introduced, and nothing has ever called it, so a PlaybackException that
+    // left the native player in 'error' while playWhenReady stayed true never
+    // corrected the play/pause button. No engine fallback here, unlike
+    // PlaybackError — recovery must run headless, UI state must not.
+    if (handlers.onPlaybackState) {
+      handlers.onPlaybackState(e);
+    }
   });
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, e => {
     if (handlers.onQueueEnded) {
