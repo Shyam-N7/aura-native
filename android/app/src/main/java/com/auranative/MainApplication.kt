@@ -47,6 +47,9 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
           add(AuraEqualizerPackage())
           // Backdrop blur for the glass chrome — also app-local.
           add(GlassViewPackage())
+          // Posts system notifications for pushes the OS won't draw itself
+          // (foreground arrivals, and data-only payloads in the background).
+          add(AuraNotifierPackage())
         },
     )
   }

@@ -6,11 +6,17 @@
 //   permission stands (keeps the server row fresh, heals lost registrations).
 //   The server half lands separately — a 404 from /api/push/register simply
 //   means it isn't deployed yet, and registration retries next boot.
-// - A push arriving in the FOREGROUND becomes the house toast, never a
-//   system banner over the open app.
+// - A push arriving in the FOREGROUND is posted to the system shade by the
+//   AuraNotifier module. FCM only draws a notification payload itself while the
+//   app is backgrounded or dead; in the foreground it hands the message to JS,
+//   so without this a broadcast reached nothing but a three-second toast. The
+//   in-app quiet panel is for presence and resume offers, not for anything the
+//   phone's own notification panel should be showing.
 // - A tapped notification carries data.link (an aurafm.live URL) and routes
 //   through the SAME handler as share links — push and deep links behave
-//   identically by construction.
+//   identically by construction. The posted notification's tap intent is an
+//   ACTION_VIEW on that link, so it re-enters through Linking exactly as a
+//   shared link does.
 import {
   AuthorizationStatus,
   getInitialNotification,
@@ -22,7 +28,7 @@ import {
   onTokenRefresh,
   requestPermission,
 } from '@react-native-firebase/messaging';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { fetchAuthed, getUser } from './auth';
 import { report } from './crumbs';
@@ -123,6 +129,44 @@ const route = msg => {
   }
 };
 
+// Put a message in the phone's notification panel.
+//
+// Used for the two deliveries the OS will NOT draw on its own: a push that
+// arrives while the app is in the foreground, and a data-only payload in the
+// background handler. Reads `notification` first and falls back to `data`, so
+// it works whichever way the sender composed the message.
+//
+// Returns whether the system accepted it. The toast fallback covers a binary
+// built before the native module existed and the case where notifications are
+// switched off at the OS level — losing the message entirely is the one
+// outcome worth avoiding.
+export async function displayPush(msg, { fallbackToast = true } = {}) {
+  const n = msg?.notification;
+  const data = msg?.data ?? {};
+  const title = n?.title ?? data.title ?? null;
+  const body = n?.body ?? data.body ?? null;
+  if (!title && !body) {
+    return false;
+  }
+  try {
+    const link = data.link ? String(data.link) : null;
+    const shown = await NativeModules.AuraNotifier?.display?.(
+      title,
+      body,
+      link,
+    );
+    if (shown) {
+      return true;
+    }
+  } catch (err) {
+    report(err, 'push.display-failed');
+  }
+  if (fallbackToast) {
+    showToast(title ?? body);
+  }
+  return false;
+}
+
 // Wired once from the signed-in shell. Returns the unsubscribe bundle.
 export function initPush() {
   const m = getMessaging();
@@ -131,10 +175,7 @@ export function initPush() {
       registerToken();
     }),
     onMessage(m, async msg => {
-      const n = msg?.notification;
-      if (n?.title || n?.body) {
-        showToast(n.title ?? n.body);
-      }
+      await displayPush(msg);
     }),
     onNotificationOpenedApp(m, route),
   ];

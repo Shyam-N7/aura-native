@@ -12,6 +12,7 @@ import {
 import App from './App';
 import { name as appName } from './app.json';
 import { installCrashLogger } from './src/lib/crashLog';
+import { displayPush } from './src/lib/push';
 import { mark, shipBootTiming } from './src/lib/perfMarks';
 
 // First thing, before any app code can throw: persist fatal JS errors so a
@@ -36,9 +37,15 @@ Sentry.init({
 TrackPlayer.registerPlaybackService(() => require('./src/playback/service'));
 
 // FCM requires a background handler registered outside React. Notification-
-// type pushes are shown by the OS on their own; data-only pushes land here
-// (nothing to do with them yet — later phases can act on silent pushes).
-setBackgroundMessageHandler(getMessaging(), async () => {});
+// type pushes are shown by the OS on their own; data-only pushes land HERE and
+// the OS draws nothing for them — this used to be an empty function, so a
+// broadcast sent as data simply vanished. Post those ourselves. No toast
+// fallback: there is no UI to show one to in the background.
+setBackgroundMessageHandler(getMessaging(), async msg => {
+  if (!msg?.notification) {
+    await displayPush(msg, { fallbackToast: false });
+  }
+});
 
 // Sentry.wrap adds the React error boundary + touch/context enrichment
 // around the root — crashes carry what the user was doing, not just a stack.

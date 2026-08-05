@@ -183,6 +183,27 @@ class GlassBlurController(
 
     blurView.setWillNotDraw(false)
     val bitmapSize = sizeScaler.scale(measuredWidth, measuredHeight)
+
+    // Already running at exactly this bitmap size: keep the buffers.
+    //
+    // BlurView routes EVERY size change through here, and the dock's
+    // back-to-top morph animates a LAYOUT width, so this ran once per frame of
+    // the morph — two Bitmap.createBitmap plus two BlurViewCanvas allocations,
+    // thrown away on the next frame. At ~1/6 scale a great many of those frames
+    // round to an identical bitmap size, so the allocation bought nothing at
+    // all. Captures are already throttled; the allocations were not.
+    if (
+      initialized &&
+      internalBitmap.width == bitmapSize.width &&
+      internalBitmap.height == bitmapSize.height
+    ) {
+      // The view's own dimensions may still have moved under the same scaled
+      // size — the capture matrix is recomputed per frame from them, so a
+      // refresh is all this needs.
+      updateBlur()
+      return
+    }
+
     val config = blurAlgorithm.supportedBitmapConfig
     internalBitmap = Bitmap.createBitmap(bitmapSize.width, bitmapSize.height, config)
     internalCanvas = BlurViewCanvas(internalBitmap)

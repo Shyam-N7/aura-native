@@ -12,7 +12,7 @@ const { Event } = require('react-native-track-player');
 const { Image } = require('react-native');
 const engine = require('./engine');
 const likes = require('../hooks/useLikes');
-const { crumb } = require('../lib/crumbs');
+const { crumb, report } = require('../lib/crumbs');
 const { mark } = require('../lib/perfMarks');
 
 const handlers = {};
@@ -68,15 +68,24 @@ module.exports = async function service() {
     if (!id) {
       return;
     }
+    const wasLiked = likes.isLikedId(id);
     try {
-      if (likes.isLikedId(id)) {
+      if (wasLiked) {
         await likes.unlike(id);
       } else {
         await likes.like(id);
       }
-    } catch {
+    } catch (err) {
       // The optimistic Set already rolled itself back — the re-sync below
       // simply paints whatever state survived.
+      //
+      // But it must not roll back SILENTLY. This catch used to swallow
+      // everything, which made a failing heart indistinguishable from a
+      // working one: the icon returned to its old state, nothing was logged,
+      // and "the lock-screen like does nothing" had no evidence anywhere. A
+      // tap the user made and the server refused is a terminal failure they
+      // feel, so it earns a report.
+      report(err, 'player.remote-like-failed', { liked: !wasLiked });
     }
     engine.setLikeButton(likes.isLikedId(id)).catch(() => {});
   });
