@@ -212,8 +212,30 @@ Android SDK — so every native change is review-only until a real build.
   it: `playerStateAndRestore.test.jsx` mocks the service and calls the handler
   directly, so the missing dispatch is invisible to the suite.
 
-**Still open** — the whole of Tier 4 (security/ops), `onPlaybackState`, the EQ
-audio-session re-attach (P3c), `remote-duck`, `aura.hasOnboarded`, AlbumScreen
-virtualization, and all of Tier 5. Also: `npm run lint` fails on a clean tree
-(`AbortSignal is not defined`, `__tests__/auth.test.js:45`) — one line in the
-eslint globals, left alone here as unrelated to any reported bug.
+**Deliberately not changed** (decided against, with the reasoning, so they
+aren't re-opened as oversights)
+
+- **#26 — JWT + profile in unencrypted MMKV.** There is no honest JS-only fix.
+  An `encryptionKey` constant lives in the JS bundle, inside the same APK as
+  the data it claims to protect, so it adds nothing against the only threat
+  that reaches the file (rooted or physical access) while adding a migration
+  on the auth boot path. The real fix is a key held in the Android Keystore —
+  hardware-backed and non-exportable — reached through an app-local native
+  module like `AuraNotifier`, plus a one-way migration of the existing
+  plaintext instance. That needs a build to compile against and a rollback
+  plan, because a key-retrieval failure on any device makes the session
+  unreadable and signs that user out. Worth doing; not worth doing blind.
+  Client-side `exp` checking was also considered and rejected: the 401 →
+  `revalidateSession` → `fetchMe` path already tears down a dead session when
+  online, and trusting device wall-clock to sign people out adds a
+  clock-skew failure mode for no gain.
+- **#31 — release unsignable from a clean clone.** The keystore and
+  `keystore.properties` are not in the repo and must not be; the fix is a CI
+  secret + a documented signing path, which is an infrastructure decision, not
+  a code change. Rewriting the cmd-only npm scripts to be cross-platform is
+  the tractable half, but it changes the exact commands the owner builds with,
+  and there is no build here to prove the rewrite before it lands.
+
+**Still open** — Tier 4 #26 and #31 as above; and from Tier 5: the copy-pasted
+fetch/find/sort scaffolding (#35), the three coach-mark systems (#36), and the
+larger dead-code and doc-rot sweeps (#38, #39).

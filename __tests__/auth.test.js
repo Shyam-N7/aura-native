@@ -189,3 +189,57 @@ test('a burst of 401s triggers a single session re-check', async () => {
   );
   expect(meCalls).toHaveLength(1);
 });
+
+// ── non-JSON responses on the unauthenticated endpoints ────────────────────
+// These seven calls read `await res.json()` before ever looking at res.ok, so
+// any response that isn't JSON threw SyntaxError out of the auth screen with
+// the real status discarded. An edge 502, a 500 rendering an HTML error page
+// and a captive portal all produce exactly that.
+
+const htmlRes = status => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => {
+    throw new SyntaxError('JSON Parse error: Unexpected character: <');
+  },
+});
+
+test('an html 502 on login surfaces the status, not a parse error', async () => {
+  fetchMock.mockResolvedValueOnce(htmlRes(502));
+
+  const err = await login('a@b.c', 'pw').catch(e => e);
+
+  expect(err).toBeInstanceOf(Error);
+  expect(err.message).not.toMatch(/JSON|Parse|Unexpected/i);
+  expect(err.message).toBe('the server is having trouble — try again in a moment');
+  expect(err.status).toBe(502);
+  // And no half-session: a server fault must not look like a login.
+  expect(isSignedIn()).toBe(false);
+});
+
+test('a non-JSON 4xx reads as unexpected rather than as a rejected password', async () => {
+  fetchMock.mockResolvedValueOnce(htmlRes(429));
+
+  const err = await login('a@b.c', 'pw').catch(e => e);
+
+  expect(err.message).toBe('unexpected response from the server');
+  expect(err.status).toBe(429);
+});
+
+test('a JSON error body still wins over the synthesised message', async () => {
+  fetchMock.mockResolvedValueOnce(jsonRes(401, { error: 'wrong password' }));
+
+  const err = await login('a@b.c', 'pw').catch(e => e);
+
+  expect(err.message).toBe('wrong password');
+  expect(err.status).toBe(401);
+});
+
+test('a 200 that is not JSON does not throw, it just carries no session', async () => {
+  fetchMock.mockResolvedValueOnce(htmlRes(200));
+
+  // Reaches setSession with {} — no token, no user, so nothing is persisted
+  // and the caller gets undefined instead of an exception from deep inside.
+  await expect(login('a@b.c', 'pw')).resolves.toBeUndefined();
+  expect(isSignedIn()).toBe(false);
+});
