@@ -6,6 +6,7 @@
 // hiding a mix track must drop the cached mixes so the shelf can't serve it
 // again this session.
 import { removeSnapshot } from './snapshot';
+import { onSessionReset } from './sessionReset';
 
 export const homeCache = {};
 
@@ -27,3 +28,9 @@ export function invalidateHomeCache(...keys) {
     drop(k);
   }
 }
+
+// This cache is per-PROCESS, not per-account, and useHomeSection treats a
+// populated key as a reason to skip the fetch entirely — so carrying it across
+// an account change served the previous user's Home to the next one AND
+// suppressed the request that would have corrected it.
+onSessionReset(() => invalidateHomeCache());

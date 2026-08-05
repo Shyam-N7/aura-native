@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { storage } from '../storage/mmkv';
+import { onSessionReset } from '../lib/sessionReset';
 
 // Ported from web src/hooks/useRecentSearches.js (localStorage → MMKV).
 // Singleton recent-searches store: state lives in module scope so every
@@ -53,6 +54,15 @@ export function clearRecentSearches() {
   write(items);
   notify();
 }
+
+// `items` is read once at import, so clearSession removing the disk key left
+// the previous account's queries sitting in memory — visible to the next user
+// on the Search screen, and written straight back under their name by the
+// first pushRecentSearch. Re-read (the key is gone by now) and repaint.
+onSessionReset(() => {
+  items = read();
+  notify();
+});
 
 export function useRecentSearches() {
   const [snap, setSnap] = useState(items);

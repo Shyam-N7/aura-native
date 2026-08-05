@@ -108,6 +108,10 @@ export function clearSession() {
     'aura.position',
     'aura.talkHistory',
     'aura.recentSearches',
+    // A private-listening window is one account's decision — a wall-clock
+    // deadline left behind here silently suppressed the NEXT account's events,
+    // impressions and presence for up to six hours.
+    'aura.privateUntil',
   ].forEach(k => storage.removeItem(k));
   notify();
 }

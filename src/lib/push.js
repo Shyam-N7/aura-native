@@ -19,6 +19,7 @@
 //   shared link does.
 import {
   AuthorizationStatus,
+  deleteToken,
   getInitialNotification,
   getMessaging,
   getToken,
@@ -32,6 +33,7 @@ import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { fetchAuthed, getUser } from './auth';
 import { report } from './crumbs';
+import { onSessionReset } from './sessionReset';
 import { showToast } from './toast';
 
 // .v2 — the v1 flag was burned by an ask that never happened (see
@@ -196,6 +198,22 @@ export function initPush() {
     .catch(() => {});
   return () => subs.forEach(u => u());
 }
+
+// Signing out has to surrender the push token, or the device keeps receiving
+// the previous account's notifications: nothing in the client ever released it
+// and there is no server-side unregister endpoint to call. Deleting it here
+// makes the old registration undeliverable immediately; the next sign-in mints
+// a fresh token, which initPush registers on its first boot with permission.
+//
+// Guarded on signedOut: this same reset runs when an account is REPLACED, and
+// deleting mid-sign-in would race the registration that follows it — the
+// device would end up enrolled under a token it no longer holds.
+onSessionReset(({ signedOut }) => {
+  if (!signedOut) {
+    return;
+  }
+  deleteToken(getMessaging()).catch(err => report(err, 'push.token-delete'));
+});
 
 // ── Notification preferences (settings switches) ─────────────────────
 // Server-persisted — the sender checks the same row before every triggered

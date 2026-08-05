@@ -68,6 +68,7 @@ jest.mock('@react-native-firebase/messaging', () => ({
   },
   getMessaging: jest.fn(() => ({})),
   getToken: jest.fn(async () => 'jest-push-token'),
+  deleteToken: jest.fn(async () => {}),
   hasPermission: jest.fn(async () => 0),
   requestPermission: jest.fn(async () => 0),
   onMessage: jest.fn(() => () => {}),
