@@ -39,10 +39,6 @@ Blanket adaptations (apply to every port):
 | src/api/sonicDna.js | src/api/sonicDna.js | |
 | src/screens/JournalScreen.jsx | src/screens/desktop/DesktopJournal.jsx | hydrates entries[].tracks (server sends ID strings; the web renders them as objects so its thumbs never show) |
 | src/screens/DnaScreen.jsx | src/screens/desktop/DesktopDna.jsx | unavailable state reads eventsSeen (web reads a `seen` field that never existed); moods show real play counts (web's share% rendered NaN) |
-
-Lyrics overlay: reduced motion never enters cinematic mode (deliberate — the
-800ms dissolve would be a one-frame snap); "song ended" is a position
-heuristic (≥99.5% + paused), not the web's natural-end event.
 | src/api/mood.js | src/api/mood.js | |
 | src/hooks/useTalkHistory.js | src/hooks/useTalkHistory.js | seed is an explicit call (native greeting waits on the mood fetch) |
 | src/screens/TalkScreen.jsx | src/components/chat/TalkAura.jsx + src/screens/desktop/DesktopTalk.jsx | tab screen, not a modal; no now-playing banner (the dock bead stays visible); greeting only claims a mood reading when confidence ≥ 0.5 |
@@ -59,3 +55,16 @@ heuristic (≥99.5% + paused), not the web's natural-end event.
 | src/lib/auth.js setActiveMode/enableFamilyMode/disableFamilyMode | src/lib/auth.js same | no cross-tab broadcast (web-only) |
 | src/overlays/ModeSheet.jsx + src/lib/modeSheet.js | src/components/nav/GooeyModePills.jsx (+ MobileTopBar mode chip) | bottom-sheet picker, not gooey metaball pills; 'car' hidden until the Phase-5 car experience lands (it's a no-op vibe without the drive UI + leveling) |
 | src/screens/YouScreen.jsx family-mode group | src/components/SettingsPanel.jsx family form | inline PIN form in the settings shelf; number-pad + secureTextEntry |
+
+## Notes that outgrew the table
+
+**Lyrics overlay.** Reduced motion never enters cinematic mode — deliberate,
+the 800 ms dissolve would be a one-frame snap. "Song ended" is a position
+heuristic (≥ 99.5% + paused), not the web's natural-end event.
+
+*(This paragraph used to sit between two table rows. Markdown ends a table at
+the first non-row line, so everything after it — twelve ports, including every
+bridges row and the auth/mode/family entries — rendered as raw pipe-separated
+text rather than as part of the table. If another note outgrows a cell, it
+goes here.)*
+

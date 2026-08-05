@@ -2,6 +2,26 @@
 
 Description only. No quality judgments; those are in `reports/02-review.md`.
 
+> **Freshness — read this before trusting a number or a line reference.**
+>
+> This is a *snapshot*, taken at `native` `027ee93`. It has not been retaken,
+> and the tree has moved a long way since. Rather than silently restate it at
+> a new commit — which would destroy the record of what was true then — here
+> is the measured drift as of `9a0a4b0` (2026-08-05):
+>
+> | Claim below | Then | Now |
+> |---|---|---|
+> | JS/JSX LOC (§2) | ~24,800 | ~33,300 |
+> | App-owned Kotlin files (§2) | 4 | 9 — the glass blur controller, the notifier, and their packages arrived after the snapshot |
+> | Jest (§7) | 46 suites / 271 tests | 59 suites / 356 tests |
+> | `npm run lint` (§7) | "not re-run this phase" | passes clean on the whole tree |
+> | `fetchAuthed` timeout (§4) | "no timeout" | **false now** — corrected in place below, because a reader in §4 has no reason to come back up here |
+>
+> Per-file LOC figures and every `file:line` citation have drifted with them
+> (the audit measured 2–40 lines). Treat line numbers here as "roughly here,
+> go look" rather than as addresses. Prose about *how things work* is still
+> accurate except where marked.
+
 Taken at:
 
 | Repo | Short name used below | Path | Branch | HEAD |
@@ -76,7 +96,7 @@ Routers beyond `app.js`: `/api/auth` (`server/auth.js`), `/api/family` (`server/
 
 `native` reaches the server through exactly one function: `fetchAuthed(path, opts)` at `native/src/lib/auth.js:492-502`. It prefixes `API_BASE`, attaches `Authorization: Bearer <aura.authToken>`, and on a 401 kicks a de-duped `fetchMe()` re-validation (`native/src/lib/auth.js:469-482`) rather than signing out directly. Auth endpoints in `native/src/lib/auth.js` call `fetch` directly instead, since they have no token yet.
 
-`fetchAuthed` sets **no timeout, no retry, and no abort default**. Callers pass `signal` when they have one; each caller checks `res.ok` and throws its own `Error`.
+~~`fetchAuthed` sets **no timeout, no retry, and no abort default**.~~ **No longer true.** Every call now carries a 15 s deadline via a manual `AbortController` (`native/src/lib/auth.js:531-556`) — a hung connection used to be a 60-second spinner ended only by Vercel's `maxDuration`. `deadlineMs` overrides it and `0` opts out; the exemptions are narrow and deliberate (`getTrack` passes `0`, because a timeout on the call that decides *which track plays* turns slow-success into failure; Gemini talk and image uploads pass longer budgets). There is still **no retry**. A caller's own `signal` wins over the default. Each caller checks `res.ok` and throws its own `Error` — except the unauthenticated auth endpoints, which read their body through `readJson()` so a non-JSON 5xx surfaces as a status rather than a `SyntaxError`.
 
 Server surface: **94 routes** — 74 in `app.js`, 20 in the auth router.
 
