@@ -388,7 +388,7 @@ export function PlayerSheet() {
   // holds against us. Open-but-backgrounded (locked mid-listen) is the same
   // churn plus the ribbon/time re-render cascade: reports/10 leak territory.
   const appActive = useAppActive();
-  const { position, duration } = usePlaybackProgress(
+  const { position, duration, bufferedProgress } = usePlaybackProgress(
     open && appActive ? 250 : 60_000,
   );
   const reduced = useReducedMotion();
@@ -1074,6 +1074,7 @@ export function PlayerSheet() {
 
             <ProgressRibbon
               progress={duration > 0 ? position / duration : 0}
+              buffered={bufferedProgress}
               playing={player.isPlaying}
               seed={String(track.id ?? 'x')}
               accent={t.accent}

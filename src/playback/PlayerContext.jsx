@@ -662,6 +662,11 @@ export function PlayerProvider({ children }) {
   const playQueue = useCallback(
     (tracks, idx = 0, source = "tonight's set") => {
       userActedRef.current = true;
+      // Asking for music is asking for a clean slate: clear the cross-track
+      // give-up streak (and abandon any pending resume wait) so someone who
+      // has just fixed their wifi gets a full run of attempts instead of
+      // being stopped by the failures that came before.
+      engine.notePlaybackStarted();
       const q = model.createQueue(tracks, idx, source);
       if (!q.tracks.length) {
         return;
@@ -698,6 +703,9 @@ export function PlayerProvider({ children }) {
       enqueueOp(() => engine.pause());
     } else {
       setIsPlaying(true);
+      // Same fresh-slate rule as playQueue: a deliberate press of play after a
+      // stopped-on-failure session must not inherit that session's streak.
+      engine.notePlaybackStarted();
       enqueuePlayOp(async () => {
         // After a system kill the model can remember a queue the NATIVE
         // player lost (the cold restore died before syncing) — play() on an

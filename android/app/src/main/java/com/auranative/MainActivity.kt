@@ -1,6 +1,7 @@
 package com.auranative
 
 import android.os.Bundle
+import android.util.Log
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -31,17 +32,44 @@ class MainActivity : ReactActivity() {
   private fun requestFullRefreshRate() {
     val display = windowManager.defaultDisplay ?: return
     val current = display.mode ?: return
-    val best = display.supportedModes
+    val modes = display.supportedModes
+    val best = modes
       .filter {
         it.physicalWidth == current.physicalWidth &&
           it.physicalHeight == current.physicalHeight
       }
       .maxByOrNull { it.refreshRate } ?: return
+    // Diagnostic, because the two ways this silently does nothing are
+    // indistinguishable from inside the app — both just leave the panel at
+    // 60Hz (owner report, still 60 after this landed):
+    //   1. the platform hands a non-allowlisted app a mode list containing
+    //      only the current mode, so `best` IS `current` and the request below
+    //      is never made at all;
+    //   2. the request is made and the OS refuses the vote.
+    // Log what was actually offered so logcat separates them. One line at
+    // launch, no loop.
+    Log.i(
+      TAG,
+      "display: current=${current.refreshRate}Hz modes=[" +
+        modes.joinToString {
+          "${it.physicalWidth}x${it.physicalHeight}@${it.refreshRate}"
+        } + "]",
+    )
     if (best.modeId != current.modeId) {
       window.attributes = window.attributes.apply {
         preferredDisplayModeId = best.modeId
       }
+      Log.i(TAG, "requested modeId=${best.modeId} (${best.refreshRate}Hz)")
+    } else {
+      Log.i(
+        TAG,
+        "no higher mode offered at this resolution — nothing requested",
+      )
     }
+  }
+
+  private companion object {
+    const val TAG = "AuraDisplay"
   }
 
   /**

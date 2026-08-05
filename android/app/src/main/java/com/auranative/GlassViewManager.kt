@@ -59,15 +59,32 @@ class GlassBlurView(context: Context) : BlurView(context) {
   // future lifecycle churn is diagnosable from logcat.
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
-    Log.i(TAG, "view attached (ready=$controllerReady frozen=$pendingFrozen)")
+    // Geometry on BOTH edges: the detach/attach pair is what proves whether a
+    // stack pop restores the view at its previous size (in which case Fabric
+    // sends no updateLayout and onSizeChanged never fires) or at a new one.
+    Log.i(TAG, "attached ready=$controllerReady frozen=$pendingFrozen $geom")
     controller?.resyncArm()
+    // Re-run init on the way back in. A detach can have left the controller
+    // holding WILL_NOT_DRAW from a zero-size measure, and nothing else will
+    // clear it: onSizeChanged does not fire when the size returns to the value
+    // it already had, which is exactly what a stack pop restores. Waiting for
+    // the heartbeat would work eventually, but that is up to two seconds of a
+    // visibly empty bar on every back press.
+    //
+    // Cheap to call: init() keeps the existing buffers when the scaled bitmap
+    // size is unchanged, so the common case allocates nothing.
+    controller?.updateBlurViewSize()
     invalidate()
   }
 
   override fun onDetachedFromWindow() {
     super.onDetachedFromWindow()
-    Log.i(TAG, "view detached")
+    Log.i(TAG, "detached $geom")
   }
+
+  private val geom: String
+    get() = "w=$width h=$height mw=$measuredWidth mh=$measuredHeight " +
+      "hw=$isHardwareAccelerated"
 
   private companion object {
     const val TAG = "GlassBlur"

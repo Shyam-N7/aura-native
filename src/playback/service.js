@@ -14,8 +14,31 @@ const engine = require('./engine');
 const likes = require('../hooks/useLikes');
 const { crumb, report } = require('../lib/crumbs');
 const { mark } = require('../lib/perfMarks');
+const { showToast } = require('../lib/toast');
 
 const handlers = {};
+
+// ── mid-track starvation ────────────────────────────────────────────────
+// ExoPlayer reports 'buffering' whenever it runs dry. A brief one is normal —
+// playback is progressive, so every block boundary can produce one — but a
+// long one means the connection cannot keep up with the stream. The app
+// already KNEW this (the auto-quality sampler watches buffered-minus-position
+// and silently steps the bitrate down); it just never told anyone, so a stall
+// was indistinguishable from the player being broken.
+//
+// Deliberately NOT mirrored onto the play/pause button: PlayerContext's
+// comment about buffering flickering that button is right, and this is a
+// separate, slower signal.
+const STALL_TOAST_MS = 8000;
+let stallTimer = null;
+let stallAnnounced = false;
+
+function clearStallWatch() {
+  if (stallTimer) {
+    clearTimeout(stallTimer);
+    stallTimer = null;
+  }
+}
 
 function registerHandlers(next) {
   Object.assign(handlers, next);
@@ -105,6 +128,31 @@ module.exports = async function service() {
       mark('first-ready');
     } else if (e?.state === 'playing') {
       mark('first-playing');
+      // Audio is genuinely coming out: whatever run of failures preceded this
+      // is over, so the cross-track give-up streak starts again from zero.
+      // Without a signal here the streak would only ever accumulate, and one
+      // bad track earlier in a long session would make the next two stop it.
+      engine.notePlaybackStarted();
+    }
+
+    if (e?.state === 'buffering' || e?.state === 'loading') {
+      // One toast per stall episode — a struggling connection produces a
+      // stream of these events, and the single-slot toast would otherwise
+      // flicker exactly the way the per-skip message used to.
+      if (!stallTimer && !stallAnnounced) {
+        stallTimer = setTimeout(() => {
+          stallTimer = null;
+          stallAnnounced = true;
+          crumb('playback', 'stall');
+          showToast('your connection is slow — still loading.');
+        }, STALL_TOAST_MS);
+      }
+    } else {
+      clearStallWatch();
+      if (e?.state === 'playing') {
+        // Recovered: the next stall is a new episode and earns its own say.
+        stallAnnounced = false;
+      }
     }
   });
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, e => {
