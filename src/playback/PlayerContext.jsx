@@ -251,6 +251,33 @@ export function PlayerProvider({ children }) {
             nativeTrack.id !== before.tracks[before.idx]?.id &&
             before.tracks[active]?.id === nativeTrack.id;
           if (drifted) {
+            // Correct the INDEX against the live queue rather than rebuilding
+            // the mutation from `before`.
+            //
+            // `before` is the queue as it stood when THIS edit was issued, and
+            // by the time the op reaches the front of the chain it can be
+            // several changes behind: a second rapid edit, a hydration fill, a
+            // near-end URL freshen, a wake resync. Recomputing from it threw
+            // every one of them away — and because only this branch calls
+            // applyQueue, the model kept the truncated result while the native
+            // queue got the later op's version. That divergence is the exact
+            // thing the op chain exists to prevent.
+            //
+            // The live queue already carries this mutation (applied
+            // optimistically above) plus everything since, so all that is
+            // actually wrong with it is idx. Point idx at the track the native
+            // player says is playing and nothing else is disturbed.
+            const live = queueRef.current;
+            const at = live.tracks.findIndex(x => x.id === nativeTrack.id);
+            if (at >= 0) {
+              const fixed = { ...live, idx: at };
+              applyQueue(fixed);
+              return engine.syncQueue(fixed, { startIndex: fixed.idx });
+            }
+            // The playing track did not survive the edit (the user removed the
+            // very row that was playing), so there is no live index to adopt —
+            // fall back to recomputing from `before`, which the model knows how
+            // to land.
             const fixed = mutate({ ...before, idx: active });
             applyQueue(fixed);
             return engine.syncQueue(fixed, { startIndex: fixed.idx });
@@ -713,23 +740,38 @@ export function PlayerProvider({ children }) {
 
   const prev = useCallback(() => {
     userActedRef.current = true;
-    const q = queueRef.current;
-    if (!q.tracks.length) {
+    if (!queueRef.current.tracks.length) {
       return;
     }
-    // Which track "previous" would step to, if we step at all.
-    let idx = null;
-    if (q.idx > 0) {
-      idx = q.idx - 1;
-    } else if (q.source === "tonight's set" || repeatRef.current === 'all') {
-      idx = q.tracks.length - 1;
-    }
     enqueuePlayOp(async () => {
+      // Both the target and the queue it is relative to are resolved HERE,
+      // inside the op — not at press time.
+      //
+      // Every sibling intent (next, jumpTo, playQueue, removeAt) applies its
+      // mutation synchronously on press, so queueRef is already updated before
+      // the next press reads it. prev was the sole exception: it captured the
+      // queue and computed the target on press but only applied them after the
+      // chain drained, so a double-tap read the same idx twice and stepped back
+      // ONE track instead of two — and the stale snapshot it wrote back
+      // clobbered anything that had landed in between.
       // Past the threshold — or with nothing to go back to — a previous press
       // RESTARTS the current track, keeping idx and the play/pause state as
       // they are. Only near the start does it step to the previous song (the
       // universal convention; the lock-screen control routes here too).
       const pos = await engine.getPosition();
+      // Read the queue AFTER the only await, so the snapshot applied below is
+      // the freshest one available.
+      const q = queueRef.current;
+      if (!q.tracks.length) {
+        return;
+      }
+      // Which track "previous" would step to, if we step at all.
+      let idx = null;
+      if (q.idx > 0) {
+        idx = q.idx - 1;
+      } else if (q.source === "tonight's set" || repeatRef.current === 'all') {
+        idx = q.tracks.length - 1;
+      }
       if (pos > engine.RESTART_THRESHOLD_SEC || idx == null) {
         await engine.seekTo(0);
         return;
