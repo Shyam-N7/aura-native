@@ -2,7 +2,11 @@ import TrackPlayer, {
   __getMockState,
   __resetMock,
 } from 'react-native-track-player';
-import { handlePlaybackError, _resetFailureStreak } from '../src/playback/engine';
+import {
+  handlePlaybackError,
+  notePlaybackStarted,
+  _resetFailureStreak,
+} from '../src/playback/engine';
 import { subscribeToast } from '../src/lib/toast';
 
 // The mid-song offline pause used to promise something nothing delivered.
@@ -25,7 +29,8 @@ jest.mock('../src/lib/retryPolicy', () => ({
 }));
 
 const NET_ERR = { code: 'android-io-network-connection-failed' };
-const track = { id: 'n1', title: 'n1', url: 'https://cdn.example.com/n1.mp4' };
+const mk = id => ({ id, title: id, url: `https://cdn.example.com/${id}.mp4` });
+const track = mk('n1');
 
 // MAX_RECOVERY_MS is 20s. Crossing it is the cheapest way to the ceiling: the
 // attempt-count route needs seven events on one track, and the give-up streak
@@ -117,4 +122,71 @@ test('a wait that is superseded does not resume behind the user', async () => {
   await jest.advanceTimersByTimeAsync(PAST_RESUME_PROBE_GAP_MS * 3);
 
   expect(__getMockState().playWhenReady).toBe(false);
+});
+
+// ── the interaction cases ──────────────────────────────────────────────────
+// An unattended loop that calls play() minutes later is the kind of thing that
+// is right in isolation and wrong in company. These pin the three ways it
+// could misbehave around the user.
+
+test('the wait does not yank you back off a song you moved to', async () => {
+  await TrackPlayer.setQueue([mk('n1'), mk('n2')]);
+  await pauseOfflineMidSong();
+
+  // Offline, but the next track is already in ExoPlayer's disk cache, so the
+  // user skips onto it and plays.
+  await TrackPlayer.skipToNext();
+  await TrackPlayer.play();
+  expect(__getMockState().activeIndex).toBe(1);
+
+  goOnline();
+  await jest.advanceTimersByTimeAsync(PAST_RESUME_PROBE_GAP_MS * 2);
+
+  // stillOnSlot is what stops the wait dragging them back to n1.
+  expect(__getMockState().activeIndex).toBe(1);
+});
+
+test('pressing play cancels the wait, so it cannot fire again later', async () => {
+  await pauseOfflineMidSong();
+
+  // What PlayerContext does on a deliberate play press, and what the service
+  // does the moment audio is genuinely coming out.
+  notePlaybackStarted();
+  await TrackPlayer.pause(); // ...and the user pauses again straight after
+
+  goOnline();
+  await jest.advanceTimersByTimeAsync(PAST_RESUME_PROBE_GAP_MS * 3);
+
+  expect(__getMockState().playWhenReady).toBe(false);
+});
+
+test('a second arming supersedes the first — one resume, not two', async () => {
+  // Arming from two places is what this change introduces, so the guard that
+  // makes that safe is worth pinning. Two full trips through the offline
+  // ceiling arm two waits; the generation counter has to retire the first.
+  await pauseOfflineMidSong();
+  await pauseOfflineMidSong();
+
+  // Count only what happens once the network returns. A global play() count
+  // cannot see this: the offline branch resets `recovery`, so the next error
+  // restarts the retry ladder, and loadAndResume calls play() on its own.
+  const play = jest.spyOn(TrackPlayer, 'play');
+  goOnline();
+  await jest.advanceTimersByTimeAsync(PAST_RESUME_PROBE_GAP_MS * 4);
+
+  expect(play).toHaveBeenCalledTimes(1);
+  play.mockRestore();
+});
+
+test('the wait gives up after its window instead of polling forever', async () => {
+  await pauseOfflineMidSong();
+
+  // Five minutes of nothing, then the network returns. The wait is over — the
+  // queue and position are still intact, so the user's next play resumes.
+  await jest.advanceTimersByTimeAsync(6 * 60 * 1000);
+  goOnline();
+  await jest.advanceTimersByTimeAsync(PAST_RESUME_PROBE_GAP_MS * 2);
+
+  expect(__getMockState().playWhenReady).toBe(false);
+  expect(__getMockState().activeIndex).toBe(0);
 });
