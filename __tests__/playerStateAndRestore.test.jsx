@@ -198,3 +198,79 @@ describe('PlayerProvider queue restore', () => {
     expect(readQueue().tracks.map(t => t.id)).toEqual(['t1', 't2']);
   });
 });
+
+// ── shuffle across a restart ───────────────────────────────────────────────
+// Shuffle state was never persisted. A queue saved while shuffled came back
+// shuffled with the toggle reading OFF and no snapshot, so the pre-shuffle
+// order was unrecoverable and the pill lied about it.
+
+describe('shuffle survives a restart', () => {
+  const threeTrack = {
+    tracks: [
+      { id: 't1', title: 'one', durationSec: 100 },
+      { id: 't2', title: 'two', durationSec: 100 },
+      { id: 't3', title: 'three', durationSec: 100 },
+    ],
+    idx: 0,
+    source: "tonight's set",
+    v: 1,
+  };
+
+  test('the order and the flag are written, as ids not rows', async () => {
+    storeQueue(threeTrack);
+    await mount();
+    await ReactTestRenderer.act(async () => {
+      api.toggleShuffle();
+      await new Promise(r => setTimeout(r, 0));
+    });
+    await unmount();
+
+    const saved = readQueue();
+    expect(saved.shuffled).toBe(true);
+    // Ids, not a second copy of every row — a long queue would otherwise
+    // write itself to disk twice.
+    expect(saved.preShuffle).toEqual(['t1', 't2', 't3']);
+    expect(typeof saved.preShuffle[0]).toBe('string');
+  });
+
+  test('a cold open reports shuffle on and can still put it back', async () => {
+    storeQueue({
+      ...threeTrack,
+      tracks: [threeTrack.tracks[0], threeTrack.tracks[2], threeTrack.tracks[1]],
+      shuffled: true,
+      preShuffle: ['t1', 't2', 't3'],
+    });
+
+    await mount();
+
+    // Used to boot to `false` with a null snapshot.
+    expect(api.shuffleActive).toBe(true);
+    await ReactTestRenderer.act(async () => {
+      api.toggleShuffle();
+      await new Promise(r => setTimeout(r, 0));
+    });
+    expect(api.shuffleActive).toBe(false);
+    expect(api.queue.tracks.map(t => t.id)).toEqual(['t1', 't2', 't3']);
+  });
+
+  test('a payload with no shuffle fields reads as not shuffled', async () => {
+    storeQueue(threeTrack); // the shape every existing install has on disk
+    await mount();
+    expect(api.shuffleActive).toBe(false);
+  });
+
+  test('a one-track queue does not claim to have shuffled', async () => {
+    storeQueue({ ...threeTrack, tracks: [threeTrack.tracks[0]] });
+    await mount();
+
+    await ReactTestRenderer.act(async () => {
+      api.toggleShuffle();
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    // The pill used to light and toast "shuffled." over a no-op, and because
+    // nothing resets it when tracks arrive later, the NEXT press took the
+    // off-branch and did nothing visible: two presses to shuffle.
+    expect(api.shuffleActive).toBe(false);
+  });
+});

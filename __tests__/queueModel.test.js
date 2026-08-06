@@ -137,15 +137,14 @@ describe('shuffleUpcoming', () => {
   test('pins history + current, shuffles only the tail', () => {
     const tracks = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => t(id));
     const q = createQueue(tracks, 2, 'your set');
-    // Reversing rng: j = i-1 each round rotates the tail deterministically.
-    const shuffled = shuffleUpcoming(q, () => 0.99);
+    // rng () => 0 puts j at 0 every round, which actually reorders: the tail
+    // [d,e,f] becomes [e,f,d]. This used to pass () => 0.99, where
+    // j = floor(0.99 * (i+1)) === i — every swap a self-swap, so the "shuffle"
+    // was a no-op and the .sort() below hid it. The comment claimed the rng
+    // rotated the tail; it did nothing.
+    const shuffled = shuffleUpcoming(q, () => 0);
     expect(shuffled.tracks.slice(0, 3).map(x => x.id)).toEqual(['a', 'b', 'c']);
-    expect(
-      shuffled.tracks
-        .slice(3)
-        .map(x => x.id)
-        .sort(),
-    ).toEqual(['d', 'e', 'f']);
+    expect(shuffled.tracks.slice(3).map(x => x.id)).toEqual(['e', 'f', 'd']);
     expect(shuffled.idx).toBe(2);
   });
 
@@ -168,7 +167,7 @@ describe('restoreOrder', () => {
   test('round-trips a shuffle back to the original order', () => {
     const tracks = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => t(id));
     const q = createQueue(tracks, 2, 'your set');
-    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const shuffled = shuffleUpcoming(q, () => 0);
     const back = restoreOrder(shuffled, q.tracks);
     expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
     expect(back.tracks[back.idx].id).toBe('c');
@@ -176,7 +175,7 @@ describe('restoreOrder', () => {
 
   test('tracks removed while shuffled stay gone', () => {
     const q = createQueue(['a', 'b', 'c', 'd'].map(id => t(id)), 0, 'your set');
-    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const shuffled = shuffleUpcoming(q, () => 0);
     const trimmed = removeAt(shuffled, shuffled.tracks.findIndex(x => x.id === 'd'));
     const back = restoreOrder(trimmed, q.tracks);
     expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c']);
@@ -185,7 +184,7 @@ describe('restoreOrder', () => {
 
   test('tracks added while shuffled follow at the end', () => {
     const q = createQueue(['a', 'b', 'c'].map(id => t(id)), 0, 'your set');
-    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const shuffled = shuffleUpcoming(q, () => 0);
     const grown = addToEnd(shuffled, t('x'));
     const back = restoreOrder(grown, q.tracks);
     expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'x']);
@@ -195,7 +194,7 @@ describe('restoreOrder', () => {
     const dup = t('b');
     const tracks = [t('a'), dup, t('c'), dup];
     const q = createQueue(tracks, 0, 'your set');
-    const shuffled = shuffleUpcoming(q, () => 0.99);
+    const shuffled = shuffleUpcoming(q, () => 0);
     const back = restoreOrder(shuffled, q.tracks);
     expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'b']);
   });
@@ -204,6 +203,95 @@ describe('restoreOrder', () => {
     const q = q3();
     expect(restoreOrder(q, null)).toBe(q);
     expect(restoreOrder(q, [])).toBe(q);
+  });
+
+  // ── the clone class ──────────────────────────────────────────────────
+  // restoreOrder used to match by object identity, on the stated premise that
+  // "queue ops move track objects, never clone them". Two paths do clone them
+  // — the near-end URL freshen and hydrateAround, both `{ ...x, ...fresh }`.
+  // Every test above preserves identity, which is exactly why this shipped.
+
+  // Mirrors PlayerContext: the freshen rebuilds ONE row and leaves the rest.
+  const freshen = (q, id, patch) => ({
+    ...q,
+    tracks: q.tracks.map(x => (x.id === id ? { ...x, ...patch } : x)),
+  });
+
+  test('a track cloned while shuffled still lands in its original place', () => {
+    const tracks = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => t(id));
+    const q = createQueue(tracks, 0, 'your set');
+    // rng () => 0 gives a real reorder: [a, c, d, e, f, b].
+    let live = shuffleUpcoming(q, () => 0);
+    // Walk the whole tail, freshening each track as it becomes next — which
+    // is exactly what the near-end guard does at every boundary. Five steps,
+    // so 'b' (first in the ORIGINAL order, last in the shuffled one) is
+    // cloned too. That is what the old identity match could not survive:
+    // with only the late tracks cloned it happened to produce the right
+    // answer, so a gentler version of this test passed against the bug.
+    for (let n = 0; n < 5; n++) {
+      const nxt = live.tracks[live.idx + 1];
+      live = {
+        ...live,
+        tracks: live.tracks.map(x =>
+          x.id === nxt.id ? { ...x, streamUrl: 'fresh' } : x,
+        ),
+        idx: live.idx + 1,
+      };
+    }
+    expect(live.tracks[live.idx].id).toBe('b');
+
+    const back = restoreOrder(live, q.tracks);
+
+    expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    // The half that ended albums early: the playhead was dragged to the tail,
+    // so nothing followed the current song. 'b' is second, so four do.
+    expect(back.idx).toBe(1);
+    expect(back.tracks.slice(back.idx + 1).map(x => x.id)).toEqual([
+      'c',
+      'd',
+      'e',
+      'f',
+    ]);
+  });
+
+  test('the restored row keeps the freshened url, not the snapshot one', () => {
+    const tracks = ['a', 'b', 'c'].map(id => t(id));
+    const q = createQueue(tracks, 0, 'your set');
+    const shuffled = freshen(
+      shuffleUpcoming(q, () => 0),
+      'c',
+      { streamUrl: 'fresh-c' },
+    );
+
+    const back = restoreOrder(shuffled, q.tracks);
+
+    // Putting the snapshot object back would undo the refresh and hand the
+    // next boundary the stale link the freshen exists to avoid.
+    expect(back.tracks.find(x => x.id === 'c').streamUrl).toBe('fresh-c');
+  });
+
+  test('a snapshot of bare ids works the same as one of tracks', () => {
+    const tracks = ['a', 'b', 'c', 'd'].map(id => t(id));
+    const q = createQueue(tracks, 0, 'your set');
+    const shuffled = shuffleUpcoming(q, () => 0);
+
+    const byIds = restoreOrder(shuffled, ['a', 'b', 'c', 'd']);
+    const byTracks = restoreOrder(shuffled, q.tracks);
+
+    expect(byIds.tracks.map(x => x.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(byIds.tracks.map(x => x.id)).toEqual(byTracks.tracks.map(x => x.id));
+    expect(byIds.idx).toBe(byTracks.idx);
+  });
+
+  test('an id queued twice but snapshotted once appends exactly one', () => {
+    const dup = t('b');
+    const q = createQueue([t('a'), dup], 0, 'your set');
+    // 'b' queued a second time while shuffled.
+    const grown = addToEnd(q, dup);
+
+    const back = restoreOrder(grown, [t('a'), dup]);
+
+    expect(back.tracks.map(x => x.id)).toEqual(['a', 'b', 'b']);
   });
 });
 

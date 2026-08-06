@@ -119,6 +119,10 @@ function useHomeSection(key, fetcher) {
   return data;
 }
 
+// Reco resolved with nothing personal in it — distinct from `null`, which
+// means "still asking". Module scope so it is a stable effect dependency.
+const NO_RECO = { hero: null, newForYou: null, stations: null };
+
 // "don't ask again" for the background-play confirm popup.
 const BG_NO_CONFIRM_KEY = 'aura.backgroundPlayNoConfirm';
 
@@ -295,7 +299,17 @@ export default function HomeScreen({ navigation }) {
         writeSnapshot('home.reco', next, as);
         setReco(next);
       },
-    );
+    )
+      .catch(() => {
+        // No .catch used to exist: a rejection left `reco` null forever, which
+        // read as "no personalization" and was invisible because the featured
+        // pool fills that surface anyway. It stops being invisible the moment
+        // a loading state keys off null, so settle it explicitly. Not cached —
+        // a later visit retries, same as useHomeSection's failure path.
+        if (!stale) {
+          setReco(NO_RECO);
+        }
+      });
     return () => {
       stale = true;
     };
@@ -331,6 +345,13 @@ export default function HomeScreen({ navigation }) {
   const newPicks =
     (!explicitOff && reco?.newForYou) || pool.tracks.slice(1, 5);
   const newPicksPersonal = !explicitOff && !!reco?.newForYou;
+  // The rail used to be gated on `poolLoading` alone. When the featured pool
+  // resolved with nothing to slice (empty, or a short set), newPicks was []
+  // and the whole section simply was not rendered — then it popped into
+  // existence, unannounced, whenever the personal call landed. Both sources
+  // have to be in before "nothing here" is the truth.
+  const newPicksLoading =
+    (poolLoading || reco == null) && newPicks.length === 0;
 
   // Stations: real per-artist radio seeds (mapped to the grid's track shape),
   // else featured tiles. `station:true` routes the tap to a radio, not the set.
@@ -683,13 +704,13 @@ export default function HomeScreen({ navigation }) {
             </View>
           )}
 
-          {(poolLoading || newPicks.length > 0) && (
+          {(newPicksLoading || newPicks.length > 0) && (
             <View>
               <SectionHeader
                 title="new for you"
                 sub={newPicksPersonal ? 'from your listening' : 'fresh this week'}
               />
-              {poolLoading ? (
+              {newPicksLoading ? (
                 <View style={styles.skeletonGrid}>
                   {[0, 1, 2, 3].map(i => (
                     <Skeleton key={i} radius={8} style={styles.skeletonCell} />

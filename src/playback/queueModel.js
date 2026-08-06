@@ -155,41 +155,76 @@ export function shuffleUpcoming(queue, rng = Math.random) {
   return { ...queue, tracks, idx: tracks.indexOf(playing) };
 }
 
-// Un-shuffle: return the queue to its pre-shuffle order (originalTracks, the
+// Un-shuffle: return the queue to its pre-shuffle order (originalOrder, the
 // snapshot toggleShuffle took when it shuffled). Reconciles what happened
 // while shuffled — tracks removed since stay gone, tracks added since follow
 // at the end in their play order — and the playing track keeps playing.
-// Compares by object identity with occurrence counts (queue ops move track
-// objects, never clone them), so a song queued twice survives the round-trip.
-export function restoreOrder(queue, originalTracks) {
-  if (!originalTracks?.length || queue.tracks.length < 2) {
+//
+// Matches by **id**, and the restored array carries the LIVE track objects.
+// Both halves of that matter, and the previous version got both wrong:
+//
+//   - It matched by object identity, on the stated premise that "queue ops
+//     move track objects, never clone them". That premise was false. The
+//     near-end URL freshen and hydrateAround both rebuild the row with
+//     `{ ...x, ...fresh }` (PlayerContext), so every track freshened while
+//     shuffled was a NEW object, failed the identity match, fell through to
+//     the "arrived while shuffled" bucket and was appended to the tail —
+//     taking the playhead with it, because the idx anchor was identity-based
+//     too. A ten-track album un-shuffled after four songs came back in the
+//     wrong order with the playhead on the LAST slot and nothing after it.
+//
+//   - It pushed the object from the SNAPSHOT into the restored position.
+//     Harmless while that was the same reference; with id matching it would
+//     put back the pre-freshen row and undo the URL refresh, reintroducing
+//     the stale-link gap at the next boundary that the freshen exists to
+//     prevent. So the snapshot supplies the ORDER and the live queue supplies
+//     the OBJECTS.
+//
+// Occurrence counts are kept — a song queued twice survives the round-trip —
+// by bucketing live rows per id in queue order and consuming from the front.
+//
+// `originalOrder` accepts track objects or bare ids, so the snapshot can be
+// persisted as ids alone rather than a second copy of the whole queue.
+export function restoreOrder(queue, originalOrder) {
+  if (!originalOrder?.length || queue.tracks.length < 2) {
     return queue;
   }
+  // Live rows bucketed by id, in queue order.
   const remaining = new Map();
   for (const trk of queue.tracks) {
-    remaining.set(trk, (remaining.get(trk) ?? 0) + 1);
-  }
-  // Snapshot-order pass: keep each original track still present, consuming
-  // one occurrence per appearance.
-  const restored = [];
-  for (const trk of originalTracks) {
-    const n = remaining.get(trk) ?? 0;
-    if (n > 0) {
-      restored.push(trk);
-      remaining.set(trk, n - 1);
+    const bucket = remaining.get(trk.id);
+    if (bucket) {
+      bucket.push(trk);
+    } else {
+      remaining.set(trk.id, [trk]);
     }
   }
-  // Occurrences left over arrived while shuffled — they have no original
-  // position, so they follow the restored set in their current order.
+  // Snapshot-order pass: for each id in the original order, place the next
+  // live row carrying that id.
+  const restored = [];
+  for (const entry of originalOrder) {
+    const id = typeof entry === 'string' ? entry : entry?.id;
+    const bucket = remaining.get(id);
+    if (bucket?.length) {
+      restored.push(bucket.shift());
+    }
+  }
+  // Rows left unconsumed arrived while shuffled — they have no original
+  // position, so they follow the restored set in their current order. The
+  // `bucket[0] === trk` test is what keeps duplicates honest: the front of a
+  // bucket is the earliest occurrence not yet placed, so an id queued twice
+  // but present once in the snapshot appends exactly one row, not two.
   const added = queue.tracks.filter(trk => {
-    const n = remaining.get(trk) ?? 0;
-    if (n > 0) {
-      remaining.set(trk, n - 1);
+    const bucket = remaining.get(trk.id);
+    if (bucket?.length && bucket[0] === trk) {
+      bucket.shift();
       return true;
     }
     return false;
   });
   const tracks = [...restored, ...added];
+  // Every live row appears exactly once across restored+added, so anchoring
+  // on the live object is exact even when two rows share an id.
   const idx = tracks.indexOf(queue.tracks[queue.idx]);
   if (idx < 0) {
     // No playing track to anchor on (idx out of range) — restoring would
