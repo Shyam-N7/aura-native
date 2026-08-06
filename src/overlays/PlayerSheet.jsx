@@ -55,6 +55,7 @@ import {
   getTourState,
   noteTourGesture,
   startTour,
+  subscribeTour,
   tourDone,
 } from '../lib/gestureTour';
 import { GestureTourOverlay } from '../components/player/GestureTourOverlay';
@@ -468,9 +469,22 @@ export function PlayerSheet() {
   durationRef.current = duration;
   useEffect(() => () => clearInterval(holdTimer.current), []);
   // In-place gesture hints: each stays until its gesture is performed once.
-  const likeHint = useHintActive(HINT_LIKE);
-  const nextHint = useHintActive(HINT_NEXT);
-  const queueHint = useHintActive(HINT_QUEUE_SWIPE);
+  //
+  // Suppressed while the tour is running. The two systems teach the SAME two
+  // gestures and neither knew about the other, so a first-time user got a pill
+  // reading "double-tap to like" with a tour card fourteen pixels below it
+  // saying "double-tap the art" — and at the queue step, a pill, a drifting
+  // chevron and a card in one lit window. The chips stay as the safety net for
+  // anyone who skips or ends the tour; they simply wait their turn.
+  const [tourActive, setTourActive] = useState(() => getTourState().active);
+  useEffect(
+    () => subscribeTour(next => setTourActive(!!next?.active)),
+    [],
+  );
+  const hintsAllowed = !tourActive;
+  const likeHint = useHintActive(HINT_LIKE) && hintsAllowed;
+  const nextHint = useHintActive(HINT_NEXT) && hintsAllowed;
+  const queueHint = useHintActive(HINT_QUEUE_SWIPE) && hintsAllowed;
 
   const slide = useSharedValue(winH);
   const dragY = useSharedValue(0);

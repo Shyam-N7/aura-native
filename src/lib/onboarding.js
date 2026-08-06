@@ -1,6 +1,7 @@
 import { storage } from '../storage/mmkv';
 import { K } from '../storage/keys';
 import { updatePreferences } from './auth';
+import { markWhatsNewSeenForNewInstall } from './whatsNew';
 // Ported from web src/lib/onboarding.js. Three MMKV keys mirror the web's
 // localStorage ones (persistUser also mirrors them from the server user):
 //   aura.seedArtists    — JSON [{ name, language?, sampleTrackId? }].
@@ -15,6 +16,10 @@ const LANGS_KEY = K.seedLanguages;
 const MOOD_KEY = K.seedMood;
 
 export function markOnboarded() {
+  // A first-time user has no update to be told about. Without this the
+  // what's-new sheet auto-opened the moment onboarding handed over, and then
+  // the gesture tour taught the same two gestures again.
+  markWhatsNewSeenForNewInstall();
   // Push the snapshot to the server so a returning user (new device, cleared
   // storage) keeps their seeds. Fire-and-forget — onboarding never blocks on
   // the network, and the local copy is the source of truth meanwhile.

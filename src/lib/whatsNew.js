@@ -32,3 +32,15 @@ export function subscribeWhatsNew(cb) {
 export function shouldShowWhatsNew() {
   return storage.getItem(KEY) !== WHATS_NEW_BATCH;
 }
+
+// A brand-new install has never seen ANY batch, so the unset key read as
+// "unseen" and the sheet auto-opened on first run — announcing what's "fresh
+// in this update" to someone who installed the app ninety seconds ago, and
+// teaching double-tap-to-like and swipe-to-change before the gesture tour got
+// to teach the same two things. Called when onboarding completes: there is
+// nothing new to a first-time user, so the current batch counts as seen.
+export function markWhatsNewSeenForNewInstall() {
+  if (!storage.getItem(KEY)) {
+    storage.setItem(KEY, WHATS_NEW_BATCH);
+  }
+}
