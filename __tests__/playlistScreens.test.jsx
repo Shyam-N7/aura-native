@@ -45,6 +45,7 @@ jest.mock('../src/api/playlists', () => ({
 }));
 jest.mock('../src/api/autoPlaylists', () => ({ listAutoPlaylists: jest.fn() }));
 jest.mock('../src/lib/auth', () => ({
+  getModeEpoch: () => 0,
   API_BASE: 'https://www.aurafm.live',
   getUser: () => ({ id: 'me', name: 'shyam' }),
   fetchAuthed: jest.fn(),

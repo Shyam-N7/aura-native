@@ -26,6 +26,7 @@ import {
 } from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
+import { useActiveMode } from '../hooks/useActiveMode';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
@@ -282,9 +283,25 @@ export default function HomeScreen({ navigation }) {
   const [reco, setReco] = useState(
     () => homeCache.reco ?? readSnapshot('home.reco'),
   );
+  // This effect had an EMPTY dependency array, and Home is a memoized tab
+  // screen that never unmounts — so hero, new-for-you and stations kept the
+  // mode's personalization from whenever the app started, for the whole
+  // session. The mode name in the header and the mode-mix card updated
+  // instantly, which made the mismatch visible without explaining it.
+  const { mode: activeMode, epoch: modeEpoch } = useActiveMode();
+  const shownRecoMode = useRef(activeMode);
   useEffect(() => {
     let stale = false;
     const as = snapshotOwner();
+    // Mirrors the featured pool's rule exactly: keep what is on screen while
+    // the new mode loads, EXCEPT into a mode that filters explicit — the
+    // previous mode's picks must never flash under a stricter one.
+    if (shownRecoMode.current !== activeMode) {
+      shownRecoMode.current = activeMode;
+      if (getActiveExplicitOff()) {
+        setReco(null);
+      }
+    }
     Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
       ([h, n, s]) => {
         if (stale) {
@@ -313,7 +330,7 @@ export default function HomeScreen({ navigation }) {
     return () => {
       stale = true;
     };
-  }, []);
+  }, [activeMode, modeEpoch]);
 
   // Log SHOWN picks so the ranker can demote never-played ones — only when
   // the server ring is what rendered; the local fallback is never logged.
@@ -397,7 +414,9 @@ export default function HomeScreen({ navigation }) {
     !moreLike?.tracks?.length &&
     !discover?.popularPlaylists?.length;
 
-  const activeMode = user?.activeMode ?? 'everyday';
+  // activeMode comes from useActiveMode above rather than being re-derived
+  // from the inline getUser() read — that read does not re-render on an auth
+  // change, so the two could disagree after a switch.
   const modeLabel =
     (user?.modes ?? []).find(m => m.key === activeMode)?.label ?? activeMode;
 

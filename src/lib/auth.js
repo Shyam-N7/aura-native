@@ -399,6 +399,25 @@ export function showSensing() {
 // Switch the active context. Returns the refreshed user (activeMode + the
 // modes view) and updates the session so the UI reacts at once (home refetches
 // the mode-seeded pool). No cross-tab broadcast — that's a web-only concern.
+// Bumped when the SERVER has confirmed a mode switch, as opposed to the
+// optimistic local flip that precedes it.
+//
+// The flip persists and notifies BEFORE the POST, which is what makes the
+// picker feel instant — but it also means Home's refetch can reach the server
+// before the switch has committed there. `/api/catalog/featured` carries no
+// mode param (the server derives it from the auth user), so that fetch builds
+// the "new mode" pool out of the OLD mode and caches it under the new mode's
+// key. The confirmation notify could not fix it on its own: it re-persists the
+// same `activeMode` string, so every subscriber deriving a primitive from it
+// sees no change and React bails out of the re-render.
+//
+// A counter changes on confirmation even when the mode string does not, so a
+// reader can depend on "the server agrees" rather than on "the user asked".
+let modeEpoch = 0;
+export function getModeEpoch() {
+  return modeEpoch;
+}
+
 export async function setActiveMode(key) {
   // Optimistic: flip the mode locally FIRST so the sheet can close instantly
   // and Home re-seeds right away — the network confirms (or reverts) behind
@@ -421,6 +440,9 @@ export async function setActiveMode(key) {
         code: data.code,
       });
     }
+    // Before persistUser, so the notify it fires already carries the new
+    // epoch to every subscriber.
+    modeEpoch += 1;
     persistUser(data.user); // reconcile with the server's canonical user
     return data.user;
   } catch (err) {
