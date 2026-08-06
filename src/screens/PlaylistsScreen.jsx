@@ -412,7 +412,7 @@ export default function PlaylistsScreen({ navigation }) {
         {status === 'loading' && <AuraLoader label="loading playlists" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't fetch playlists — {hit.error}
+            couldn't load — {hit.error}
           </Text>
         )}
         {status === 'ok' && owned.length === 0 && !creating && (

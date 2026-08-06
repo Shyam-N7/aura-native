@@ -1,5 +1,6 @@
 import { fetchAuthed } from '../lib/auth';
 import { storage } from '../storage/mmkv';
+import { apiError } from './apiError';
 // Client for /api/catalog/*, ported from web src/api/catalog.js (album detail
 // arrives with the album screen in a later phase). Each call accepts an
 // AbortSignal so stale in-flight requests can be cancelled while typing.
@@ -47,8 +48,7 @@ export async function getAlbum(id, { signal } = {}) {
     signal,
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `album fetch failed (${res.status})`);
+    throw await apiError(res, 'this album');
   }
   const { album } = await res.json();
   return album;
@@ -160,8 +160,7 @@ export async function getFeatured({ lang, limit = 20, signal } = {}) {
     signal,
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `featured failed (${res.status})`);
+    throw await apiError(res, 'your music');
   }
   const { results } = await res.json();
   return results;

@@ -77,7 +77,7 @@ export default function ArtistScreen({ route, navigation }) {
         {status === 'loading' && <AuraLoader label="loading artist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't find that artist — {hit.error}
+            couldn't load — {hit.error}
           </Text>
         )}
 

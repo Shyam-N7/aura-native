@@ -1,4 +1,5 @@
 import { fetchAuthed } from '../lib/auth';
+import { apiError } from './apiError';
 // Ported from web src/api/lyrics.js. Returns the same shape as the server:
 //   { available: true,  synced: true,  lines: [{t, line, line_en?}], has_english, source }
 //   { available: true,  synced: false, lines: [{line, line_en?}],    has_english, source } // plain, untimed
@@ -43,8 +44,7 @@ async function fetchLyrics(trackId) {
   // ignore a stale result use the signal wrapper below + their own guard.
   const res = await fetchAuthed(`/api/lyrics/${encodeURIComponent(trackId)}`);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `lyrics fetch failed (${res.status})`);
+    throw await apiError(res, 'the lyrics');
   }
   return res.json();
 }

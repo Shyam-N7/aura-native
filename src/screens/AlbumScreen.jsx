@@ -77,7 +77,7 @@ export default function AlbumScreen({ route, navigation }) {
             {status === 'loading' && <AuraLoader label={`loading ${kind}`} />}
             {status === 'error' && (
               <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-                Couldn't load — {hit.error}
+                couldn't load — {hit.error}
               </Text>
             )}
 

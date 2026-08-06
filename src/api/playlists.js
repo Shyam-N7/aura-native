@@ -1,11 +1,12 @@
 import { API_BASE, fetchAuthed } from '../lib/auth';
+import { apiError } from './apiError';
 // Ported verbatim from web src/api/playlists.js (Phase 3 completes the file:
 // detail, collaboration, visibility, covers, save-to-library, public reads).
 
 export async function listPlaylists({ signal } = {}) {
   const res = await fetchAuthed('/api/playlists', { signal });
   if (!res.ok) {
-    throw new Error(`playlists fetch failed (${res.status})`);
+    throw await apiError(res, 'your playlists');
   }
   const { playlists } = await res.json();
   return playlists ?? [];
@@ -16,8 +17,7 @@ export async function getPlaylist(id, { signal } = {}) {
     signal,
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `playlist fetch failed (${res.status})`);
+    throw await apiError(res, 'this playlist');
   }
   return res.json();
 }

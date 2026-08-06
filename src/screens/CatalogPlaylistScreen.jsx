@@ -163,7 +163,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
         {status === 'loading' && <AuraLoader label="loading playlist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
+            couldn't load — {hit.error}
           </Text>
         )}
 

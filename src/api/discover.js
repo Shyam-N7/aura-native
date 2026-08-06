@@ -1,13 +1,12 @@
 import { fetchAuthed } from '../lib/auth';
+import { apiError } from './apiError';
 // Ported from web src/api/discover.js.
 
 export async function getDiscoverHome({ lang, signal } = {}) {
   const qs = lang ? `?lang=${encodeURIComponent(lang)}` : '';
   const res = await fetchAuthed(`/api/discover/home${qs}`, { signal });
   if (!res.ok) {
-    throw Object.assign(new Error(`discover failed (${res.status})`), {
-      status: res.status,
-    });
+    throw await apiError(res, 'discover');
   }
   return res.json();
 }
@@ -18,10 +17,7 @@ export async function getCatalogPlaylist(id, { signal } = {}) {
     { signal },
   );
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      body.error || `catalog playlist fetch failed (${res.status})`,
-    );
+    throw await apiError(res, 'this playlist');
   }
   return res.json();
 }

@@ -333,8 +333,11 @@ export function setVolume(v) {
   return TrackPlayer.setVolume(v);
 }
 
-export function skipToIndex(i, positionSec) {
-  return TrackPlayer.skip(i, positionSec ?? -1);
+// -1 is RNTP's "start from the beginning". There used to be a positionSec
+// parameter here for skipping into a track mid-way; none of the six call sites
+// ever passed one, so it always collapsed to this same default.
+export function skipToIndex(i) {
+  return TrackPlayer.skip(i, -1);
 }
 
 // Swap one queue entry for its hydrated version (fresh streamUrl) without
