@@ -13,7 +13,7 @@ import Animated, { Keyframe } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
-import { radii } from '../theme/tokens';
+import { fonts, radii } from '../theme/tokens';
 import { DUR } from '../theme/motion';
 import { showToast } from '../lib/toast';
 import { relTime } from '../lib/time';
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
   wordmark: {
     alignSelf: 'center',
     color: 'rgba(248,240,226,0.92)',
-    fontFamily: 'HankenGrotesk-Bold',
+    fontFamily: fonts.bold,
     fontSize: 18,
     letterSpacing: 6,
     marginBottom: 28,
@@ -809,19 +809,19 @@ const styles = StyleSheet.create({
   cardInner: { paddingHorizontal: 24, paddingVertical: 30 },
   head: { marginBottom: 20 },
   kicker: {
-    fontFamily: 'HankenGrotesk-Medium',
+    fontFamily: fonts.medium,
     fontSize: 11,
     letterSpacing: 0.88,
     marginBottom: 8,
     textTransform: 'lowercase',
   },
   title: {
-    fontFamily: 'HankenGrotesk-Bold',
+    fontFamily: fonts.bold,
     fontSize: 28,
     letterSpacing: -0.42,
     marginBottom: 8,
   },
-  sub: { fontFamily: 'HankenGrotesk-Regular', fontSize: 14, lineHeight: 20 },
+  sub: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   formError: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
   submit: {
     alignItems: 'center',

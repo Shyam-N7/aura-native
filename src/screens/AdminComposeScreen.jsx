@@ -18,7 +18,7 @@ import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, label } from '../theme/tokens';
 import { adminPushReach, adminPushSend } from '../lib/push';
-import { API_BASE } from '../lib/auth';
+import { API_BASE, getUser, subscribeAuth } from '../lib/auth';
 import { showToast } from '../lib/toast';
 
 // The admin composer as its own SCREEN (user-directed after two failed sheet
@@ -73,8 +73,28 @@ export default function AdminComposeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
+  // The route is registered unconditionally (RootTabs.jsx) and this screen
+  // checked nothing — the only gate was YouScreen hiding the row that opens
+  // it. The server re-checks its allowlist on both admin endpoints, so this is
+  // defence in depth rather than the boundary; the boundary is not in this
+  // repo and cannot be verified from it. What the check does buy locally:
+  // arriving here by any means other than that one row leaves immediately
+  // instead of rendering a composer whose Send will 403, and an account
+  // demoted mid-session is ejected on the auth notify rather than sitting on a
+  // screen it no longer has any right to.
+  const [allowed, setAllowed] = useState(() => !!getUser()?.admin);
+  useEffect(() => subscribeAuth(() => setAllowed(!!getUser()?.admin)), []);
+  useEffect(() => {
+    if (!allowed) {
+      navigation.goBack();
+    }
+  }, [allowed, navigation]);
+
   const [reach, setReach] = useState(null);
   useEffect(() => {
+    if (!allowed) {
+      return undefined;
+    }
     let live = true;
     adminPushReach()
       .then(r => {
@@ -86,7 +106,7 @@ export default function AdminComposeScreen({ navigation }) {
     return () => {
       live = false;
     };
-  }, []);
+  }, [allowed]);
 
   const [form, setForm] = useState({
     title: '',
@@ -158,6 +178,13 @@ export default function AdminComposeScreen({ navigation }) {
     styles.input,
     { color: t.ink, borderColor: t.line, backgroundColor: t.bg },
   ];
+
+  // Below every hook, so the early exit can't change the hook order. The
+  // effect above is what actually leaves; this is what stops a composer from
+  // being painted for the frame before it does.
+  if (!allowed) {
+    return <View style={[styles.root, { backgroundColor: t.bg }]} />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>

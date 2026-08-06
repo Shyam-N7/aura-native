@@ -1,4 +1,5 @@
 import { storage } from '../storage/mmkv';
+import { K, SESSION_KEYS } from '../storage/keys';
 
 // Port of web src/lib/auth.js. Native differences: the session is a JWT kept
 // in MMKV (not an httpOnly cookie) and injected as a Bearer header on every
@@ -9,8 +10,8 @@ import { storage } from '../storage/mmkv';
 
 export const API_BASE = 'https://www.aurafm.live';
 
-const TOKEN_KEY = 'aura.authToken';
-const USER_KEY = 'aura.authUser';
+const TOKEN_KEY = K.authToken;
+const USER_KEY = K.authUser;
 
 const subscribers = new Set();
 
@@ -29,6 +30,37 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 // Session-creating calls carry this so the server returns the JWT in the
 // response body instead of relying on a cookie.
 const NATIVE_JSON_HEADERS = { ...JSON_HEADERS, 'X-Aura-Client': 'native' };
+
+// Every unauthenticated endpoint below used a bare `await res.json()`, which
+// is only safe while the server always answers JSON — and the cases where it
+// doesn't are exactly the ones that matter: a 502 from the edge, a 500 that
+// renders an HTML error page, a captive portal swapping in its own login page.
+// json() then throws SyntaxError BEFORE the `!res.ok` branch can run, so the
+// status is discarded and someone trying to log in is shown
+// "JSON Parse error: Unexpected character: <".
+//
+// Returning an object lets each caller's own `data.error ?? '<verb> failed'`
+// fallback work as written, and the synthesised message stops a server fault
+// from reading as a rejected password. The authed half of this file already
+// does this (`.catch(() => ({}))` at every call site) — the unauthenticated
+// half is where it was missed.
+async function readJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    if (res.ok) {
+      // A 200 that isn't JSON is a broken deploy, not a user error. Empty
+      // object, and the caller reads its own fields as absent.
+      return {};
+    }
+    return {
+      error:
+        res.status >= 500
+          ? 'the server is having trouble — try again in a moment'
+          : 'unexpected response from the server',
+    };
+  }
+}
 
 // Identity is read through MMKV (synchronous) rather than cached in a module
 // variable — a login/logout anywhere in the app can never go stale here.
@@ -77,13 +109,13 @@ function persistUser(user) {
   // getUser()?.hasOnboarded, i.e. the authUser blob written on the line above,
   // so the flag was pure write amplification pretending to be a cache.
   if (user.seedArtists) {
-    storage.setItem('aura.seedArtists', JSON.stringify(user.seedArtists));
+    storage.setItem(K.seedArtists, JSON.stringify(user.seedArtists));
   }
   if (user.seedLanguages) {
-    storage.setItem('aura.seedLanguages', JSON.stringify(user.seedLanguages));
+    storage.setItem(K.seedLanguages, JSON.stringify(user.seedLanguages));
   }
   if (user.seedMood !== undefined) {
-    storage.setItem('aura.seedMood', user.seedMood ?? '');
+    storage.setItem(K.seedMood, user.seedMood ?? '');
   }
   notify();
 }
@@ -98,21 +130,11 @@ function setSession(data) {
 }
 
 export function clearSession() {
-  [
-    TOKEN_KEY,
-    USER_KEY,
-    'aura.seedArtists',
-    'aura.seedLanguages',
-    'aura.seedMood',
-    'aura.queue',
-    'aura.position',
-    'aura.talkHistory',
-    'aura.recentSearches',
-    // A private-listening window is one account's decision — a wall-clock
-    // deadline left behind here silently suppressed the NEXT account's events,
-    // impressions and presence for up to six hours.
-    'aura.privateUntil',
-  ].forEach(k => storage.removeItem(k));
+  // The list lives in storage/keys.js beside the keys it is made of. It used
+  // to be eight string literals retyped from the eight modules that own them,
+  // which is the whole account-switch boundary for stored data resting on
+  // nobody making a typo.
+  SESSION_KEYS.forEach(k => storage.removeItem(k));
   notify();
 }
 
@@ -122,7 +144,7 @@ export async function signup(name, email, password) {
     headers: JSON_HEADERS,
     body: JSON.stringify({ email, name, password }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   if (!res.ok) {
     throw Object.assign(new Error(data.error ?? 'signup failed'), {
       status: res.status,
@@ -140,7 +162,7 @@ export async function login(email, password, evictSessionId) {
     headers: NATIVE_JSON_HEADERS,
     body: JSON.stringify({ email, password, evictSessionId }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   // Unverified account isn't an error — route the caller to the OTP step.
   if (res.status === 403 && data.pendingVerification) {
     return { pendingVerification: true, email: data.email };
@@ -173,7 +195,7 @@ export async function verifyOtp(email, code, evictSessionId) {
     headers: NATIVE_JSON_HEADERS,
     body: JSON.stringify({ email, code, evictSessionId }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   if (res.status === 403 && data.code === 'device_limit') {
     return {
       deviceLimit: true,
@@ -200,7 +222,7 @@ export async function resendOtp(email) {
     headers: JSON_HEADERS,
     body: JSON.stringify({ email }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   if (!res.ok) {
     throw Object.assign(new Error(data.error ?? 'could not resend code'), {
       status: res.status,
@@ -221,7 +243,7 @@ export async function forgotRequest(email) {
     headers: JSON_HEADERS,
     body: JSON.stringify({ email }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   trace('/forgot', res.status, data);
   if (!res.ok) {
     throw Object.assign(new Error(data.error ?? 'request failed'), {
@@ -244,7 +266,7 @@ export async function verifyResetOtp(email, code) {
     headers: JSON_HEADERS,
     body: JSON.stringify({ email, code }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   trace('/verify-reset-otp', res.status, data);
   if (!res.ok) {
     throw Object.assign(new Error(data.error ?? 'verification failed'), {
@@ -265,7 +287,7 @@ export async function resetPassword(email, code, password) {
     headers: JSON_HEADERS,
     body: JSON.stringify({ email, code, password }),
   });
-  const data = await res.json();
+  const data = await readJson(res);
   trace('/reset-password', res.status, res.ok ? '→ ok (re-login)' : data);
   if (!res.ok) {
     throw Object.assign(new Error(data.error ?? 'reset failed'), {

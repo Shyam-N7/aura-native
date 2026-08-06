@@ -1,97 +1,92 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# AURA — native
 
-# Getting Started
+The Android app for AURA, a personal music-streaming service. React Native
+0.83 / React 19 on Hermes with the New Architecture (Fabric + TurboModules),
+`arm64-v8a` only. No iOS target.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+This is one half of a two-repo system. Everything the app shows comes from a
+companion web repo that is **not in this checkout** and serves
+`https://www.aurafm.live` — an Express API on Vercel over Neon Postgres, with
+the music catalog proxied from JioSaavn. If a question ends at `/api/…`, the
+answer is in the other repo.
 
-## Step 1: Start Metro
+## What it does
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+Streams the catalog with fixed and adaptive quality; a client-owned queue with
+drag-reorder and endless "auto-radio" continuation; synced lyrics and karaoke
+with instrumental stems; likes and collaborative playlists; listening insights
+(journal, "sonic DNA", music clock); mood "bridges"; an LLM DJ chat ("Talk"); a
+native equalizer with volume leveling; FCM push with an in-app admin composer;
+and cross-device presence and resume.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+There is no local database. Durable client state is a few dozen MMKV string
+keys — the shared ones are declared in `src/storage/keys.js`. There is no env
+layer either: the API origin and the Sentry DSN are hardcoded
+(`src/lib/auth.js`, `index.js`).
+
+The chrome is a native "glass" capture-blur stack (a patched BlurView pipeline
+in Kotlin) plus Skia "goo" effects.
+
+## Getting oriented
+
+Read in this order:
+
+| Document | What it gives you |
+|---|---|
+| `docs/CONTEXT.md` | The system map — module layout, the API seam, the native stack. It is a snapshot; read its freshness banner first. |
+| `reports/11-onboarding-audit.md` | Current state: feature inventory, architecture, test coverage, and the ranked risk list with what is closed and what is deliberately not. |
+| `UPSTREAM.md` | Which files are ports of the web app, and what was adapted. Sync a web change by diffing the pair. |
+| `docs/OPTIMIZATION-PLAYBOOK.md`, `docs/perf/` | The performance work and how it was measured. |
+| `reports/` | The investigation record — each report is a hunt, and records what was ruled out as well as what was found. |
+
+Two things worth knowing before changing anything:
+
+- **`android/kotlin-audio/` is a vendored fork** of doublesymmetry/kotlin-audio
+  that `react-native-track-player` builds against, and no upstream base commit
+  is recorded anywhere. Diffing it against upstream is not currently possible.
+- **`patches/` is load-bearing.** `patch-package` runs on `postinstall`. When
+  the patch fails to apply, the usual cause is a stale `node_modules` — remove
+  `node_modules/react-native-track-player` and reinstall.
+
+## Working on it
 
 ```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+npm install        # runs patch-package on postinstall
+npm test           # jest
+npm run lint       # eslint — expected to pass clean on the whole tree
+npm start          # metro
 ```
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
+Android builds go through `scripts/env.cmd`, which pins the toolchain to a
+`D:\` layout, so the `android:*` scripts are **cmd.exe only** — `call` is a cmd
+builtin and PowerShell fails it. Run `android\gradlew.bat` directly from
+PowerShell, or use cmd.
 
 ```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+npm run android:release   # assembleRelease
+npm run android:install   # adb install -r  (keeps app data; a debug build would not)
 ```
 
-### iOS
+Release signing needs a keystore and a `keystore.properties` that are
+deliberately not in the repo, so **a clean clone cannot produce a signed
+release build.** That is a known gap, recorded in the audit.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## Tests
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+`jest.config.js` + `jest.setup.js`. The suite covers the queue model, playback
+engine paths and failure cascades, retry policy, the track cache, the deep-link
+guard, storage-key and session-reset invariants, playlist and detail screens,
+lyric sync, audio quality, leveling and the music clock.
 
-```sh
-bundle install
-```
+`react-native-track-player` has a hand-written manual mock
+(`__mocks__/react-native-track-player.js`) with `__emit`, `__setProgress` and
+`__resetMock`, so service-level specs can drive real event flows.
 
-Then, and every time you update your native dependencies, run:
+Two habits that keep this suite honest, both learned the hard way here:
 
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+- **Module state outlives a test.** Stores in this app are singletons by
+  design, and several specs have leaked into their neighbours through a
+  module-scope cache or a buffered toast. Reset what you touch in `beforeEach`.
+- **A passing test proves nothing until it has failed.** More than one test in
+  this repo's history passed with its fix reverted. Check that a new test
+  actually discriminates.

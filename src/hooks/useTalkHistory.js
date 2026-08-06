@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
 import { onSessionReset } from '../lib/sessionReset';
 
 // Ported from web src/hooks/useTalkHistory.js. Singleton talk history in
@@ -11,7 +12,7 @@ import { onSessionReset } from '../lib/sessionReset';
 // One adaptation: the web hook takes a seed argument
 // because its greeting is synchronous; the native greeting waits on a mood
 // fetch, so seeding is the explicit seedTalkHistory() call instead.
-const STORAGE_KEY = 'aura.talkHistory';
+const STORAGE_KEY = K.talkHistory;
 const MAX_MESSAGES = 50;
 
 function readStored() {

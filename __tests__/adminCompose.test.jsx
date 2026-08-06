@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
+import { storage } from '../src/storage/mmkv';
 import AdminComposeScreen from '../src/screens/AdminComposeScreen';
 
 const mockReach = jest.fn();
@@ -39,11 +40,20 @@ async function render(node) {
 }
 const nav = () => ({ navigate: jest.fn(), goBack: jest.fn() });
 
+// The screen now refuses to render for a non-admin, so every existing case
+// here has to sign in as one first. That is the point of the check: reaching
+// this screen without the flag is not supposed to work.
+const signInAs = user =>
+  storage.setItem('aura.authUser', JSON.stringify(user));
+
 beforeEach(() => {
   jest.clearAllMocks();
+  signInAs({ id: 'u1', name: 'owner', admin: true });
   mockReach.mockResolvedValue({ configured: true, devices: 2, users: 1 });
   mockSend.mockResolvedValue({ sent: 2 });
 });
+
+afterEach(() => storage.removeItem('aura.authUser'));
 
 test('empty form shows the default preview, the aura card and a disabled send', async () => {
   const tree = await render(<AdminComposeScreen navigation={nav()} />);
@@ -174,4 +184,67 @@ test('catalog art gets composited; foreign https urls ride raw', async () => {
     uri: 'https://cdn.example/x.jpg',
   });
   await ReactTestRenderer.act(() => tree2.unmount());
+});
+
+// ── the gate ────────────────────────────────────────────────────────────────
+// The route is registered unconditionally and this screen used to check
+// nothing; the only thing standing between any signed-in account and a
+// broadcast composer was YouScreen hiding the row that opens it. The server
+// re-checks its allowlist, so this is defence in depth — but a composer that
+// renders and then 403s on Send is a worse answer than not rendering.
+
+test('a non-admin gets no composer and is sent back', async () => {
+  signInAs({ id: 'u2', name: 'listener' });
+  const navigation = nav();
+
+  const tree = await render(<AdminComposeScreen navigation={navigation} />);
+
+  expect(texts(tree.toJSON())).not.toContain('hello from aura');
+  expect(tree.root.findAllByProps({ accessibilityLabel: 'send notification' }))
+    .toHaveLength(0);
+  expect(navigation.goBack).toHaveBeenCalled();
+  // Nothing admin-only is even fetched on the way out.
+  expect(mockReach).not.toHaveBeenCalled();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('a signed-out reader gets the same treatment', async () => {
+  storage.removeItem('aura.authUser');
+  const navigation = nav();
+
+  const tree = await render(<AdminComposeScreen navigation={navigation} />);
+
+  expect(navigation.goBack).toHaveBeenCalled();
+  expect(mockReach).not.toHaveBeenCalled();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+// Admin is a server-side fact that can change under an open screen. The flag
+// rides the cached user, so the refresh that drops it must eject rather than
+// leave a live composer up. Driven through the real mechanism — fetchMe
+// reconciling identity — rather than a test-only setter.
+test('losing admin mid-session closes the composer', async () => {
+  const navigation = nav();
+  const tree = await render(<AdminComposeScreen navigation={navigation} />);
+  expect(texts(tree.toJSON())).toContain('hello from aura');
+  expect(navigation.goBack).not.toHaveBeenCalled();
+
+  const { fetchMe } = require('../src/lib/auth');
+  const realFetch = global.fetch;
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ user: { id: 'u1', name: 'owner' } }), // no admin
+  });
+  try {
+    await ReactTestRenderer.act(async () => {
+      await fetchMe();
+    });
+  } finally {
+    global.fetch = realFetch;
+  }
+
+  expect(navigation.goBack).toHaveBeenCalled();
+  expect(texts(tree.toJSON())).not.toContain('hello from aura');
+  await ReactTestRenderer.act(() => tree.unmount());
 });

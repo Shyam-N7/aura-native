@@ -431,5 +431,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profileText: { fontFamily: 'HankenGrotesk-SemiBold', fontSize: 14 },
+  profileText: { fontFamily: fonts.semibold, fontSize: 14 },
 });

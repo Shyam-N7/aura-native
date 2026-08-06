@@ -1,5 +1,6 @@
 import TrackPlayer from 'react-native-track-player';
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
 
 // The drift gate (reports/07-changelog.md): does RNTP's live queue still match
 // the copy MMKV persisted? Same tracks, same order.
@@ -43,7 +44,7 @@ export async function dumpQueueDrift(tag = '') {
     ]);
     const nativeIds = (nativeQueue ?? []).map(t => t?.id ?? '<no-id>');
 
-    const raw = storage.getItem('aura.queue');
+    const raw = storage.getItem(K.queue);
     const parsed = raw ? JSON.parse(raw) : null;
     const storedIds = (parsed?.tracks ?? []).map(t => t?.id ?? '<no-id>');
 

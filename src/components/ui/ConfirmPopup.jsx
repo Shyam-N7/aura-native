@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../Icon';
+import { SHEET_DANGER } from './SheetRow';
 import { fonts } from '../../theme/tokens';
 
 // The house confirm as a centered POPUP — user-specified for the
@@ -14,12 +15,19 @@ export function ConfirmPopup({
   title,
   body,
   action,
+  // Red action pill for a destructive ask, same token and same rule as
+  // ConfirmSheet. This prop did not exist, so the equalizer's DELETE PRESET
+  // confirm wore the ordinary accent — identical to "turn on" and "boost it"
+  // beside it — and the one visual cue the app uses to mark a destructive
+  // action was missing from a destructive action.
+  danger = false,
   onConfirm,
   onCancel,
   dontAsk,
   onToggleDontAsk,
 }) {
   const { t } = useTheme();
+  const actionColor = danger ? SHEET_DANGER : t.accent;
   return (
     <Modal
       transparent
@@ -88,7 +96,7 @@ export function ConfirmPopup({
               onPress={onConfirm}
               style={({ pressed }) => [
                 styles.action,
-                { backgroundColor: t.accent },
+                { backgroundColor: actionColor },
                 pressed && styles.pressed,
               ]}
             >

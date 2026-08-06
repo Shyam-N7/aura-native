@@ -12,6 +12,7 @@ import {
 import App from './App';
 import { name as appName } from './app.json';
 import { installCrashLogger } from './src/lib/crashLog';
+import { scrubBreadcrumb } from './src/lib/scrubBreadcrumb';
 import { displayPush } from './src/lib/push';
 import { mark, shipBootTiming } from './src/lib/perfMarks';
 
@@ -30,6 +31,7 @@ Sentry.init({
   enableAutoSessionTracking: true,
   tracesSampleRate: 0,
   maxBreadcrumbs: 150,
+  beforeBreadcrumb: scrubBreadcrumb,
 });
 
 // The playback service must be registered before the app component so RNTP

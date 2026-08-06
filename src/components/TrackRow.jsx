@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
+import { fonts, type } from '../theme/tokens';
 import { Icon } from './Icon';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { cleanTitle } from '../utils/title';
@@ -116,12 +117,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 2,
   },
-  title: {
-    fontFamily: 'HankenGrotesk-Medium',
-    fontSize: 15,
-  },
+  // type.rowTitle spelled out — the token exists for exactly this row and
+  // read as unused because every list bypassed it.
+  title: type.rowTitle,
   artist: {
-    fontFamily: 'HankenGrotesk-Regular',
+    fontFamily: fonts.regular,
     fontSize: 12.5,
   },
   fallback: {
@@ -129,6 +129,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   letter: {
-    fontFamily: 'HankenGrotesk-SemiBold',
+    fontFamily: fonts.semibold,
   },
 });

@@ -9,6 +9,8 @@ import React, {
 } from 'react';
 import { AppState } from 'react-native';
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
+import { resumeSec } from './resumePoint';
 import { showToast } from '../lib/toast';
 import { isSignedIn, subscribeAuth } from '../lib/auth';
 import { ensurePushPermission } from '../lib/push';
@@ -43,8 +45,8 @@ import { startRecorder } from './recorder';
 // first and push to the engine; native-initiated changes (auto-advance, error
 // auto-skip) flow back through onActiveTrackChanged.
 
-const QUEUE_KEY = 'aura.queue';
-const POSITION_KEY = 'aura.position';
+const QUEUE_KEY = K.queue;
+const POSITION_KEY = K.position;
 const REPEAT_KEY = 'aura.repeat';
 // Persisted-shape version (autoRadio's aura.autoNext.v1 pattern). Stamped
 // INSIDE the payload, not on the key: a renamed key would silently drop every
@@ -99,23 +101,13 @@ function readStoredPosition() {
   }
 }
 
-// Where a restored queue should start playing: the saved spot, but only when
-// it still belongs to this track and isn't at either end (a nearly-finished
-// track is better restarted than resumed 2 seconds from the outro).
+// Where a restored queue should start playing. The predicate is shared with
+// the progress seed (playback/resumePoint) — the two used to be independent
+// copies of the same five conditions. `undefined` rather than null because
+// callers pass this straight into the engine as "no explicit start".
 function storedPositionSec(queue) {
-  const saved = readStoredPosition();
-  const cur = queue?.tracks?.[queue.idx];
-  if (
-    saved &&
-    cur &&
-    saved.trackId === cur.id &&
-    saved.progress > 0.01 &&
-    saved.progress < 0.98 &&
-    cur.durationSec > 0
-  ) {
-    return saved.progress * cur.durationSec;
-  }
-  return undefined;
+  const sec = resumeSec(readStoredPosition(), queue?.tracks?.[queue.idx]);
+  return sec ?? undefined;
 }
 
 const PlayerContext = createContext(null);

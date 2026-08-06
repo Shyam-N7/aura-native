@@ -19,19 +19,15 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
+import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
 import { LONG_LIST } from '../lib/listWindow';
 import { fonts, label, type } from '../theme/tokens';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
 // total runtime, numbered rows with a heart that drops the row on unlike,
 // plus find-in-list + sort (the chosen sort is remembered).
-const SORT_KEY = 'aura.sortLiked';
-const SORTS = [
-  { id: 'default', label: 'recent' },
-  { id: 'title', label: 'title' },
-  { id: 'artist', label: 'artist' },
-  { id: 'longest', label: 'longest' },
-];
+const SORT_KEY = LIKED_SORT_KEY;
+const SORTS = LIKED_SORTS;
 
 const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
   ReduceMotion.System,

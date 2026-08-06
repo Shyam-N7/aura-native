@@ -38,6 +38,12 @@ Will break, corrupt state, or lose user data.
 
 ### C3 — Two thirds of database access bypasses the transient-retry wrapper
 
+> **CLOSED** (2026-07-30, web `dev` `314cc2a`) — `reports/07-changelog.md:132`.
+> `pool.query` itself now runs the same narrow transient-retry loop, and
+> `query()` delegates into it, so the 133 direct call sites are covered without
+> touching them. The finding below is left as written; it is the record of what
+> was true, not a live item.
+
 **What breaks.** A Neon socket reaped between acquisition and query returns a 500 to the user instead of retrying, on a failure mode `db.js`'s own comment calls routine.
 
 **How to trigger.** Hard to force deliberately; it surfaces as intermittent unexplained 500s on the pooled endpoint, disproportionately after idle periods.

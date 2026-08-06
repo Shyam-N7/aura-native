@@ -1,0 +1,16 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
+
+  <application>
+    <!-- Lets shell profilers (heapprofd/Perfetto) attach. Debug-only on
+         purpose: this was in the main manifest and therefore shipped in
+         release, which let anyone with an ADB-authorised host capture the
+         production app's native heap — where the bearer JWT lives. Profiling a
+         debug build costs nothing here and the release APK stops offering it.
+
+         If a release-build capture is ever needed again (the leak hunt in
+         reports/10-leak-and-kill.md is what put it here), move this line back
+         to src/main for that build and take it out again afterwards. -->
+    <profileable android:shell="true" tools:targetApi="29" />
+  </application>
+</manifest>

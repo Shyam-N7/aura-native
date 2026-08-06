@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { useTheme } from '../theme/ThemeContext';
+import { fonts, label } from '../theme/tokens';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
@@ -498,12 +499,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
-  pillText: {
-    fontFamily: 'HankenGrotesk-Medium',
-    fontSize: 11,
-    letterSpacing: 0.88,
-    textTransform: 'uppercase',
-  },
+  // label(11) spelled out — same four properties, 11 * 0.08 = 0.88.
+  pillText: label(11),
   results: {
     flex: 1,
   },
@@ -572,7 +569,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 12.5,
-    fontFamily: 'HankenGrotesk-Regular',
+    fontFamily: fonts.regular,
   },
   hero: {
     flexDirection: 'row',
@@ -582,7 +579,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   heroName: {
-    fontFamily: 'HankenGrotesk-SemiBold',
+    fontFamily: fonts.semibold,
     fontSize: 19,
     letterSpacing: -0.1,
   },

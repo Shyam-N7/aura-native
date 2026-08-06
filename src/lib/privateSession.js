@@ -1,11 +1,12 @@
 import { storage } from '../storage/mmkv';
+import { K } from '../storage/keys';
 import { onSessionReset } from './sessionReset';
 
 // One-tap private listening: while on, nothing you play feeds
 // recommendations, stats, history, or presence — events, impressions, and
 // heartbeats are dropped at their API boundaries. Auto-expires after 6 hours
 // so a forgotten toggle can't quietly starve the taste profile forever.
-const KEY = 'aura.privateUntil';
+const KEY = K.privateUntil;
 const SESSION_MS = 6 * 60 * 60 * 1000;
 const subs = new Set();
 

@@ -183,37 +183,146 @@ The gate resets exactly two module stores (`App.jsx:96-97`); `clearSession` wipe
 ## Status since this audit
 
 Worked in the same session, on `claude/session-takeover-wwu0wy`. Everything below
-is verified by `npm test` (50 suites / 298 tests) and lint unless marked
-otherwise. **No Kotlin in this session was compiled** — the container had no
-Android SDK — so every native change is review-only until a real build.
+is verified by `npm test` (59 suites / 356 tests) and `npm run lint`, which now
+passes clean on the whole tree, unless marked otherwise. **No Kotlin in this
+session was compiled** — the container had no Android SDK — so every native
+change is review-only until a real build.
 
 **Closed**
 
 | Item | Where |
 |---|---|
-| T3 #17 — glass zero-size wedge (transparent top bar after a detail-screen round-trip) | `GlassBlurController.init()` resets `initialized`, so the heartbeat's revive branch can reach it |
+| T3 #17 — glass zero-size wedge (transparent top bar after a detail-screen round-trip) | **Confirmed fixed on device.** See the correction below — the first fix was wrong. |
 | T2 #16 — TopBar read identity without subscribing (stale mode pill, stale avatar) | `TopBar.jsx` subscribes to auth |
 | T3 #19 — dock morph reallocated blur bitmaps per frame | `init()` keeps buffers when the scaled size is unchanged |
 | T2 #10-15 — all six sign-out leaks | new `lib/sessionReset.js` registry; stores register their own teardown |
 | T1 #1 — `prev()` resolved its target at press time | resolved inside the op |
 | T1 #2 — drift correction rebuilt from a stale `before` | rebased on the live queue |
 | T1 #3 — `replaceTrack` skipped the lock, never id-checked | takes the lock, verifies id, re-confirms the active row |
+| T1 #6 — `onPlaybackState` never dispatched | dispatched last in the listener, so the perf marks and stall bookkeeping cannot be starved; `__tests__/playbackServiceDispatch.test.js` drives the REAL service |
+| T1 #4/#5 — endless skip cascade after a crash | cross-track give-up streak, stop + probe + a message that names the cause, auto-resume on reconnect |
+| P3c — EQ silently detached | different bug from the audited one; see the correction below |
+| T1 #8 — `aura.hasOnboarded` write-only | both writes and the `clearSession` entry removed; nothing read it |
+| T3 — AlbumScreen not virtualized | `BounceFlatList` + `LONG_LIST`, header as inline JSX, `gap` moved off `contentContainerStyle` |
+| T4 #28 — deep-link handler had no origin allowlist | https + own-host check derived from `API_BASE`, applied straight after parsing |
+| T4 #29 — `<profileable>` shipped in release | moved to `src/debug/AndroidManifest.xml` |
+| T4 #30 — Sentry breadcrumbs recorded invite tokens in URLs | `lib/scrubBreadcrumb.js` wired as `beforeBreadcrumb` |
+| T4 #32 — unguarded `res.json()` on the auth endpoints | `readJson()`; a non-JSON 5xx now surfaces as a status, not a `SyntaxError` |
+| T4 #27 — AdminCompose client-gated only | the screen checks `admin` itself and ejects on demotion; the server remains the boundary |
+| T5 #33 — resume window duplicated with reordered predicates | one `playback/resumePoint.js` both readers call |
+| T5 #34 — `aura.queue`/`aura.position` retyped in 5 modules | `storage/keys.js` + `SESSION_KEYS`, with a test that fails on any re-typed literal |
+| T5 #37 — shared sort key, independently declared SORTS | one `components/detail/listSorts.js` |
+| T5 #35 (part) — only one confirm dialog honoured `danger` | `ConfirmPopup` takes `danger`; the equalizer's delete-preset confirm is red |
+| T5 #38 (JS part) — `pool` prop, `likesReady()`, `HOME_LANGS` copy, 14 font-literal bypasses | removed or pointed at the canonical source |
+| T5 #39 (part) — doc rot | README rewritten from RN boilerplate; `UPSTREAM.md` table un-broken; `CONTEXT.md` given a measured freshness banner and its false `fetchAuthed` claim corrected in place; `02-review.md` C3 annotated as closed |
 | Notification heart icon frozen on OEM media cards | both icons pre-registered; `getCustomActions` selects |
 | Foreground and data-only pushes never reached the shade | new `AuraNotifier` app-local module |
 | `_resetImpressionGuard` dead since it was written | now the impression store's session teardown |
+| Lint failed on a clean tree (`AbortSignal is not defined`) | declared in the eslint globals — @react-native's `env` predates the web globals RN 0.83 ships on Hermes |
+| Buffered stroke was a flat rule across a sine ribbon | traces the same curve now, through one shared `ribbonPath` sampler |
 
-**Corrected by later evidence**
+**Corrected by later evidence** — three of my own findings were wrong. Recorded
+in full because the wrong versions were confidently argued.
 
-- **T1 #7 (`remote-duck`)** was understated. RNTP does not merely lack a handler
-  — it *emits* `"remote-duck"` on every audio-focus change
-  (`MusicService.kt:673-681`), `Event.RemoteDuck` exists in the enum, and the app
-  has zero listeners. The event is produced and dropped.
-- **T1 #6 (`onPlaybackState`)** — still open, and worth knowing that a test masks
-  it: `playerStateAndRestore.test.jsx` mocks the service and calls the handler
-  directly, so the missing dispatch is invisible to the suite.
+- **T1 #7 (`remote-duck`) — I was wrong twice.** The audit said no handler
+  existed; I then "sharpened" that to *the event is emitted and dropped*. Both
+  are false. With `autoHandleInterruptions: true` the emit path is
+  **unreachable on Android**: kotlin-audio's `OnAudioFocusChangeListener` is
+  registered only inside `requestAudioFocus()`, whose sole call site sits
+  behind a guard that config turns off. No listener, no callback, no emit.
+  Adding a JS listener would be dead code, and no JS test could pin it — the
+  RNTP mock's `__emit` fires whatever listeners exist regardless of native
+  reality, so a green test would pin a fiction. **No code change.**
+- **T3 #17 (glass) — the first fix did not work, and the reason matters.**
+  Resetting `initialized` was not enough. `react-native-screens` detaching the
+  tab subtree clears `PFLAG3_IS_LAID_OUT`, and Fabric only calls `layout()`
+  when metrics *change* — the bar is a fixed 52 dp, so a pop restores identical
+  metrics and the flag stays false forever. All three self-heal paths were
+  gated on that dead flag. Fixed by un-gating them (attachment is the only real
+  precondition) plus an `updateBlurViewSize()` on re-attach.
+  A second, self-inflicted regression followed: measuring staleness as
+  `min(lastSuccess, lastDraw)` produced a 0.5 Hz re-capture churn, visible in
+  the owner's logcat as `sinceCapture=1ms` beside `sinceDraw=2002ms`. My
+  premise was wrong — the blur render node references the bitmap's pixels live,
+  so a refreshed capture reaches the screen with **no** `draw()` call.
+  Staleness is `lastSuccessUptime` alone; `lastDrawUptime` survives only in the
+  state dump.
+- **P3c (EQ) — right symptom, unreachable trigger.** The audited trigger needs
+  `setupPlayer` to run twice, which cannot happen (once per JS lifetime, RNTP
+  rejects a second, and the one teardown path calls `exitProcess`). The
+  *reachable* bug with the same symptom is a cold start with the EQ already on:
+  `getAudioSessionId()` rejects before the service has bound, the failure is
+  swallowed with no breadcrumb, and nothing retries — so the switch reads ON
+  with live faders over untouched audio for the whole first session.
+- **T1 #6 (`onPlaybackState`)** — a test was masking it:
+  `playerStateAndRestore.test.jsx` mocks the service and calls the handler
+  directly, so the missing dispatch was invisible to the suite. The new spec
+  drives the real service instead.
+- **The 120 Hz suspicion was wrong in both directions.** `AuraDisplay` logged
+  `current=120.00001Hz modes=[120, 90, 60]` — the app already holds the highest
+  mode, and the developer-options overlay reading 60 was not what it looked
+  like.
 
-**Still open** — the whole of Tier 4 (security/ops), `onPlaybackState`, the EQ
-audio-session re-attach (P3c), `remote-duck`, `aura.hasOnboarded`, AlbumScreen
-virtualization, and all of Tier 5. Also: `npm run lint` fails on a clean tree
-(`AbortSignal is not defined`, `__tests__/auth.test.js:45`) — one line in the
-eslint globals, left alone here as unrelated to any reported bug.
+**Open questions raised by this pass**
+
+- Three design tokens are unreferenced: `type.searchInput`, `radii.hero` (14)
+  and `radii.coverSm` (6). The last two are arguably *bypassed* rather than
+  unused — there are six hardcoded `borderRadius: 14` sites and one
+  `borderRadius: 6`. Whether all six mean "hero" is a design call, so they were
+  left alone rather than guessed at.
+- Two native items are verified dead but were **not** removed, because neither
+  deletion can be compiled here: kotlin-audio's `AudioPlayer.kt` (a one-line
+  subclass; RNTP imports only `QueuedAudioPlayer`, nothing instantiates it) and
+  `kotlin-audio/res/values/colors.xml` (Android-Studio template colours, zero
+  references — but `@react-native-firebase/messaging`'s build.gradle injects
+  `@color/white` as its default notification-colour placeholder, and whether
+  resource linking still needs it after our `tools:replace` is a question a
+  Gradle run answers in 90 seconds and this container cannot answer at all).
+
+**Deliberately not changed** (decided against, with the reasoning, so they
+aren't re-opened as oversights)
+
+- **#26 — JWT + profile in unencrypted MMKV.** There is no honest JS-only fix.
+  An `encryptionKey` constant lives in the JS bundle, inside the same APK as
+  the data it claims to protect, so it adds nothing against the only threat
+  that reaches the file (rooted or physical access) while adding a migration
+  on the auth boot path. The real fix is a key held in the Android Keystore —
+  hardware-backed and non-exportable — reached through an app-local native
+  module like `AuraNotifier`, plus a one-way migration of the existing
+  plaintext instance. That needs a build to compile against and a rollback
+  plan, because a key-retrieval failure on any device makes the session
+  unreadable and signs that user out. Worth doing; not worth doing blind.
+  Client-side `exp` checking was also considered and rejected: the 401 →
+  `revalidateSession` → `fetchMe` path already tears down a dead session when
+  online, and trusting device wall-clock to sign people out adds a
+  clock-skew failure mode for no gain.
+- **#31 — release unsignable from a clean clone.** The keystore and
+  `keystore.properties` are not in the repo and must not be; the fix is a CI
+  secret + a documented signing path, which is an infrastructure decision, not
+  a code change. Rewriting the cmd-only npm scripts to be cross-platform is
+  the tractable half, but it changes the exact commands the owner builds with,
+  and there is no build here to prove the rewrite before it lands.
+
+**Still open**
+
+- Tier 4 #26 and #31, as reasoned above.
+- **#35 — the copy-pasted scaffolding.** Eight screens repeat the same
+  AbortController-fetch-into-`hit` block in two error dialects; the 150 ms
+  find-debounce plus sort scaffolding is triplicated; ModeSheet is
+  structurally QualitySheet; there are nine event buses in two dialects; the
+  home rails share a copy-pasted malformed ScrollView shell. All real, all
+  large, and all UI-visible if a shared abstraction gets a detail wrong — this
+  is the one that wants the owner awake and a device in hand, not an overnight
+  pass.
+- **#36 — three coach-mark systems**, two of which fire back-to-back for the
+  same physical gesture. Same reasoning: it changes what a first-time user
+  sees, which is exactly the thing a test suite cannot check.
+- **#38/#39 remainders** — the two native deletions and the three tokens above,
+  plus the per-file LOC figures and `file:line` citations throughout
+  `docs/CONTEXT.md`, which are flagged by a freshness banner rather than
+  rewritten (restating a dated snapshot at a new commit destroys the record of
+  what was true then).
+- The **original crash** that started the skip cascade is still unexplained.
+  The cascade is fixed — it now stops and says why instead of skipping the
+  queue — but the crash that triggered it was never identified. The "last
+  crash report" card under You → settings holds the text that would name it.

@@ -19,6 +19,7 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
+import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 
@@ -28,13 +29,9 @@ import { fonts, label, type } from '../theme/tokens';
 // `initialData` route param to skip the fetch (auto mixes have no per-id GET).
 // The auto-mix "don't show this again" action arrives with the context menu.
 // Find-in-list + sort ride above the rows; the chosen sort is remembered.
-const SORT_KEY = 'aura.sortPlaylist';
-const SORTS = [
-  { id: 'default', label: 'in order' },
-  { id: 'title', label: 'title' },
-  { id: 'artist', label: 'artist' },
-  { id: 'longest', label: 'longest' },
-];
+// Shared with PlaylistScreen — same key, so necessarily the same list.
+const SORT_KEY = PLAYLIST_SORT_KEY;
+const SORTS = PLAYLIST_SORTS;
 
 export default function CatalogPlaylistScreen({ route, navigation }) {
   const { t } = useTheme();

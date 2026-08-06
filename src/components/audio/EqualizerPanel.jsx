@@ -511,6 +511,7 @@ export function EqualizerPanel() {
         title={`delete "${confirmDelete?.name ?? ''}"?`}
         body="the saved settings go, your current sound stays as it is."
         action="delete"
+        danger
         onConfirm={() => {
           deleteEqUserPreset(confirmDelete.id);
           Vibration.vibrate(8);
