@@ -76,7 +76,7 @@ export default function PlaylistsScreen({ navigation }) {
   const [savedLists, setSavedLists] = useState([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [hintOn] = useState(() => hintAvailable('newPlaylist'));
+  const [hintOn, setHintOn] = useState(() => hintAvailable('newPlaylist'));
   const inputRef = useRef(null);
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
@@ -391,6 +391,7 @@ export default function PlaylistsScreen({ navigation }) {
               accessibilityLabel="new playlist"
               onPress={() => {
                 killHint('newPlaylist');
+                setHintOn(false);
                 setCreating(true);
               }}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
