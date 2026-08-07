@@ -13,9 +13,15 @@ let counter = 0;
 // (background play is on by default), and the engine and the service both
 // toast from there: swipe the app away mid-song, hit a stall or a dead track,
 // reopen an hour later, and a pill slid up about a network that had long since
-// come back. Stamp it and drop anything stale — the gap this covers is
-// milliseconds, so a few seconds is generous.
-const PENDING_TTL_MS = 5000;
+// come back. Stamp it and drop anything stale.
+//
+// This was 5 seconds, which was too short for the very case the buffer exists
+// for: it turned "a stale toast an hour later" into "no toast at all". The
+// activity being destroyed mid-outage is exactly when the engine is talking
+// and nothing is listening. A message about a connection drop a minute ago is
+// still true and still worth reading when the app reopens; an hour later is
+// not, which was the original complaint.
+const PENDING_TTL_MS = 60_000;
 let pending = null;
 
 // opts.tick renders the toast with an animated green check — for successes

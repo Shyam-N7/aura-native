@@ -25,6 +25,22 @@ test('a toast fired just before the host mounts still arrives', () => {
   off();
 });
 
+test('a message from a minute ago still arrives — the outage may be live', () => {
+  showToast('your connection dropped — waiting for it to come back.');
+
+  // The activity was destroyed mid-outage and the user reopens shortly after.
+  // A 5s TTL dropped this, which traded a stale toast for NO toast in exactly
+  // the case the buffer exists for.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 30_000;
+  const seen = [];
+  const off = subscribeToast(e => seen.push(e.message));
+  Date.now = realNow;
+
+  expect(seen).toHaveLength(1);
+  off();
+});
+
 test('a stale one is dropped instead of replaying next launch', () => {
   showToast("couldn't play this track — skipping.");
 

@@ -190,3 +190,113 @@ test('the wait gives up after its window instead of polling forever', async () =
   expect(__getMockState().playWhenReady).toBe(false);
   expect(__getMockState().activeIndex).toBe(0);
 });
+
+// ── saying something, and saying it in time ────────────────────────────────
+// The whole recovery ladder used to be silent. Attempts 1-4 walk ~25s with no
+// toast anywhere, and the first thing that spoke was the offline pause — which
+// needs the ceiling AND a full 60s waitForConnectivity, i.e. ~85 seconds after
+// the audio actually stopped, as a 1.9-second pill.
+//
+// Field report: "song is pausing when no signal, but is not showing any toast
+// when paused or resumed." The user had skipped to a new track with wifi off,
+// then restored it inside that silent window — so a retry succeeded and the
+// music came back, and the app said nothing in either direction.
+//
+// LATENCY is the defect. The Phase 2 test asserted the toast fires AT the
+// pause, which was true, and never asked how long after the error that is.
+
+const TROUBLE_NOTICE_MS = 6000;
+
+test('a failure that lasts a few seconds says so — long before the ceiling', async () => {
+  await failWhileAdvancing(0); // first network error, t=0
+
+  // Nothing yet: most network errors are blips the ladder fixes in under a
+  // second, and announcing those would be noise.
+  expect(seen).toEqual([]);
+
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS + 100);
+
+  expect(seen).toHaveLength(1);
+  expect(seen[0]).toMatch(/connection/i);
+});
+
+test('it arrives in seconds, not after the ceiling and the 60s wait', async () => {
+  const started = Date.now();
+  await failWhileAdvancing(0);
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS + 100);
+
+  // The point of the whole change: this used to be ~85_000.
+  expect(seen).toHaveLength(1);
+  expect(Date.now() - started).toBeLessThan(10_000);
+});
+
+test('a blip the ladder recovers from stays silent', async () => {
+  await failWhileAdvancing(0);
+
+  // Audio comes back on its own a second later — what the service reports when
+  // a retry succeeds.
+  await jest.advanceTimersByTimeAsync(1000);
+  notePlaybackStarted();
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS * 2);
+
+  // No "connection trouble", and no "back on." either — the user never knew.
+  expect(seen).toEqual([]);
+});
+
+test('recovery is acknowledged, but only if trouble was announced', async () => {
+  await failWhileAdvancing(0);
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS + 100);
+  expect(seen).toHaveLength(1);
+
+  // The service's `playing` handler: audio is genuinely coming out again,
+  // without the user touching anything.
+  notePlaybackStarted();
+
+  expect(seen[seen.length - 1]).toMatch(/back on/i);
+});
+
+test('pressing play yourself is not narrated back to you', async () => {
+  await failWhileAdvancing(0);
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS + 100);
+  const afterTrouble = seen.length;
+
+  // What PlayerContext passes on a deliberate play press.
+  notePlaybackStarted({ userInitiated: true });
+
+  expect(seen).toHaveLength(afterTrouble);
+  // ...and the state is cleared, so the service's follow-up `playing` event
+  // does not then announce it either.
+  notePlaybackStarted();
+  expect(seen).toHaveLength(afterTrouble);
+});
+
+test('the offline pause still speaks, and its recovery is acknowledged', async () => {
+  await pauseOfflineMidSong();
+
+  // Two messages now: the early notice, then the terminal one.
+  expect(seen[0]).toMatch(/connection/i);
+  expect(seen[seen.length - 1]).toMatch(/offline/i);
+
+  goOnline();
+  await jest.advanceTimersByTimeAsync(PAST_RESUME_PROBE_GAP_MS);
+  expect(__getMockState().playWhenReady).toBe(true);
+
+  // The acknowledgement deliberately rides the service's `playing` event
+  // rather than the play() call — "audio is genuinely coming out", not "we
+  // asked for it". A play() that fails must not claim the music is back. This
+  // stands in for service.js's playing handler, which the engine cannot
+  // observe on its own.
+  notePlaybackStarted();
+
+  expect(seen[seen.length - 1]).toMatch(/back on/i);
+});
+
+test('one notice per episode, however many errors arrive', async () => {
+  await failWhileAdvancing(0);
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS + 100);
+  await failWhileAdvancing(0);
+  await failWhileAdvancing(0);
+  await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS * 3);
+
+  expect(seen.filter(m => /connection trouble/i.test(m))).toHaveLength(1);
+});
