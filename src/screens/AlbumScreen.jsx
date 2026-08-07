@@ -12,6 +12,7 @@ import {
   PlayAllPill,
   CountLine,
   DetailRow,
+  DETAIL_ITEM_LAYOUT,
 } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
@@ -95,6 +96,7 @@ export default function AlbumScreen({ route, navigation }) {
         data={status === 'ok' ? tracks : []}
         renderItem={renderRow}
         keyExtractor={item => item.id}
+        getItemLayout={DETAIL_ITEM_LAYOUT}
         {...LONG_LIST}
         contentContainerStyle={[
           styles.content,
