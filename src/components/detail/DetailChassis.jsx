@@ -73,12 +73,19 @@ export function DetailSection({ title, sub }) {
   );
 }
 
+// label() builds a NEW style object every time it is called, and these two sat
+// inline in the row body — so a 200-row list allocated 400 of them per render.
+// Hoisted: the values are constant, only the colour varies and that is already
+// a separate object in the style array.
+const ROW_SUB = label(9.5);
+const ROW_REASON = label(8.5);
+
 // One numbered track row. `sub` defaults to artist · language; `reason` is
 // the auto-mix explainer line; `right` is an optional accessory (heart);
 // `highlight` tints the in-list search match inside the title.
 // `menu` ({ omit, extras }) adds the ⋯ button + long-press into the track
 // actions sheet — always-visible on native, never hover-gated.
-export function DetailRow({
+function DetailRowBase({
   track,
   index,
   sub,
@@ -118,11 +125,11 @@ export function DetailRow({
                 )
               : title}
           </Text>
-          <Text numberOfLines={1} style={[label(9.5), { color: t.inkSoft }]}>
+          <Text numberOfLines={1} style={[ROW_SUB, { color: t.inkSoft }]}>
             {sub ?? `${(track.artist ?? '').toLowerCase()} · ${track.language ?? ''}`}
           </Text>
           {!!reason && (
-            <Text numberOfLines={1} style={[label(8.5), { color: t.inkFaint }]}>
+            <Text numberOfLines={1} style={[ROW_REASON, { color: t.inkFaint }]}>
               {reason}
             </Text>
           )}
@@ -148,6 +155,16 @@ export function DetailRow({
     </View>
   );
 }
+
+// Memoized so a screen re-render does not re-render every mounted row.
+//
+// This only earns anything when the CALLER hands stable props — an inline
+// `onPress={() => …}`, a `menu={{…}}` literal or a `right={<X/>}` element
+// defeats the shallow compare on its own. LikedScreen does that properly; the
+// remaining screens still pass some inline props, so they get the hoisted
+// styles above but not yet the memo. Wrapping first and stabilising later
+// would have read as a fix while changing nothing.
+export const DetailRow = React.memo(DetailRowBase);
 
 const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', paddingVertical: 4, marginLeft: -4 },
