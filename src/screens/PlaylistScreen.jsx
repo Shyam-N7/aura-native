@@ -51,6 +51,7 @@ import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
+import { useBackToTop } from '../hooks/useBackToTop';
 
 // Your (or a shared) playlist, ported from web DesktopPlaylistDetail: cover +
 // hero + who-can-see-this share chip, collaborator cluster with a members
@@ -119,6 +120,7 @@ function SheetHead({ text }) {
 }
 
 export default function PlaylistScreen({ route, navigation }) {
+  const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
@@ -477,6 +479,7 @@ export default function PlaylistScreen({ route, navigation }) {
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
       <BounceFlatList
+        {...backToTop}
         data={status === 'ok' ? shown : []}
         renderItem={renderRow}
         keyExtractor={item => item.id}

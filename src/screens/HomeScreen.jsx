@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
-import { clearScrollDepth, setScrollDepth } from '../lib/scrollDepth';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { useTrackDirection } from '../hooks/useTrackDirection';
@@ -26,6 +25,7 @@ import {
 } from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
+import { useBackToTop } from '../hooks/useBackToTop';
 import { useActiveMode } from '../hooks/useActiveMode';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -131,17 +131,10 @@ export default function HomeScreen({ navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  // Deep-scroll signal for the dock's back-to-top contraction. The scroller
-  // ref is how "take me back up" actually gets back up; blur clears the flag
-  // so the dock never contracts over some other screen.
-  const scrollRef = useRef(null);
-  useEffect(() => {
-    const unsub = navigation?.addListener?.('blur', clearScrollDepth);
-    return () => {
-      unsub?.();
-      clearScrollDepth();
-    };
-  }, [navigation]);
+  // Deep-scroll signal for the dock's back-to-top contraction. Lifted into a
+  // hook so every long list can produce it — Home was the only screen that
+  // did, which is why it was the only screen with the affordance.
+  const backToTop = useBackToTop();
   // Filmstrip direction of the last track change — the banner steps with it.
   const trackDir = useTrackDirection(player.queue);
   const user = getUser();
@@ -484,12 +477,7 @@ export default function HomeScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <ScreenFade>
         <BounceScrollView
-          ref={scrollRef}
-          onDeepChange={deep =>
-            setScrollDepth(deep, () =>
-              scrollRef.current?.scrollTo?.({ y: 0, animated: true }),
-            )
-          }
+          {...backToTop}
           contentContainerStyle={[
             styles.content,
             // The bar floats over the scroller now (web: position fixed) —

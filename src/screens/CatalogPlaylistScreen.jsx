@@ -22,6 +22,7 @@ import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
+import { useBackToTop } from '../hooks/useBackToTop';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
 // Serves catalog/editorial playlists (fetched by id) AND auto "made for you"
@@ -34,6 +35,7 @@ const SORT_KEY = PLAYLIST_SORT_KEY;
 const SORTS = PLAYLIST_SORTS;
 
 export default function CatalogPlaylistScreen({ route, navigation }) {
+  const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
@@ -145,6 +147,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
       <BounceFlatList
+        {...backToTop}
         data={status === 'ok' ? shown : []}
         renderItem={renderRow}
         keyExtractor={item => item.id}

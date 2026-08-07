@@ -22,6 +22,7 @@ import { ListTools } from '../components/detail/ListTools';
 import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
 import { LONG_LIST } from '../lib/listWindow';
 import { fonts, label, type } from '../theme/tokens';
+import { useBackToTop } from '../hooks/useBackToTop';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
 // total runtime, numbered rows with a heart that drops the row on unlike,
@@ -34,6 +35,7 @@ const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
 );
 
 export default function LikedScreen({ navigation }) {
+  const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
@@ -162,6 +164,7 @@ export default function LikedScreen({ navigation }) {
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
       <BounceFlatList
+        {...backToTop}
         data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}
