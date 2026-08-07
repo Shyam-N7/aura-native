@@ -136,15 +136,18 @@ export default function LikedScreen({ navigation }) {
   // Stable, so the memoized row below is not invalidated on every render.
   // shownRef rather than a `shown` dep: the callback must see the CURRENT list
   // when tapped, without changing identity every time the list does.
+  // playerRef for the same reason: the context value takes a new identity on
+  // every track advance and every play/pause, so depending on it here handed
+  // the rows a new onPlay each time — which is exactly what the memo above
+  // exists to prevent.
   const shownRef = useRef(shown);
   shownRef.current = shown;
-  const playFrom = useCallback(
-    i => {
-      player.playQueue(shownRef.current, i, 'your liked');
-      player.ui?.openPlayer?.();
-    },
-    [player],
-  );
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const playFrom = useCallback(i => {
+    playerRef.current.playQueue(shownRef.current, i, 'your liked');
+    playerRef.current.ui?.openPlayer?.();
+  }, []);
 
   const header = (
     <View style={styles.header}>

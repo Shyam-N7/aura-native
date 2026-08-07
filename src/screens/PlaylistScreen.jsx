@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
   Image,
@@ -74,6 +74,48 @@ const SORT_KEY = PLAYLIST_SORT_KEY;
 const SORTS = PLAYLIST_SORTS;
 
 const POLL_MS = 15000;
+
+// Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
+// (`onPress={() => playFrom(i)}`), a fresh object (the `menu={{extras: …}}`
+// literal) or a renderItem redefined in the render body each defeats that
+// compare on its own. Same shape as LikedScreen.
+const ROW_MENU = { extras: [] };
+
+const PlaylistTrackRow = React.memo(function PlaylistTrackRow({
+  track,
+  index,
+  highlight,
+  reason,
+  onPlay,
+  onRemove,
+}) {
+  const press = useCallback(() => onPlay(index), [onPlay, index]);
+  const menu = useMemo(
+    () =>
+      onRemove
+        ? {
+            extras: [
+              {
+                label: 'remove from this playlist',
+                danger: true,
+                onPress: () => onRemove(track),
+              },
+            ],
+          }
+        : ROW_MENU,
+    [onRemove, track],
+  );
+  return (
+    <DetailRow
+      track={track}
+      index={index}
+      highlight={highlight}
+      reason={reason}
+      onPress={press}
+      menu={menu}
+    />
+  );
+});
 
 function SheetItem({ icon, text, note, on, disabled, onPress }) {
   const { t } = useTheme();
@@ -173,6 +215,8 @@ export default function PlaylistScreen({ route, navigation }) {
     () => sortTracks(filterTracks(tracks, query), sort),
     [tracks, query, sort],
   );
+  const hitRef = useRef(hit);
+  hitRef.current = hit;
 
   const myId = getUser()?.id;
   const canEdit = !publicId && (hit.data?.canEdit ?? false);
@@ -353,7 +397,7 @@ export default function PlaylistScreen({ route, navigation }) {
     }
   };
 
-  const removeTrack = async track => {
+  const removeTrack = useCallback(async track => {
     const ok = await confirm({
       title: `remove "${cleanTitle(track.title)}"?`,
       body: 'this only removes it from this playlist. your likes are untouched.',
@@ -362,7 +406,7 @@ export default function PlaylistScreen({ route, navigation }) {
     if (!ok) {
       return;
     }
-    const prev = hit.data;
+    const prev = hitRef.current.data;
     setHit(h => ({
       ...h,
       data: {
@@ -378,7 +422,10 @@ export default function PlaylistScreen({ route, navigation }) {
       setHit({ data: prev, error: null });
       showToast(`Couldn't remove — ${err.message}`);
     }
-  };
+    // `id` is the only value this needs to keep stable across renders; the
+    // rollback snapshot comes off hitRef so a data change does not hand every
+    // mounted row a new menu.
+  }, [id]);
 
   // Upload a custom cover image (picker delivers it pre-resized).
   const uploadCover = async () => {
@@ -439,39 +486,45 @@ export default function PlaylistScreen({ route, navigation }) {
   };
 
   // Play what's on screen: a filtered or re-sorted view queues in that order.
-  const playFrom = i => {
-    player.playQueue(shown, i, (hit.data?.name ?? 'this playlist').toLowerCase());
-    player.ui?.openPlayer?.();
-  };
+  //
+  // shownRef / playerRef rather than deps: both change on things that must not
+  // reach the rows — `shown` on every keystroke, the player value on every
+  // track advance — and this only ever runs on a tap, so it must read the
+  // CURRENT values without taking a new identity when they move.
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const source = (hit.data?.name ?? 'this playlist').toLowerCase();
+  const playFrom = useCallback(
+    i => {
+      playerRef.current.playQueue(shownRef.current, i, source);
+      playerRef.current.ui?.openPlayer?.();
+    },
+    [source],
+  );
 
   // Rows are windowed FlatList data — a shared playlist can be hundreds of
   // tracks, and mounting them all on open (the old ScrollView map) was the
   // measured OOM-kill spike. Everything above the rows rides as the header.
-  const renderRow = ({ item: track, index: i }) => (
-    <DetailRow
-      track={track}
-      index={i}
-      highlight={query}
-      reason={
-        shared && track.addedBy
-          ? `added by ${
-              track.addedBy.userId === myId ? 'you' : track.addedBy.name
-            }`
-          : undefined
-      }
-      onPress={() => playFrom(i)}
-      menu={{
-        extras: canEdit
-          ? [
-              {
-                label: 'remove from this playlist',
-                danger: true,
-                onPress: () => removeTrack(track),
-              },
-            ]
-          : [],
-      }}
-    />
+  const renderRow = useCallback(
+    ({ item: track, index: i }) => (
+      <PlaylistTrackRow
+        track={track}
+        index={i}
+        highlight={query}
+        reason={
+          shared && track.addedBy
+            ? `added by ${
+                track.addedBy.userId === myId ? 'you' : track.addedBy.name
+              }`
+            : undefined
+        }
+        onPlay={playFrom}
+        onRemove={canEdit ? removeTrack : null}
+      />
+    ),
+    [query, shared, myId, playFrom, canEdit, removeTrack],
   );
 
   return (

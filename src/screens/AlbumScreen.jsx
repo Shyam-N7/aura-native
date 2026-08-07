@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceFlatList } from '../components/ui/Bounce';
@@ -16,6 +16,19 @@ import {
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+
+// Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
+// (`onPress={() => playFrom(i)}`), a fresh object (`menu={{}}`) or a renderItem
+// redefined in the render body each defeats that compare on its own — so the
+// memo sat there earning nothing. Same shape as LikedScreen.
+const ROW_MENU = {};
+
+const AlbumRow = React.memo(function AlbumRow({ track, index, onPlay }) {
+  const press = useCallback(() => onPlay(index), [onPlay, index]);
+  return (
+    <DetailRow track={track} index={index} onPress={press} menu={ROW_MENU} />
+  );
+});
 
 // Album / movie detail, ported from web DesktopAlbumDetail. Indian-cinema
 // soundtracks are albums with isMovie — the eyebrow names it a movie.
@@ -40,18 +53,33 @@ export default function AlbumScreen({ route, navigation }) {
     return () => ctl.abort();
   }, [id]);
 
-  const tracks = hit.data?.tracks ?? [];
+  // Memoized because this is the list's `data`. A fresh `[]`/slice every render
+  // is a new identity to VirtualizedList, which re-renders every mounted cell.
+  const tracks = useMemo(() => hit.data?.tracks ?? [], [hit.data]);
   const kind = hit.data?.isMovie ? 'movie' : 'album';
   // Multiple artists arrive as a comma-joined string — show only the main one.
   const mainArtist = (hit.data?.artist ?? '').split(',')[0].trim();
 
-  const playFrom = i => {
-    player.playQueue(tracks, i, (hit.data?.name ?? `this ${kind}`).toLowerCase());
-    player.ui?.openPlayer?.();
-  };
+  // The player context value changes on every track advance and every
+  // play/pause. Depending on it here would hand the rows a new onPlay each
+  // time — the exact thing this batch is removing — and the callback only ever
+  // runs on a tap, so a ref is the honest dependency.
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const source = (hit.data?.name ?? `this ${kind}`).toLowerCase();
+  const playFrom = useCallback(
+    i => {
+      playerRef.current.playQueue(tracks, i, source);
+      playerRef.current.ui?.openPlayer?.();
+    },
+    [tracks, source],
+  );
 
-  const renderRow = ({ item: track, index: i }) => (
-    <DetailRow track={track} index={i} onPress={() => playFrom(i)} menu={{}} />
+  const renderRow = useCallback(
+    ({ item: track, index: i }) => (
+      <AlbumRow track={track} index={i} onPlay={playFrom} />
+    ),
+    [playFrom],
   );
 
   return (
