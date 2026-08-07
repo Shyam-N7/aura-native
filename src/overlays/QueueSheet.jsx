@@ -1044,20 +1044,27 @@ export function QueueSheet() {
   // above it, so the insert target differs by side (docs/perf/04 4a).
   const moveToTop = useCallback(
     i => {
+      // commitRef, not `idx` — see the deps below.
+      const cur = commitRef.current.idx;
       const p = pickAt(i);
       if (p) {
         // This pick alone becomes next in line; the batch keeps the rest.
-        insertTrackAt(p.track, idx + 1);
+        insertTrackAt(p.track, cur + 1);
         autoRadio.dropCandidate(p.track.id);
         return;
       }
-      if (i === idx) {
+      if (i === cur) {
         return;
       }
-      reorder(i, i > idx ? idx + 1 : idx);
+      reorder(i, i > cur ? cur + 1 : cur);
     },
-     
-    [reorder, insertTrackAt, idx],
+    // `idx` is deliberately NOT a dependency. It changes on every track
+    // advance, and this callback is handed to every mounted Row — so depending
+    // on it re-rendered the whole visible queue each time a song changed,
+    // straight through Row's React.memo. Its two siblings jumpToRow and
+    // reorderRow already read the playhead off commitRef for exactly this
+    // reason; this one was the outlier.
+    [reorder, insertTrackAt],
   );
   const onGone = useCallback(
     key => {

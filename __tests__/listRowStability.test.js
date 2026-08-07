@@ -83,6 +83,27 @@ describe('nothing inline reaches a memoized row', () => {
   });
 });
 
+// QueueSheet's `Row` has been React.memo'd all along, but `moveToTop` listed
+// `idx` in its deps — so every track advance handed all mounted rows a new
+// onMoveTop and re-rendered the whole visible queue straight through the memo.
+// Its siblings jumpToRow and reorderRow already read the playhead off
+// commitRef; this locks the outlier to that convention, because re-adding
+// `idx` to satisfy exhaustive-deps is the obvious way to undo it.
+describe('the queue sheet does not re-render its rows on every track advance', () => {
+  const body = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'overlays', 'QueueSheet.jsx'),
+    'utf8',
+  );
+
+  test('moveToTop reads the playhead off commitRef, not a dep', () => {
+    const start = body.indexOf('const moveToTop = useCallback(');
+    expect(start).toBeGreaterThan(-1);
+    const region = body.slice(start, body.indexOf('\n  );', start));
+    expect(region).toContain('commitRef.current.idx');
+    expect(code(region)).not.toMatch(/\[[^\]]*\bidx\b[^\]]*\]/);
+  });
+});
+
 // The player context value takes a new identity on every track advance and
 // every play/pause. A row callback that depends on it is re-created on each of
 // those, so a memoized row re-renders while a song is simply playing — the
