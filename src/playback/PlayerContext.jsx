@@ -692,7 +692,7 @@ export function PlayerProvider({ children }) {
       // give-up streak (and abandon any pending resume wait) so someone who
       // has just fixed their wifi gets a full run of attempts instead of
       // being stopped by the failures that came before.
-      engine.notePlaybackStarted();
+      engine.notePlaybackStarted({ userInitiated: true });
       const q = model.createQueue(tracks, idx, source);
       if (!q.tracks.length) {
         return;
@@ -731,7 +731,7 @@ export function PlayerProvider({ children }) {
       setIsPlaying(true);
       // Same fresh-slate rule as playQueue: a deliberate press of play after a
       // stopped-on-failure session must not inherit that session's streak.
-      engine.notePlaybackStarted();
+      engine.notePlaybackStarted({ userInitiated: true });
       enqueuePlayOp(async () => {
         // After a system kill the model can remember a queue the NATIVE
         // player lost (the cold restore died before syncing) — play() on an

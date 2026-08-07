@@ -742,6 +742,54 @@ const RESUME_WAIT_MS = 5 * 60 * 1000;
 const RESUME_PROBE_GAP_MS = 15000;
 
 let giveUpStreak = 0;
+
+// ── the failure voice ──────────────────────────────────────────────────────
+// Recovery used to be entirely silent for its first ~25 seconds. The ladder
+// walks attempts 1-4 with no toast anywhere, and the first thing that speaks
+// is the offline pause — which fires only AFTER the ceiling and a full
+// 60-second waitForConnectivity, i.e. about 85 seconds after the audio
+// actually stopped, as a 1.9-second pill. Field report: "song is pausing when
+// no signal, but is not showing any toast when paused or resumed."
+//
+// A toast on the FIRST error would be the wrong fix. Most network errors are
+// blips the ladder recovers from in under a second, silently and correctly,
+// and announcing those would be noise. So this is a debounce: say something
+// only once a failure has lasted long enough to be worth a user's attention.
+//
+// Past the first two same-URL reloads (0s and ~1s) and well inside the 25s
+// ceiling.
+const TROUBLE_NOTICE_MS = 6000;
+let troubleTimer = null;
+// Whether we have told the user something is wrong. It also gates the
+// acknowledgement when things come back: announcing "back on." to someone who
+// was never told anything was off is a non-sequitur.
+let troubleAnnounced = false;
+
+function clearTroubleTimer() {
+  if (troubleTimer) {
+    clearTimeout(troubleTimer);
+    troubleTimer = null;
+  }
+}
+
+// Every terminal message goes through here, so "we have spoken" and "stop the
+// pending debounce" can never drift apart.
+function announceTrouble(message) {
+  clearTroubleTimer();
+  troubleAnnounced = true;
+  showToast(message);
+}
+
+function armTroubleNotice() {
+  if (troubleTimer || troubleAnnounced) {
+    return;
+  }
+  troubleTimer = setTimeout(() => {
+    troubleTimer = null;
+    announceTrouble('connection trouble — trying to get it back.');
+  }, TROUBLE_NOTICE_MS);
+}
+
 // Bumped to invalidate an in-flight resume wait. The wait is long and nothing
 // awaits it, so cancellation is by identity rather than by abort.
 let resumeGeneration = 0;
@@ -762,10 +810,24 @@ function cancelResumeWait() {
  * Playback is healthy again — either it genuinely started, or the user asked
  * for it and has earned a fresh run of attempts. Also abandons any pending
  * resume wait, so a user-initiated play can't be raced by an older one.
+ *
+ * `userInitiated` is what keeps the acknowledgement honest. Recovery can take
+ * up to RESUME_PROBE_GAP_MS after signal returns, with nobody touching the
+ * phone, so "back on." is genuinely useful there. Saying it to someone who
+ * just pressed play themselves is telling them what they already did — so the
+ * two PlayerContext call sites pass the flag and clear the state silently,
+ * while the service's `playing` handler does not.
  */
-export function notePlaybackStarted() {
+export function notePlaybackStarted({ userInitiated = false } = {}) {
   giveUpStreak = 0;
   cancelResumeWait();
+  clearTroubleTimer();
+  if (troubleAnnounced) {
+    troubleAnnounced = false;
+    if (!userInitiated) {
+      showToast('back on.');
+    }
+  }
 }
 
 // Test seam: the streak and the resume wait are module state that survives
@@ -773,6 +835,14 @@ export function notePlaybackStarted() {
 export function _resetFailureStreak() {
   giveUpStreak = 0;
   cancelResumeWait();
+  clearTroubleTimer();
+  troubleAnnounced = false;
+  // The recovery walk is module state too, and it is keyed by ELAPSED TIME
+  // (MAX_RECOVERY_MS). Specs that advance a fake clock leave `startedAt` far
+  // in the past, so the next one starts already past the ceiling and takes the
+  // give-up branch on its first error — silently, and for reasons that have
+  // nothing to do with what it is testing.
+  recovery = { id: null, ladderPos: 0, refetched: false };
 }
 
 // Watch for the network in the background and pick the SAME track back up.
@@ -867,6 +937,11 @@ export async function handlePlaybackError(err) {
   recovery.attempt = (recovery.attempt ?? 0) + 1;
   const klass = classifyPlaybackError(err);
   crumb('recovery', klass, { attempt: recovery.attempt, code: err?.code });
+  // Start the clock on the FIRST network error, not on the ceiling. Everything
+  // below this point can take a minute and a half to reach a message.
+  if (klass === 'network') {
+    armTroubleNotice();
+  }
   if (
     recovery.attempt > MAX_ATTEMPTS ||
     Date.now() - (recovery.startedAt ?? 0) > MAX_RECOVERY_MS
@@ -880,7 +955,7 @@ export async function handlePlaybackError(err) {
       // plenty of time to press next onto something the disk cache plays fine,
       // and pausing THAT with an offline toast would be a lie.
       if (await stillOnSlot(cur.id, cur.url)) {
-        showToast("you're offline — music will wait for you.");
+        announceTrouble("you're offline — music will wait for you.");
         await TrackPlayer.pause();
         recovery = { id: null, ladderPos: 0, refetched: false };
         // ...and something has to actually be waiting, or that toast is a
@@ -987,9 +1062,9 @@ export async function handlePlaybackError(err) {
     if (online) {
       // The origin answers, so this is the catalog or these particular
       // streams — waiting for a network that is already here would be a lie.
-      showToast("couldn't play these songs — playback stopped.");
+      announceTrouble("couldn't play these songs — playback stopped.");
     } else {
-      showToast('your connection dropped — waiting for it to come back.');
+      announceTrouble('your connection dropped — waiting for it to come back.');
       startResumeWait(cur.id, cur.url);
     }
     // The streak is NOT cleared here: one more failure after this should stop
@@ -998,6 +1073,11 @@ export async function handlePlaybackError(err) {
     return;
   }
 
+  // Deliberately NOT announceTrouble: this is about one track, not the
+  // session. The next track playing fine is the normal outcome, and "back on."
+  // after a routine skip would be noise.
+  clearTroubleTimer();
+  troubleAnnounced = false;
   showToast("couldn't play this track — skipping.");
   if (active + 1 < rQueue.length) {
     await TrackPlayer.skipToNext();

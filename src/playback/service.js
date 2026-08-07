@@ -135,6 +135,13 @@ module.exports = async function service() {
       engine.notePlaybackStarted();
     }
 
+    // Calibrated for a connection that is SLOW BUT ALIVE, and it cannot fire
+    // on a hard drop — do not "fix" it by widening the trigger. A dead network
+    // raises a fatal error, so the player sits in error/idle and never reports
+    // buffering; and even where the buffer drains first, the else-branch below
+    // cancels this timer the moment the error state arrives, well inside the
+    // 8s window. Hard drops are covered by the engine's trouble notice at ~6s
+    // (TROUBLE_NOTICE_MS), which says something different on purpose.
     if (e?.state === 'buffering' || e?.state === 'loading') {
       // One toast per stall episode — a struggling connection produces a
       // stream of these events, and the single-slot toast would otherwise
