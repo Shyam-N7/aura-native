@@ -495,8 +495,14 @@ export default function PlaylistScreen({ route, navigation }) {
         {status === 'loading' && <AuraLoader label="loading playlist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            This playlist is private or unavailable. If someone shared it, ask
-            them for a public view link.
+            {/* This was one fixed sentence for both branches, so opening YOUR
+                OWN playlist while offline told you it was private and to ask
+                a friend for a share link. The caught message was already in
+                state and simply never rendered — every sibling screen shows
+                it. Lowercase per docs/CONTEXT.md's stated voice. */}
+            {publicId
+              ? 'this playlist is private or unavailable. if someone shared it, ask them for a public view link.'
+              : hit.error || "couldn't load this playlist."}
           </Text>
         )}
 

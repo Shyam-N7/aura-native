@@ -46,7 +46,7 @@ import { initPush, setPushLinkHandler } from './src/lib/push';
 import { freezeGlass } from './src/lib/navFreeze';
 import { initEqualizer } from './src/lib/equalizer';
 import { sensingShownToday, markSensingShown } from './src/lib/sensing';
-import { resetSessionState } from './src/lib/sessionReset';
+import { onSessionReset, resetSessionState } from './src/lib/sessionReset';
 // Imported for their side effect: each registers its own session teardown with
 // the registry above. Without a reference here a store that no mounted screen
 // has imported yet would never register — and Home/likes are exactly the ones
@@ -59,9 +59,29 @@ import './src/lib/privateSession';
 import './src/api/impressions';
 
 // Share links the app answers (web parity): /playlists?join=TOKEN joins a
-// playlist invite, /p/PUBLIC_ID opens a public playlist read-only. Tokens are
-// remembered per session so a re-fired intent can't double-accept.
-const handledTokens = new Set();
+// playlist invite, /p/PUBLIC_ID opens a public playlist read-only.
+//
+// A token used to be marked handled BEFORE the network call and never
+// released, so one failed join — a 503, a flaky moment — killed the link for
+// the rest of the process. Tapping it again did nothing at all: no toast, no
+// navigation, no way to tell the app was ignoring you. The obvious recovery
+// for a transient failure was the one thing that could not work.
+//
+// Now a token is only remembered once it has actually been accepted, and what
+// it is remembered WITH is the playlist it produced — so re-tapping a link you
+// already joined takes you back to the playlist instead of silently doing
+// nothing. `joining` is the double-accept guard the Set used to be, held only
+// while a request is in flight.
+const joinedPlaylists = new Map(); // token → playlistId, successful joins only
+const joining = new Set();
+
+// Per-account, like everything else keyed to a signed-in user: a token the
+// PREVIOUS account accepted would otherwise send the next one to a playlist
+// they are not a member of. Same registry the stores use.
+onSessionReset(() => {
+  joinedPlaylists.clear();
+  joining.clear();
+});
 
 // Only OUR links are actionable. Both hosts the manifest declares an intent
 // filter for — www (autoVerify) and the apex (chooser) — derived from the one
@@ -184,10 +204,19 @@ function Shell() {
         return;
       }
       const join = params.get('join');
-      if (join && !handledTokens.has(join)) {
-        handledTokens.add(join);
+      if (join) {
+        const already = joinedPlaylists.get(join);
+        if (already) {
+          navRef.navigate('Playlist', { id: already });
+          return;
+        }
+        if (joining.has(join)) {
+          return; // same link fired twice — one accept, not two
+        }
+        joining.add(join);
         acceptPlaylistInvite(join)
           .then(({ playlistId, name: plName, inviterName }) => {
+            joinedPlaylists.set(join, playlistId);
             const which = plName ? `"${plName}"` : 'the playlist';
             showToast(
               inviterName
@@ -196,7 +225,8 @@ function Shell() {
             );
             navRef.navigate('Playlist', { id: playlistId });
           })
-          .catch(err => showToast(err.message));
+          .catch(err => showToast(err.message))
+          .finally(() => joining.delete(join));
         return;
       }
       if (parsed.pathname.startsWith('/p/')) {

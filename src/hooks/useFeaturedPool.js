@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getFeatured } from '../api/catalog';
-import { getUser, getActiveExplicitOff, subscribeAuth } from '../lib/auth';
+import { getActiveExplicitOff } from '../lib/auth';
+import { useActiveMode } from './useActiveMode';
 import { dropExplicit } from '../lib/explicit';
 import { readSnapshot, snapshotOwner, writeSnapshot } from '../lib/snapshot';
 
@@ -14,12 +15,15 @@ export function useFeaturedPool({ limit = 24 } = {}) {
   // Track the active mode REACTIVELY. Home doesn't re-render on a mode switch
   // (it's a memoized tab screen under the auth-subscribed Shell), so reading
   // getUser() once left the pool stuck on the old mode until an app restart —
-  // the checkmark moved but Home didn't. Subscribing re-seeds it immediately.
-  const [mode, setMode] = useState(() => getUser()?.activeMode ?? 'everyday');
-  useEffect(
-    () => subscribeAuth(() => setMode(getUser()?.activeMode ?? 'everyday')),
-    [],
-  );
+  // the checkmark moved but Home didn't.
+  //
+  // `modeEpoch` is the second half of that. The optimistic flip fires the
+  // fetch immediately, which is what makes the switch feel instant — but
+  // getFeatured sends no mode param, so that request can beat the POST to the
+  // server and come back with the OLD mode's pool, cached under the NEW mode's
+  // key for the rest of the session. The epoch changes when the server has
+  // confirmed, which the mode string alone cannot express.
+  const { mode, epoch: modeEpoch } = useActiveMode();
   // Cold starts seed from the last session's pool for THIS mode (re-filtered
   // in case the explicit rule changed since) — hero/new-for-you/stations paint
   // instantly; the fetch below still runs and swaps the fresh pool in.
@@ -74,7 +78,7 @@ export function useFeaturedPool({ limit = 24 } = {}) {
     return () => {
       stale = true;
     };
-  }, [limit, mode, attempt]);
+  }, [limit, mode, modeEpoch, attempt]);
 
   return { ...state, retry: () => setAttempt(n => n + 1) };
 }

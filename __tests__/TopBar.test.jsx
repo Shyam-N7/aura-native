@@ -18,6 +18,7 @@ function mockSetUser(next) {
 }
 
 jest.mock('../src/lib/auth', () => ({
+  getModeEpoch: () => 0,
   getUser: () => mockUser,
   subscribeAuth: fn => {
     mockAuthSubs.add(fn);

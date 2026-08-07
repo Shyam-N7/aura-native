@@ -305,24 +305,52 @@ aren't re-opened as oversights)
 
 **Still open**
 
-- Tier 4 #26 and #31, as reasoned above.
-- **#35 — the copy-pasted scaffolding.** Eight screens repeat the same
-  AbortController-fetch-into-`hit` block in two error dialects; the 150 ms
-  find-debounce plus sort scaffolding is triplicated; ModeSheet is
-  structurally QualitySheet; there are nine event buses in two dialects; the
-  home rails share a copy-pasted malformed ScrollView shell. All real, all
-  large, and all UI-visible if a shared abstraction gets a detail wrong — this
-  is the one that wants the owner awake and a device in hand, not an overnight
-  pass.
-- **#36 — three coach-mark systems**, two of which fire back-to-back for the
-  same physical gesture. Same reasoning: it changes what a first-time user
-  sees, which is exactly the thing a test suite cannot check.
-- **#38/#39 remainders** — the two native deletions and the three tokens above,
-  plus the per-file LOC figures and `file:line` citations throughout
-  `docs/CONTEXT.md`, which are flagged by a freshness banner rather than
-  rewritten (restating a dated snapshot at a new commit destroys the record of
-  what was true then).
+- Tier 4 #26 (JWT at rest) and #31 (release signing), as reasoned above.
+- **#35 — the copy-pasted fetch scaffolding.** Nine screens plus three overlays
+  repeat the same AbortController-into-`hit` block in two error dialects, and
+  the find-debounce plus sort scaffolding is triplicated. **All twelve work
+  correctly today**; extracting a shared hook is drift insurance, roughly three
+  hours across a dozen files, and the drift it insures against has not
+  happened. Deliberately skipped: every large refactor is a chance to introduce
+  the class of bug this work has spent its time removing.
 - The **original crash** that started the skip cascade is still unexplained.
-  The cascade is fixed — it now stops and says why instead of skipping the
-  queue — but the crash that triggered it was never identified. The "last
-  crash report" card under You → settings holds the text that would name it.
+  The cascade is fixed — it stops and names the cause instead of walking the
+  queue — but the crash that triggered it was never identified. The text is
+  under You → settings, "last crash report".
+- Per-file LOC figures and `file:line` citations throughout `docs/CONTEXT.md`,
+  flagged by a freshness banner rather than rewritten: restating a dated
+  snapshot at a new commit destroys the record of what was true then.
+
+## Corrections to this document's own numbers
+
+Counted at HEAD, because several were wrong and this repo re-investigates the
+same wrong things:
+
+| Claim | Said | Actually |
+|---|---|---|
+| Screens with the copy-pasted fetch block (#35) | eight | **nine screens plus three overlays** — the overlays use a `{trackId}`-keyed variant |
+| Event buses (#35) | nine | **27 modules** |
+| Buses that replay to a late subscriber (§C) | one | **three** — plus `lib/toast`, whose replay had no expiry until it was fixed |
+| Screens' find/sort scaffolding | triplicated | correct |
+
+Several citations have also drifted by 3-26 lines. Treat this document's line
+numbers as "roughly here, go look".
+
+## Phases worked after the batches above
+
+On the same branch, each audited against HEAD before implementation, each
+verified against the reverted source.
+
+| Phase | What |
+|---|---|
+| 1 | **Un-shuffle destroyed the queue.** `restoreOrder` matched by object identity on a premise its own comment stated — "queue ops move track objects, never clone them" — which two paths falsify. Reproduced by running the real algorithm: order wrong AND the playhead on the last slot, so an album ended after the current song. Also: the snapshot was cleared before the restore was known to succeed; the pill lied on a one-track queue; and shuffle state is now persisted (as ids, at `v: 1`, since bumping the version would delete every existing queue). Plus a loading state for "new for you", which needed a missing `.catch` fixed first. |
+| 2 | **The offline pause promised a wait nothing kept.** The mid-song branch returns before the give-up path that was the only place `startResumeWait` was armed. Four further tests pin the ways an unattended `play()` could misbehave around the user. |
+| 3 | Invite token burned before the join succeeded (and leaking across accounts); owners told their own playlist was private; coach marks returning after dismissal on a tab screen that never unmounts; the toast buffer replaying across app lifetimes. |
+| 4 | **Mode switch served the previous mode's content.** Two faults: the optimistic refetch could beat the POST, and the confirmation could not correct it because the same string re-renders to nothing — fixed with a server-confirmation epoch. And Home's personalization effect had an empty dependency array on a screen that never unmounts. Plus first-run teaching the same two gestures three times. |
+| 5 | API error messages are user-facing copy — `Couldn't load — likes fetch failed (500)` — now one `apiError` helper in the house voice. Two dead things removed. These corrections. |
+
+**A recurring lesson, recorded because it caused real bugs here:** several tests
+in this repo passed with their fix reverted. Every `restoreOrder` case used an
+rng of `() => 0.99`, where `j === i` makes each Fisher-Yates swap a self-swap —
+the shuffle was a no-op and the round-trips were round-tripping an unshuffled
+queue. A test is not evidence until it has been seen to fail.

@@ -93,7 +93,7 @@ export default function LikedScreen({ navigation }) {
       {status === 'loading' && <AuraLoader label="loading liked songs" />}
       {status === 'error' && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-          Couldn't load — {hit.error}
+          couldn't load — {hit.error}
         </Text>
       )}
       {status === 'ok' && (

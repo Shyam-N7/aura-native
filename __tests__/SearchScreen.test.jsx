@@ -19,6 +19,7 @@ jest.mock('../src/playback/PlayerContext', () => ({
   }),
 }));
 jest.mock('../src/lib/auth', () => ({
+  getModeEpoch: () => 0,
   getActiveExplicitOff: () => false,
   getUser: () => ({
     name: 'aura',

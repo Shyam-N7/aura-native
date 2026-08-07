@@ -30,6 +30,7 @@ jest.mock('../src/playback/PlayerContext', () => ({
 // Mutable so individual tests can flip capabilities (e.g. the admin row).
 let mockUser = { name: 'Shyam N', email: 's@x.y' };
 jest.mock('../src/lib/auth', () => ({
+  getModeEpoch: () => 0,
   getUser: () => mockUser,
   getActiveExplicitOff: () => false,
   subscribeAuth: jest.fn(() => () => {}),

@@ -333,8 +333,11 @@ export function setVolume(v) {
   return TrackPlayer.setVolume(v);
 }
 
-export function skipToIndex(i, positionSec) {
-  return TrackPlayer.skip(i, positionSec ?? -1);
+// -1 is RNTP's "start from the beginning". There used to be a positionSec
+// parameter here for skipping into a track mid-way; none of the six call sites
+// ever passed one, so it always collapsed to this same default.
+export function skipToIndex(i) {
+  return TrackPlayer.skip(i, -1);
 }
 
 // Swap one queue entry for its hydrated version (fresh streamUrl) without
@@ -880,6 +883,19 @@ export async function handlePlaybackError(err) {
         showToast("you're offline — music will wait for you.");
         await TrackPlayer.pause();
         recovery = { id: null, ladderPos: 0, refetched: false };
+        // ...and something has to actually be waiting, or that toast is a
+        // promise nothing keeps. This branch returns BEFORE the give-up path
+        // below, which is where startResumeWait is armed — so a sustained
+        // offline stretch on a single track paused with a message about
+        // waiting and then watched for nothing. Signal came back and the
+        // silence continued until the user pressed play.
+        //
+        // The sibling case (three tracks failing in a row) did auto-resume,
+        // so two offline states the user cannot tell apart behaved
+        // differently. Same call, same arguments: it generation-guards
+        // itself, re-checks the slot before resuming so it can't yank someone
+        // back to a song they left, and notePlaybackStarted cancels it.
+        startResumeWait(cur.id, cur.url);
       }
       return;
     }

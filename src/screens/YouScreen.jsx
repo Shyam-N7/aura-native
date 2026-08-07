@@ -206,7 +206,11 @@ export default function YouScreen({ navigation }) {
   const [loaded, setLoaded] = useState(() => !!snap);
   const [openShelf, setOpenShelf] = useState(() => sessionShelf);
   const [crash, setCrash] = useState(getLastCrash);
-  const [hintOn] = useState(() => hintAvailable('libraryShelf'));
+  // Needs the setter: killHint() below writes the flag to storage, but this
+  // screen is a TAB — it never unmounts — so without a state update the nudge
+  // reappeared over a shelf the user had just opened, and kept reappearing
+  // until the app was restarted.
+  const [hintOn, setHintOn] = useState(() => hintAvailable('libraryShelf'));
   const alive = useRef(true);
 
   // Hidden songs — the visible "don't show this again" list (mixes and
@@ -478,6 +482,7 @@ export default function YouScreen({ navigation }) {
 
   const toggleShelf = id => {
     killHint('libraryShelf');
+    setHintOn(false);
     const next = openShelf === id ? null : id;
     setOpenShelf(next);
     sessionShelf = next;

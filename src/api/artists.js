@@ -1,4 +1,5 @@
 import { fetchAuthed } from '../lib/auth';
+import { apiError } from './apiError';
 // Ported from web src/api/artists.js (query string built by hand — RN's
 // URL/URLSearchParams are only partially implemented).
 
@@ -20,11 +21,7 @@ export async function getArtist({ id, name, trackId } = {}, { signal } = {}) {
     signal,
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw Object.assign(
-      new Error(body.error || `artist failed (${res.status})`),
-      { status: res.status },
-    );
+    throw await apiError(res, 'this artist');
   }
   const data = await res.json();
   return data.artist ?? null;

@@ -102,7 +102,7 @@ export default function LanguageHubScreen({ route, navigation }) {
         {status === 'loading' && <AuraLoader label={`loading ${lang}`} />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
+            couldn't load — {hit.error}
           </Text>
         )}
         {status === 'ok' && !anyContent && (

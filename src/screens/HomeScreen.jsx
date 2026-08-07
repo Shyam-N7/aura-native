@@ -26,6 +26,7 @@ import {
 } from '../api/catalog';
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
+import { useActiveMode } from '../hooks/useActiveMode';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { ScreenFade } from '../components/ui/ScreenFade';
@@ -118,6 +119,10 @@ function useHomeSection(key, fetcher) {
   }, [key]);
   return data;
 }
+
+// Reco resolved with nothing personal in it — distinct from `null`, which
+// means "still asking". Module scope so it is a stable effect dependency.
+const NO_RECO = { hero: null, newForYou: null, stations: null };
 
 // "don't ask again" for the background-play confirm popup.
 const BG_NO_CONFIRM_KEY = 'aura.backgroundPlayNoConfirm';
@@ -278,9 +283,25 @@ export default function HomeScreen({ navigation }) {
   const [reco, setReco] = useState(
     () => homeCache.reco ?? readSnapshot('home.reco'),
   );
+  // This effect had an EMPTY dependency array, and Home is a memoized tab
+  // screen that never unmounts — so hero, new-for-you and stations kept the
+  // mode's personalization from whenever the app started, for the whole
+  // session. The mode name in the header and the mode-mix card updated
+  // instantly, which made the mismatch visible without explaining it.
+  const { mode: activeMode, epoch: modeEpoch } = useActiveMode();
+  const shownRecoMode = useRef(activeMode);
   useEffect(() => {
     let stale = false;
     const as = snapshotOwner();
+    // Mirrors the featured pool's rule exactly: keep what is on screen while
+    // the new mode loads, EXCEPT into a mode that filters explicit — the
+    // previous mode's picks must never flash under a stricter one.
+    if (shownRecoMode.current !== activeMode) {
+      shownRecoMode.current = activeMode;
+      if (getActiveExplicitOff()) {
+        setReco(null);
+      }
+    }
     Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
       ([h, n, s]) => {
         if (stale) {
@@ -295,11 +316,21 @@ export default function HomeScreen({ navigation }) {
         writeSnapshot('home.reco', next, as);
         setReco(next);
       },
-    );
+    )
+      .catch(() => {
+        // No .catch used to exist: a rejection left `reco` null forever, which
+        // read as "no personalization" and was invisible because the featured
+        // pool fills that surface anyway. It stops being invisible the moment
+        // a loading state keys off null, so settle it explicitly. Not cached —
+        // a later visit retries, same as useHomeSection's failure path.
+        if (!stale) {
+          setReco(NO_RECO);
+        }
+      });
     return () => {
       stale = true;
     };
-  }, []);
+  }, [activeMode, modeEpoch]);
 
   // Log SHOWN picks so the ranker can demote never-played ones — only when
   // the server ring is what rendered; the local fallback is never logged.
@@ -331,6 +362,13 @@ export default function HomeScreen({ navigation }) {
   const newPicks =
     (!explicitOff && reco?.newForYou) || pool.tracks.slice(1, 5);
   const newPicksPersonal = !explicitOff && !!reco?.newForYou;
+  // The rail used to be gated on `poolLoading` alone. When the featured pool
+  // resolved with nothing to slice (empty, or a short set), newPicks was []
+  // and the whole section simply was not rendered — then it popped into
+  // existence, unannounced, whenever the personal call landed. Both sources
+  // have to be in before "nothing here" is the truth.
+  const newPicksLoading =
+    (poolLoading || reco == null) && newPicks.length === 0;
 
   // Stations: real per-artist radio seeds (mapped to the grid's track shape),
   // else featured tiles. `station:true` routes the tap to a radio, not the set.
@@ -376,7 +414,9 @@ export default function HomeScreen({ navigation }) {
     !moreLike?.tracks?.length &&
     !discover?.popularPlaylists?.length;
 
-  const activeMode = user?.activeMode ?? 'everyday';
+  // activeMode comes from useActiveMode above rather than being re-derived
+  // from the inline getUser() read — that read does not re-render on an auth
+  // change, so the two could disagree after a switch.
   const modeLabel =
     (user?.modes ?? []).find(m => m.key === activeMode)?.label ?? activeMode;
 
@@ -683,13 +723,13 @@ export default function HomeScreen({ navigation }) {
             </View>
           )}
 
-          {(poolLoading || newPicks.length > 0) && (
+          {(newPicksLoading || newPicks.length > 0) && (
             <View>
               <SectionHeader
                 title="new for you"
                 sub={newPicksPersonal ? 'from your listening' : 'fresh this week'}
               />
-              {poolLoading ? (
+              {newPicksLoading ? (
                 <View style={styles.skeletonGrid}>
                   {[0, 1, 2, 3].map(i => (
                     <Skeleton key={i} radius={8} style={styles.skeletonCell} />

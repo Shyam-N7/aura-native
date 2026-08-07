@@ -6,6 +6,7 @@
 // The tour never auto-shows twice: ANY way it ends (finished, skipped, or
 // the player closed mid-tour) marks it done.
 import { storage } from '../storage/mmkv';
+import { onSessionReset } from './sessionReset';
 import { showToast } from './toast';
 
 const KEY = 'aura.gestureTourDone';
@@ -30,6 +31,21 @@ export const TOUR_STEPS = [
 
 let state = { active: false, step: 0 };
 const subs = new Set();
+
+// The live tour position is module state and survived an account change: two
+// paths close the player without ending the tour, so the next account could
+// arrive mid-tour at "try it · 4 of 5" with steps 1-3 never shown — and
+// finishing from there writes the done flag, so those gestures are never
+// taught at all.
+//
+// The DONE flag is deliberately left alone. It is device-scoped teaching
+// state, not account data: whoever holds this phone has already learnt these
+// gestures, and re-teaching them on every account switch would be the more
+// annoying bug.
+onSessionReset(() => {
+  state = { active: false, step: 0 };
+  emit();
+});
 
 function emit() {
   for (const cb of subs) {

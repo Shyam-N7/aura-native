@@ -1,11 +1,12 @@
 import { fetchAuthed } from '../lib/auth';
+import { apiError } from './apiError';
 import { invalidateHomeCache } from '../lib/homeCache';
 // Ported from web src/api/likes.js.
 
 export async function listLikedIds({ signal } = {}) {
   const res = await fetchAuthed('/api/likes?ids=1', { signal });
   if (!res.ok) {
-    throw new Error(`likes fetch failed (${res.status})`);
+    throw await apiError(res, 'your liked songs');
   }
   const { ids } = await res.json();
   return ids ?? [];
@@ -14,7 +15,7 @@ export async function listLikedIds({ signal } = {}) {
 export async function listLiked({ signal } = {}) {
   const res = await fetchAuthed('/api/likes', { signal });
   if (!res.ok) {
-    throw new Error(`likes fetch failed (${res.status})`);
+    throw await apiError(res, 'your liked songs');
   }
   const { liked } = await res.json();
   return liked ?? [];

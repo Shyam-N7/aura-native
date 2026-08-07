@@ -40,8 +40,3 @@ export function resetSessionState(context = {}) {
     }
   });
 }
-
-// Test-only: drop registrations between specs.
-export function _resetSessionRegistry() {
-  resets.clear();
-}

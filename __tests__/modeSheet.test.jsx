@@ -15,6 +15,7 @@ let mockUser = {
 };
 const mockSetActiveMode = jest.fn(() => Promise.resolve(mockUser));
 jest.mock('../src/lib/auth', () => ({
+  getModeEpoch: () => 0,
   getUser: () => mockUser,
   subscribeAuth: jest.fn(() => () => {}),
   setActiveMode: (...a) => mockSetActiveMode(...a),

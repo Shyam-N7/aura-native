@@ -87,6 +87,34 @@ function loadStoredQueue() {
   }
 }
 
+// Shuffle state rides the same payload. Without it a queue saved while
+// shuffled came back shuffled with the toggle reading OFF and no snapshot —
+// so the pre-shuffle order was gone for good and the pill lied about it.
+//
+// The snapshot persists as IDS, not rows: restoreOrder matches by id, and a
+// 289-track queue would otherwise write itself to disk twice. New fields at
+// v: 1 on purpose — loadStoredQueue drops any payload whose version it does
+// not recognise, so bumping QUEUE_VERSION would delete every existing user's
+// queue to add a nicety. An older payload simply has neither field and reads
+// as "not shuffled", which is what it was.
+function loadStoredShuffle() {
+  try {
+    const parsed = JSON.parse(storage.getItem(QUEUE_KEY) ?? 'null');
+    if (parsed?.v != null && parsed.v !== QUEUE_VERSION) {
+      return { active: false, order: null };
+    }
+    const order = Array.isArray(parsed?.preShuffle)
+      ? parsed.preShuffle.filter(id => typeof id === 'string' && id)
+      : null;
+    if (parsed?.shuffled !== true || !order?.length) {
+      return { active: false, order: null };
+    }
+    return { active: true, order };
+  } catch {
+    return { active: false, order: null };
+  }
+}
+
 function readStoredRepeat() {
   const v = storage.getItem(REPEAT_KEY);
   return v === 'all' || v === 'one' ? v : 'off';
@@ -118,11 +146,15 @@ export function PlayerProvider({ children }) {
   );
   const [isPlaying, setIsPlaying] = useState(false);
   const [repeat, setRepeat] = useState(readStoredRepeat);
-  const [shuffleActive, setShuffleActive] = useState(false);
-  // Pre-shuffle order snapshot, held while shuffle is on so turning it off
-  // can restore the queue (model.restoreOrder). Null whenever shuffle is off
-  // or the queue was replaced — a new queue owns its own order.
-  const preShuffleRef = useRef(null);
+  // Restored from the persisted queue, so a cold open tells the truth about
+  // whether the queue on screen is shuffled and can still be put back.
+  const [bootShuffle] = useState(loadStoredShuffle);
+  const [shuffleActive, setShuffleActive] = useState(bootShuffle.active);
+  // Pre-shuffle order, held while shuffle is on so turning it off can restore
+  // the queue (model.restoreOrder). Null whenever shuffle is off or the queue
+  // was replaced — a new queue owns its own order. Holds track objects while
+  // live and ids when restored from disk; restoreOrder takes either.
+  const preShuffleRef = useRef(bootShuffle.order);
   const [quality, setQualityState] = useState(getAudioQuality);
   const [leveling, setLevelingState] = useState(getLeveling);
   // Karaoke "music only" — true while the active track plays its instrumental.
@@ -136,8 +168,10 @@ export function PlayerProvider({ children }) {
   const queueRef = useRef(queue);
   const repeatRef = useRef(repeat);
   const isPlayingRef = useRef(isPlaying);
+  const shuffleRef = useRef(shuffleActive);
   repeatRef.current = repeat;
   isPlayingRef.current = isPlaying;
+  shuffleRef.current = shuffleActive;
 
   // Engine calls are async; a single promise chain keeps queue mutations from
   // interleaving (rapid next-next, remove during an append, …).
@@ -892,15 +926,28 @@ export function PlayerProvider({ children }) {
       // Off restores the pre-shuffle order — minus tracks removed since,
       // plus tracks added since — with the playing track kept playing.
       const original = preShuffleRef.current;
-      preShuffleRef.current = null;
-      setShuffleActive(false);
-      if (
-        applyAndSync(queueRef.current, base =>
-          model.restoreOrder(base, original),
-        )
-      ) {
+      const restored = applyAndSync(queueRef.current, base =>
+        model.restoreOrder(base, original),
+      );
+      if (restored) {
+        preShuffleRef.current = null;
+        setShuffleActive(false);
         showToast('back in order.');
+        return;
       }
+      // Nothing to restore TO — the queue was replaced or shrank below two
+      // while shuffled — so shuffle genuinely is off now.
+      if (!original?.length || queueRef.current.tracks.length < 2) {
+        preShuffleRef.current = null;
+        setShuffleActive(false);
+        return;
+      }
+      // A real snapshot that restoreOrder refused (a queue index it could not
+      // anchor on). This used to clear the snapshot and the flag REGARDLESS,
+      // which left the queue shuffled, the pill reading off, and the original
+      // order gone for good. Keep both so the next press can try again, and
+      // say so rather than looking like a dead button.
+      showToast("couldn't put the queue back just now.");
       return;
     }
     const q = queueRef.current;
@@ -916,11 +963,17 @@ export function PlayerProvider({ children }) {
         return n / 233280;
       };
     };
+    // All three together, or none. The flag and the toast used to fire
+    // unconditionally while only the snapshot was gated on a real edit, so a
+    // one-track queue lit the pill and claimed "shuffled." over a no-op — and
+    // because nothing resets the flag when tracks are appended later, the
+    // NEXT press took the off-branch and did nothing visible. Two presses to
+    // shuffle, with no way to tell why.
     if (applyAndSync(q, base => model.shuffleUpcoming(base, deal()))) {
       preShuffleRef.current = q.tracks;
+      setShuffleActive(true);
+      showToast('shuffled.');
     }
-    setShuffleActive(true);
-    showToast('shuffled.');
   }, [applyAndSync, shuffleActive]);
 
   const setQuality = useCallback(
@@ -1293,9 +1346,19 @@ export function PlayerProvider({ children }) {
     }
     savePending.current = null;
     if (q.tracks.length) {
+      const snapshot = preShuffleRef.current;
       storage.setItem(
         QUEUE_KEY,
-        JSON.stringify({ ...model.serializeQueue(q), v: QUEUE_VERSION }),
+        JSON.stringify({
+          ...model.serializeQueue(q),
+          v: QUEUE_VERSION,
+          // Only meaningful together: shuffled without an order to go back to
+          // is the state that used to strand people.
+          shuffled: shuffleRef.current && !!snapshot?.length,
+          preShuffle: snapshot?.length
+            ? snapshot.map(x => (typeof x === 'string' ? x : x.id))
+            : undefined,
+        }),
       );
     } else {
       storage.removeItem(QUEUE_KEY);
