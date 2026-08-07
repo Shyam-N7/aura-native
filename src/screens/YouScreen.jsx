@@ -69,6 +69,7 @@ import { fonts, label } from '../theme/tokens';
 import { EASE } from '../theme/motion';
 import { cleanTitle } from '../utils/title';
 import { PRIMARY_LANGUAGES } from '../data/languages';
+import { useBackToTop } from '../hooks/useBackToTop';
 
 // The library ("you" tab), ported from web DesktopLibrary: pinned "your year"
 // stats, then a single-open accordion — liked / playlists / history /
@@ -187,6 +188,7 @@ function SeeAll({ what, onPress }) {
 }
 
 export default function YouScreen({ navigation }) {
+  const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
@@ -535,6 +537,7 @@ export default function YouScreen({ navigation }) {
     >
       <ScreenFade>
         <BounceScrollView
+          {...backToTop}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >

@@ -15,10 +15,12 @@ import {
 } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
+import { useBackToTop } from '../hooks/useBackToTop';
 
 // Album / movie detail, ported from web DesktopAlbumDetail. Indian-cinema
 // soundtracks are albums with isMovie — the eyebrow names it a movie.
 export default function AlbumScreen({ route, navigation }) {
+  const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
@@ -61,6 +63,7 @@ export default function AlbumScreen({ route, navigation }) {
           image per row with no cap from the server — the one detail screen the
           list-window treatment never reached. */}
       <BounceFlatList
+        {...backToTop}
         data={status === 'ok' ? tracks : []}
         renderItem={renderRow}
         keyExtractor={item => item.id}

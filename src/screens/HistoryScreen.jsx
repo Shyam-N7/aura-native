@@ -20,6 +20,7 @@ import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
+import { useBackToTop } from '../hooks/useBackToTop';
 
 // Full listening history, ported from web DesktopHistory: the time-of-day
 // "music clock" insight on top, then every play grouped by local day, newest
@@ -143,6 +144,7 @@ function MusicClock({ clock }) {
 }
 
 export default function HistoryScreen({ navigation }) {
+  const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
@@ -279,6 +281,7 @@ export default function HistoryScreen({ navigation }) {
       style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top }]}
     >
       <BounceSectionList
+        {...backToTop}
         sections={status === 'ok' ? days : []}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (
