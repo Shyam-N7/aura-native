@@ -10,14 +10,19 @@ name: ci
 # eleven days. Nothing between the change and a human noticing.
 
 on:
+  # Only main on push. A branch with an open PR is already covered by the
+  # pull_request event, and listening to both ran the whole job twice per
+  # commit — the concurrency group could not dedupe them either, because
+  # github.ref differs between the two events (refs/heads/x vs refs/pull/n/merge).
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
-# A new push to the same branch makes the previous run pointless.
+# A new push to the same PR makes the previous run pointless. Keyed on
+# head_ref so the group is the same across re-pushes to one branch.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:

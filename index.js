@@ -40,14 +40,23 @@ installCrashLogger();
 //
 // 1.0 while this is sideloaded to a handful of people: the measurement is
 // already happening, so the only added cost is sending it, and pre-release is
-// exactly when the baselines are worth having. This needs an actual decision
-// before any wide release — perfMarks carries a "dial SAMPLE down once
-// baselines are collected" note that was never acted on because nobody read
-// the baselines, and a second vague TODO would go the same way.
+// exactly when the baselines are worth having.
+//
+// Named rather than inlined because it is a DECISION with a shelf life, and
+// this repo has already shown what an un-encoded one looks like: perfMarks
+// carries "dial SAMPLE down once baselines are collected", which was never
+// acted on because nobody read the baselines. Deliberately not branched on
+// __DEV__ — the release builds are the ones whose numbers are worth having;
+// sampling the laptop and not the phone would be backwards.
+//
+// Revisit when install count stops being countable on one hand. At that point
+// this and perfMarks' SAMPLE are the same conversation, and both are quota.
+const TRACES_SAMPLE_RATE = 1.0; // sideload-only; see note above before release
+
 Sentry.init({
   dsn: 'https://0a8ed63b17fdc1dfe0a151c76f1f4f8b@o4511808612270080.ingest.us.sentry.io/4511808667648005',
   enableAutoSessionTracking: true,
-  tracesSampleRate: 1.0,
+  tracesSampleRate: TRACES_SAMPLE_RATE,
   // Without this every build reports as "production" (@sentry/core's default),
   // so a crash from this laptop and a crash from a real install were
   // indistinguishable in the UI.

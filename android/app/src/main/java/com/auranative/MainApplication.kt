@@ -167,8 +167,15 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
         else -> "level-$level"
       }
       // RUNNING_CRITICAL is "about to be killed while the user is watching".
-      // COMPLETE is "first in line among cached processes" — the screen-off
-      // listening case this app has already lost twice.
+      //
+      // COMPLETE is "first in line among CACHED processes" — and that is not
+      // the screen-off listening case, whatever it looks like. During playback
+      // this process holds a foreground service, so it is not cached and this
+      // level is never delivered to it (reports/10 records the kill happening
+      // at oom_adj 200 / proc_state 4, not from the cached tier). It fires when
+      // the user has genuinely left: no service, app in the background, about
+      // to be reclaimed and lose its state. Worth an event for the restore
+      // path, not for the listening one.
       if (level == TRIM_MEMORY_RUNNING_CRITICAL || level == TRIM_MEMORY_COMPLETE) {
         Sentry.captureMessage("memory-trim: $name", SentryLevel.WARNING)
       } else {

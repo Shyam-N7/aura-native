@@ -13,6 +13,10 @@ context (fresh URLs, queue, connectivity) lives.*
 |---|---|---|
 | Expired/forbidden URL | HTTP 403/410 on segment, or error shortly after a stale-cached URL | **Re-resolve first** (bypass track cache), retry immediately, position preserved. Never counts against backoff budget the first time. |
 | Transient network / 5xx / timeout | ExoPlayer source error, 5xx | Retry same URL: **0 s → 1 s → 3 s → 8 s, ±30 % jitter, hard cap 20 s** (see the attempt-cap note below), then next rung. |
+| Hard 4xx (404/451) | HTTP 4xx ≠ 403 | No retry of that URL. One re-resolve; if the re-resolved track 4xxs again → **skip**. |
+| Decoder/source malformed | ExoPlayer renderer/parsing error | One reload (same position); then quality-ladder down; then skip. |
+| Offline | fetch to own API also failing / no route | Don't burn attempts blind. Hold paused-with-intent; a **connectivity probe every 5 s** (lightweight HEAD to our origin) gates the next attempt. (No new dependency; NetInfo can replace the probe later.) |
+
 > **Unresolved: 4 attempts or 6?** This table said "hard cap 4 attempts"; the
 > shipped `MAX_ATTEMPTS` is **6** (`src/lib/retryPolicy.js:47`). Nothing records
 > which was intended — `__tests__/retryPolicy.test.js:64` only pins `> 2`.
@@ -22,9 +26,6 @@ context (fresh URLs, queue, connectivity) lives.*
 > rather than silently reconciled — editing the doc to match the code would
 > enshrine whichever one is the mistake.
 
-| Hard 4xx (404/451) | HTTP 4xx ≠ 403 | No retry of that URL. One re-resolve; if the re-resolved track 4xxs again → **skip**. |
-| Decoder/source malformed | ExoPlayer renderer/parsing error | One reload (same position); then quality-ladder down; then skip. |
-| Offline | fetch to own API also failing / no route | Don't burn attempts blind. Hold paused-with-intent; a **connectivity probe every 5 s** (lightweight HEAD to our origin) gates the next attempt. (No new dependency; NetInfo can replace the probe later.) |
 
 ## Invariants
 - **Position is sacred:** every path resumes via `getProgress()` → `loadAndResume`
