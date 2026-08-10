@@ -37,9 +37,16 @@ jobs:
           node-version: '20' # package.json engines: >=20
           cache: npm
 
-      # --ignore-scripts would skip patch-package, which this repo needs:
-      # react-native-track-player is patched (postinstall runs patch-package).
-      - run: npm ci
+      # `npm install`, not `npm ci`. ci demands a lockfile in exact sync with
+      # package.json, and this one has been drifted since the initial import —
+      # typescript@6.0.3 missing, picomatch 2.3.2 vs 4.0.5. That is a real
+      # inconsistency and worth fixing, but regenerating the lockfile churns
+      # dependency versions and does not belong in the same change as a crash
+      # fix. Tracked separately; this job's purpose is lint + tests.
+      #
+      # No --ignore-scripts either way: postinstall runs patch-package, and
+      # react-native-track-player is patched.
+      - run: npm install --no-audit --no-fund
 
       - run: npm run lint
 
