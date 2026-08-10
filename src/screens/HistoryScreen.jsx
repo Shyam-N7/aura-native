@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -22,6 +22,64 @@ import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
 import { useBackToTop } from '../hooks/useBackToTop';
 import { countRender } from '../lib/renderCount';
+
+// Nothing inline reaches a row. This screen does not use DetailRow, so none of
+// the row work done on liked/album/playlist reached it — its row was an
+// anonymous Pressable inside an inline renderItem, unmemoized, allocating two
+// closures, a style function, three style arrays, three colour objects, a
+// menu literal, a label() call and a Date, per row, per render. And every
+// wrapper around it (renderItem, renderSectionHeader, the header and footer
+// ELEMENTS) took a fresh identity every render, so every mounted cell
+// re-rendered regardless of whether its play had changed.
+//
+// label() builds a new style object per call, so these are hoisted the same way
+// DetailChassis hoists ROW_SUB.
+const ROW_MENU = {};
+const ROW_SUB = label(9.5);
+const DAY_HEAD = label(10);
+
+const HistoryRow = React.memo(function HistoryRow({
+  play,
+  onPlay,
+  ink,
+  inkSoft,
+  inkFaint,
+}) {
+  const title = cleanTitle(play.title);
+  const press = useCallback(() => onPlay(play), [onPlay, play]);
+  const hold = useCallback(
+    () => openTrackActions({ track: play, menu: ROW_MENU }),
+    [play],
+  );
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`play ${title}`}
+      onPress={press}
+      onLongPress={hold}
+      style={pressStyle}
+    >
+      <TrackArt track={play} size={50} radius={4} />
+      <View style={styles.meta}>
+        <Text numberOfLines={1} style={[styles.title, { color: ink }]}>
+          {title}
+        </Text>
+        <Text numberOfLines={1} style={[ROW_SUB, { color: inkSoft }]}>
+          {(play.artist ?? '').toLowerCase()} · {play.language ?? ''}
+        </Text>
+      </View>
+      <Text style={[type.time, { color: inkFaint }]}>
+        {formatTime12(new Date(play.playedAt))}
+      </Text>
+    </Pressable>
+  );
+});
+
+// Pressable's style-as-function, defined once rather than per row per render.
+const pressStyle = ({ pressed }) => [styles.row, pressed && styles.pressed];
+
+// Closes over nothing, so it belongs here rather than being rebuilt per render.
+const keyForPlay = play => `${play.id}-${play.playedAt}`;
 
 // Full listening history, ported from web DesktopHistory: the time-of-day
 // "music clock" insight on top, then every play grouped by local day, newest
@@ -197,10 +255,16 @@ export default function HistoryScreen({ navigation }) {
 
   const days = useMemo(() => groupPlaysByDay(plays), [plays]);
 
-  const pickLive = track => {
-    player.playTrack(track, { source: 'your pick' });
-    player.ui?.openPlayer?.();
-  };
+  // playerRef, not a `player` dep: the context value takes a new identity on
+  // every track advance and every play/pause, and this only runs on a tap — so
+  // depending on it would hand every mounted row a new onPlay while a song
+  // simply plays, which is what the memo above exists to prevent.
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const pickLive = useCallback(track => {
+    playerRef.current.playTrack(track, { source: 'your pick' });
+    playerRef.current.ui?.openPlayer?.();
+  }, []);
 
   const header = (
     <View style={styles.header}>
@@ -253,31 +317,27 @@ export default function HistoryScreen({ navigation }) {
       </>
     ) : null;
 
-  const renderItem = ({ item }) => {
-    const title = cleanTitle(item.title);
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`play ${title}`}
-        onPress={() => pickLive(item)}
-        onLongPress={() => openTrackActions({ track: item, menu: {} })}
-        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-      >
-        <TrackArt track={item} size={50} radius={4} />
-        <View style={styles.meta}>
-          <Text numberOfLines={1} style={[styles.title, { color: t.ink }]}>
-            {title}
-          </Text>
-          <Text numberOfLines={1} style={[label(9.5), { color: t.inkSoft }]}>
-            {(item.artist ?? '').toLowerCase()} · {item.language ?? ''}
-          </Text>
-        </View>
-        <Text style={[type.time, { color: t.inkFaint }]}>
-          {formatTime12(new Date(item.playedAt))}
-        </Text>
-      </Pressable>
-    );
-  };
+  const renderItem = useCallback(
+    ({ item }) => (
+      <HistoryRow
+        play={item}
+        onPlay={pickLive}
+        ink={t.ink}
+        inkSoft={t.inkSoft}
+        inkFaint={t.inkFaint}
+      />
+    ),
+    [pickLive, t.ink, t.inkSoft, t.inkFaint],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }) => (
+      <Text style={[DAY_HEAD, styles.dayHead, { color: t.inkFaint }]}>
+        {section.heading}
+      </Text>
+    ),
+    [t.inkFaint],
+  );
 
   return (
     <View
@@ -287,12 +347,8 @@ export default function HistoryScreen({ navigation }) {
         {...backToTop}
         sections={status === 'ok' ? days : []}
         renderItem={renderItem}
-        renderSectionHeader={({ section }) => (
-          <Text style={[label(10), styles.dayHead, { color: t.inkFaint }]}>
-            {section.heading}
-          </Text>
-        )}
-        keyExtractor={item => `${item.id}-${item.playedAt}`}
+        renderSectionHeader={renderSectionHeader}
+        keyExtractor={keyForPlay}
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         stickySectionHeadersEnabled={false}

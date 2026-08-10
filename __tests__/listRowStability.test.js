@@ -129,6 +129,41 @@ describe('the queue sheet does not re-render its rows on every track advance', (
   });
 });
 
+// History gets its own case rather than a fifth entry in DETAIL_SCREENS: it
+// does not use DetailRow at all, which is exactly why none of the row work on
+// liked/album/playlist reached it. Its row was an anonymous Pressable inside an
+// inline renderItem, and it is a SectionList, so it has a section header to
+// keep stable too.
+describe('the history rows are a component, not an inline Pressable', () => {
+  const body = code(screen('HistoryScreen.jsx'));
+
+  test('there is a memoized row component', () => {
+    expect(body).toMatch(/const HistoryRow = React\.memo\(/);
+  });
+
+  test('every list wrapper is stable', () => {
+    expect(body).toMatch(/const renderItem = useCallback\(/);
+    expect(body).toMatch(/const renderSectionHeader = useCallback\(/);
+    // Both close over nothing, so they are module constants.
+    expect(body).toContain('keyExtractor={keyForPlay}');
+    expect(body).toContain('style={pressStyle}');
+  });
+
+  test('label() is not called per row', () => {
+    // label() builds a new style object per call. Hoisted to ROW_SUB/DAY_HEAD
+    // the same way DetailChassis hoists its two.
+    const rowStart = body.indexOf('const HistoryRow');
+    const rowEnd = body.indexOf('});', body.indexOf('</Pressable>'));
+    expect(rowStart).toBeGreaterThan(-1);
+    expect(body.slice(rowStart, rowEnd)).not.toMatch(/label\(/);
+  });
+
+  test('a playing song does not invalidate the rows', () => {
+    expect(body).toContain('playerRef.current');
+    expect(body).not.toMatch(/const pickLive = track =>/);
+  });
+});
+
 // The player context value takes a new identity on every track advance and
 // every play/pause. A row callback that depends on it is re-created on each of
 // those, so a memoized row re-renders while a song is simply playing — the
