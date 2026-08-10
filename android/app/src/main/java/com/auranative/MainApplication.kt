@@ -16,6 +16,9 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.shell.MainPackageConfig
+import io.sentry.Breadcrumb
+import io.sentry.Sentry
+import io.sentry.SentryLevel
 
 class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
 
@@ -128,6 +131,55 @@ class MainApplication : Application(), ReactApplication, ImageLoaderFactory {
         Fresco.getImagePipeline().clearMemoryCaches()
       }
       Coil.imageLoader(this).memoryCache?.clear()
+      reportTrim(level)
+    }
+  }
+
+  /**
+   * The OS telling us it is about to reclaim from us is the single best memory
+   * signal this app can get, and until now it was consumed to clear caches and
+   * then dropped. Nothing in a release build measures memory — on the app whose
+   * list window is capped BECAUSE of an OOM kill (reports/10-leak-and-kill).
+   *
+   * Why CRITICAL and COMPLETE are events and not just breadcrumbs: an OOM kill
+   * is a SIGKILL. There is no crash to attach breadcrumbs to and no chance to
+   * flush on the way down — a breadcrumb describing the last moments dies with
+   * the process that recorded it. The trim has to leave the device while we are
+   * still alive to send it, or it is not evidence of anything.
+   *
+   * io.sentry is reachable here because @sentry/react-native declares
+   * sentry-android with `api`, not `implementation` (its android/build.gradle),
+   * so it lands on this module's compile classpath transitively. The hub is
+   * started from JS, so before Sentry.init lands these calls are no-ops rather
+   * than errors — which is the correct behaviour for a trim that early.
+   *
+   * Wrapped whole: telemetry must never throw into the app.
+   */
+  private fun reportTrim(level: Int) {
+    try {
+      val name = when (level) {
+        TRIM_MEMORY_RUNNING_LOW -> "running-low"
+        TRIM_MEMORY_RUNNING_CRITICAL -> "running-critical"
+        TRIM_MEMORY_UI_HIDDEN -> "ui-hidden"
+        TRIM_MEMORY_BACKGROUND -> "background"
+        TRIM_MEMORY_MODERATE -> "moderate"
+        TRIM_MEMORY_COMPLETE -> "complete"
+        else -> "level-$level"
+      }
+      // RUNNING_CRITICAL is "about to be killed while the user is watching".
+      // COMPLETE is "first in line among cached processes" — the screen-off
+      // listening case this app has already lost twice.
+      if (level == TRIM_MEMORY_RUNNING_CRITICAL || level == TRIM_MEMORY_COMPLETE) {
+        Sentry.captureMessage("memory-trim: $name", SentryLevel.WARNING)
+      } else {
+        Sentry.addBreadcrumb(Breadcrumb().apply {
+          category = "memory"
+          message = "trim: $name"
+          this.level = SentryLevel.INFO
+        })
+      }
+    } catch (_: Throwable) {
+      // never
     }
   }
 }
