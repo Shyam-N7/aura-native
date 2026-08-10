@@ -95,6 +95,31 @@ describe('the queue sheet does not re-render its rows on every track advance', (
     'utf8',
   );
 
+  // The FlatList's `data`. VirtualizedList is a StateSafePureComponent, so a
+  // fresh array here is a prop change — the list re-renders and recomputes its
+  // windowing on every render of the sheet, which is every play/pause and every
+  // stream-url hydration, on the longest list in the app.
+  test('the list data and the row keys come out of one memo', () => {
+    // One memo, not two, because keyExtractor indexes rowKeys by list
+    // position: keys built from a different slice than the data mismatch
+    // every row. Sharing the derivation makes disagreement impossible.
+    expect(code(body)).toMatch(
+      /const \{[^}]*\blistData\b[^}]*\browKeys\b[^}]*\} = useMemo\(/s,
+    );
+    expect(code(body)).toContain('data={listData}');
+  });
+
+  test('nothing the list is handed is rebuilt in the render body', () => {
+    const src = code(body);
+    expect(src).toMatch(/const renderItem = useCallback\(/);
+    expect(src).toMatch(/const keyForRow = useCallback\(/);
+    // getItemLayout closes over nothing, so it is a module constant.
+    expect(src).toContain('getItemLayout={ROW_LAYOUT}');
+    expect(src).toContain('keyExtractor={keyForRow}');
+    // The spread that used to allocate per render belongs inside the memo.
+    expect(src).not.toMatch(/const listData = /);
+  });
+
   test('moveToTop reads the playhead off commitRef, not a dep', () => {
     const start = body.indexOf('const moveToTop = useCallback(');
     expect(start).toBeGreaterThan(-1);

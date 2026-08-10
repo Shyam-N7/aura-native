@@ -56,6 +56,15 @@ import { DUR, EASE, SPRING } from '../theme/motion';
 import { countRender } from '../lib/renderCount';
 
 const ROW_HEIGHT = 62;
+// Fixed-height rows, so the virtualizer never has to measure one. Hoisted
+// rather than inline: it closes over nothing, and a fresh function per render
+// is one more prop the list has to diff.
+const ROW_LAYOUT = (_data, index) => ({
+  length: ROW_HEIGHT,
+  offset: ROW_HEIGHT * index,
+  index,
+});
+
 // The list's own top padding — shared with styles.list so the drop indicator
 // sits on the same origin the rows do.
 const LIST_TOP_PAD = 4;
@@ -990,25 +999,56 @@ export function QueueSheet() {
     setHidePast(nextHidden);
   };
 
-  // Per-track keys (id + occurrence), stable across a reorder — so on shuffle a
-  // tile KEEPS its React instance and the layout animation flies it to its new
-  // position instead of remounting it in place. (Index-based keys would make
-  // every moved tile a "new" one, killing the animation.) Kept above the
-  // sheet's early return so the hook order never changes.
-  const rowKeys = useMemo(() => {
+  // The list's shape, derived ONCE.
+  //
+  // Three of these used to be recomputed in the render body below the sheet's
+  // early return, and `listData` went straight into the FlatList's `data`.
+  // VirtualizedList is a StateSafePureComponent, so a fresh array there is a
+  // prop change: the list re-rendered and recomputed its windowing on every
+  // render of this sheet, including every play/pause and every stream-url
+  // hydration, on the longest list in the app.
+  //
+  // They share one memo rather than sitting in four because they MUST agree —
+  // keyExtractor indexes rowKeys by list position, so a rowKeys built from a
+  // different slice than listData mismatches every row. rowKeys already
+  // computed this exact sequence privately; now there is one copy.
+  //
+  // Kept above the early return so the hook order never changes — and now that
+  // the derivation is here, renderItem can be a useCallback too.
+  const { pastHidden, visible, listData, dragCount, rowKeys } = useMemo(() => {
+    // Hide-past renders only the current track onward (web keeps collapsed rows
+    // in the DOM; a FlatList just gets the tail slice). Rows keep their ABSOLUTE
+    // queue index — jumpTo/removeAt/reorder and the drag math all address the
+    // real queue, so the slice only re-bases what's mounted and the model and
+    // the native player never see a different numbering.
     const ph = hidePast ? Math.max(0, idx) : 0;
     const rows = ph ? tracks.slice(ph) : tracks;
-    const seen = Object.create(null);
+    // The picks join the SAME list the drag math runs on, under their header
+    // row. Queue-space: real rows [0, len-1], picks [len, len+count-1] (the
+    // header renders at ROW_HEIGHT but owns no queue index — drops at `len`
+    // mean "first suggestion").
+    //
     // Suggested rows mint keys from the SAME sequence: if one is pulled into
     // the queue, its key — and therefore its Row instance and any in-flight
     // drag gesture — survives the data swap.
-    const all = radioBatch?.length
-      ? [...rows, RADIO_HEAD, ...radioBatch]
-      : rows;
-    return all.map(item => {
+    const live = radioBatch?.length ?? 0;
+    const all = live ? [...rows, RADIO_HEAD, ...radioBatch] : rows;
+    // Per-track keys (id + occurrence), stable across a reorder — so on shuffle
+    // a tile KEEPS its React instance and the layout animation flies it to its
+    // new position instead of remounting it in place. (Index-based keys would
+    // make every moved tile a "new" one, killing the animation.)
+    const seen = Object.create(null);
+    const keys = all.map(item => {
       const n = (seen[item.id] = (seen[item.id] ?? 0) + 1);
       return `${item.id}#${n}`;
     });
+    return {
+      pastHidden: ph,
+      visible: rows,
+      listData: all,
+      dragCount: tracks.length + live,
+      rowKeys: keys,
+    };
   }, [tracks, idx, hidePast, radioBatch]);
 
   // Row removal, animate-then-commit: the tapped row joins `leaving` and plays
@@ -1318,27 +1358,7 @@ export function QueueSheet() {
     };
   });
 
-  if (!open && vis !== 'closing') {
-    return null;
-  }
-
-  // Hide-past renders only the current track onward (web keeps collapsed rows
-  // in the DOM; a FlatList just gets the tail slice). Rows keep their ABSOLUTE
-  // queue index — jumpTo/removeAt/reorder and the drag math all address the
-  // real queue, so the slice only re-bases what's mounted and the model and
-  // the native player never see a different numbering.
-  const pastHidden = hidePast ? Math.max(0, idx) : 0;
-  const visible = pastHidden ? tracks.slice(pastHidden) : tracks;
-  // The picks join the SAME list the drag math runs on, under their header
-  // row. Queue-space: real rows [0, len-1], picks [len, len+count-1] (the
-  // header renders at ROW_HEIGHT but owns no queue index — drops at `len`
-  // mean "first suggestion").
-  const listData = radioLive
-    ? [...visible, RADIO_HEAD, ...radioBatch]
-    : visible;
-  const dragCount = tracks.length + (radioLive ? radioBatch.length : 0);
-
-  const renderItem = ({ item, index }) => {
+  const renderItem = useCallback(({ item, index }) => {
     if (item.__radioHead) {
       return (
         <RadioHead
@@ -1394,9 +1414,29 @@ export function QueueSheet() {
         listTop={listTop}
       />
     );
-  };
+    // Deliberately NOT depending on the player context value: it takes a new
+    // identity on every play/pause and every stream-url hydration, none of
+    // which changes a row. What is left moves only when the list genuinely
+    // does. The shared values are refs and never change identity.
+  }, [
+    tracks.length, idx, pastHidden, visible.length, rowKeys, radioLive,
+    leaving, dragCount, jumpToRow, moveToTop, reorderRow, removeRow, onGone,
+    onAdoptPicks, onDrag, listGesture, t.inkFaint, t.accent,
+    dragFrom, dragTo, dragShift, settling, scrollY, scrollStart, scrollCmd,
+    dragDir, dirPivot, baseSV, countSV, fingerY, fingerTransY, listTop,
+  ]);
+
+  // Indexes the SAME sequence listData is built from — they come out of one
+  // memo above precisely so they cannot disagree.
+  const keyForRow = useCallback((_item, index) => rowKeys[index], [rowKeys]);
 
   // The picks' header renders IN the list (see RADIO_HEAD in renderItem).
+
+  // Everything above is a hook, so the sheet's early exit has to come after
+  // them — bailing sooner would change the hook order between renders.
+  if (!open && vis !== 'closing') {
+    return null;
+  }
 
   return (
     <>
@@ -1484,7 +1524,7 @@ export function QueueSheet() {
               ref={listRef}
               data={listData}
               renderItem={renderItem}
-              keyExtractor={(_item, index) => rowKeys[index]}
+              keyExtractor={keyForRow}
               // Mounted at REST so reanimated is already tracking each cell's
               // position when a data change lands (arming it only on that
               // render is too late — the "before" layout was never captured);
@@ -1501,11 +1541,7 @@ export function QueueSheet() {
               itemLayoutAnimation={
                 dragging ? undefined : LinearTransition.duration(flyMs)
               }
-              getItemLayout={(_, index) => ({
-                length: ROW_HEIGHT,
-                offset: ROW_HEIGHT * index,
-                index,
-              })}
+              getItemLayout={ROW_LAYOUT}
               // Jump to the current row ONLY when the list actually overflows
               // the window. On a list that fits, the native scroll clamps the
               // jump to zero while the virtualizer still believes the offset —
