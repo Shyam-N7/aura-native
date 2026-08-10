@@ -50,10 +50,36 @@ Scoped to this stack: React Native 0.83 / Hermes / New Architecture, MMKV-only c
 | No inline arrow functions or object literals in `renderItem` props — they break memoization every frame | Slightly noisier component code |
 | Precompute display strings at load — formatted duration, joined artists — never per render | Fatter model in memory; must invalidate on locale change |
 | Stable `keyExtractor`, never index-based | Requires a genuinely stable server ID |
-| Tune `windowSize` / `maxToRenderPerBatch` / `updateCellsBatchingPeriod` **against measurements**, not by feel | Raising `windowSize` cuts blank cells and raises memory — directly against the 361 MB finding |
+| Tune `windowSize` / `maxToRenderPerBatch` / `updateCellsBatchingPeriod` **against measurements**, not by feel | Raising `windowSize` cuts blank cells and raises memory. The 361 MB figure that used to be cited here is **stale** — see below; the measured cost of 289 rows is **+37 MB** |
 | `removeClippedSubviews` on Android | Known to cause disappearing-content bugs in some nesting; test hard |
 | **FlashList as a candidate replacement for FlatList** | A dependency and a real migration. Only if measurement shows FlatList recycling is the bottleneck |
 | Move list diffing off the JS thread, or avoid full-list state replacement on reorder | Needs generation tracking to reject stale results |
+
+## Symptom: it works on my phone
+
+The chapter this playbook was missing, and the one that cost the most.
+
+`minSdkVersion` is **26**. The app has only ever run on API **30** and **34**.
+On 2026-07-30 `glass.backdropRadius` was raised 20 → 40 to fix boxy seams
+reported on the API 34 device. RenderScript's `ScriptIntrinsicBlur` throws above
+25 and is the blur path below API 31 — so the app became **unlaunchable on API
+26-30**, five major versions, first drawn frame, for eleven days. `reports/04-baseline.md:9-18`
+documents an API 30 device and states its purpose is "isolating ROM and
+**API-level behaviour**". It had simply stopped being run.
+
+| Technique | Cost / when it's wrong |
+|---|---|
+| **Clamp per branch, never share a constant across an API split.** A value tuned for the modern path is not a default for the legacy one | Two constants to keep in step; worth it — the equalizer's boost ceiling already does this with three independent clamps and a test, and has never broken |
+| **Run the device matrix after any native or API-branched change** (`.github/workflows/device-matrix.yml`) | Minutes of emulator time. Catching a first-frame crash needs only install-and-see-if-it-lives |
+| Tag telemetry with the API level so a defect can be *sliced* by it, not just found | One tag; without it you are querying vendor default contexts instead of your own facets |
+| **Distrust a branch nobody runs.** Grep `Build.VERSION.SDK_INT` and `Platform.Version` and ask which side of each has ever executed | Cheap. The sweep that found the blur bug found six more candidates |
+| Watch the *modern* branch too — `targetSdk` moves the defaults under you | Predictive back and edge-to-edge enforcement both change behaviour on devices newer than the test phone. Same bug, branches swapped |
+| Check real reach, not nominal reach | `reactNativeArchitectures=arm64-v8a` means 32-bit-only devices cannot install at all, whatever `minSdk` claims |
+
+**Optimization debt specific to this symptom:** any constant whose justifying
+comment names an API level without branching on it; any device in
+`reports/04-baseline.md` that has not been launched since the last native
+change.
 
 ## Symptom: JS thread blocked / dropped state updates
 
@@ -75,7 +101,21 @@ Scoped to this stack: React Native 0.83 / Hermes / New Architecture, MMKV-only c
 | Keep list item components memoized so a drag doesn't re-render every row | — |
 | Persist to MMKV and POST to the server **on drop only** | A drop lost to a crash reverts the reorder |
 
-## Symptom: high memory — the 232 → 361 MB spike
+## Symptom: high memory
+
+> **The 232 → 361 MB spike this section used to be named after is stale, and it
+> was load-bearing for years of decisions.** It was measured against the
+> `ScrollView` implementation that `LONG_LIST` replaced. Re-measured on the same
+> device after windowing landed, opening a 289-track playlist costs **+37 MB**
+> (`reports/04-baseline.md:72`, `reports/01-stability.md:135`). The only
+> *observed* kill point is **741 MB PSS** on device A under ColorOS 14
+> (`reports/10-leak-and-kill.md:19-28`) — one event, one ROM. And ~78 MB
+> retained after a 289-row browse is still unattributed
+> (`reports/05-attribution.md:23-32`); the bitmap-cache hypothesis was refuted
+> (`reports/08-spotted.md:45`) and `am dumpheap` was never run.
+>
+> Quoting a superseded number to block a change is the failure mode this note
+> exists to stop.
 
 | Technique | Cost / when it's wrong |
 |---|---|
