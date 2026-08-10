@@ -46,6 +46,7 @@ yarn-error.log
 # Any npm run on a non-Windows machine — CI, a container, a Linux checkout —
 # resolves that literally and creates a directory of that name in the repo
 # root instead. It is a cache, never source.
+.npmrc
 D:\\Android\\npm-cache/
 
 # fastlane
