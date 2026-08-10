@@ -521,8 +521,32 @@ class GlassBlurController(
     initialized = false
   }
 
+  // RenderScript's ScriptIntrinsicBlur.setRadius hard-throws outside (0, 25].
+  // theme/tokens sets backdropRadius: 40 — deliberately, to match the web's
+  // blur(40px), and its comment reasons about RenderEffect, which has no such
+  // bound and runs at full resolution. But GlassViewManager only takes the
+  // RenderEffect path on API 31+; below that it builds a RenderScriptBlur, and
+  // 40 reaches setRadius unmodified and throws on the FIRST glass pre-draw:
+  //
+  //   RSIllegalArgumentException: Radius out of range (0 < r <= 25)
+  //     at RenderScriptBlur.blur → GlassBlurController.blurAndSave
+  //
+  // The dock and the top bar are glass, so on every Android 11-or-older device
+  // that is a crash a frame or two after launch. It went unseen because the
+  // usual test handset is on 31+, where the clamp never applies. Field report:
+  // OnePlus 6T, six consecutive APP CRASH(EXCEPTION) exits.
+  //
+  // Clamp only the RenderScript path, so 31+ keeps the tuned 40 exactly.
+  // RenderScript also blurs a downscaled bitmap (SizeScaler over
+  // blurAlgorithm.scaleFactor()), so 25 there is visually far stronger than 25
+  // at full resolution — the ceiling costs much less than it reads.
   override fun setBlurRadius(radius: Float): BlurViewFacade {
-    this.blurRadius = radius
+    this.blurRadius =
+      if (blurAlgorithm is RenderEffectBlur) {
+        radius
+      } else {
+        radius.coerceIn(RS_MIN_RADIUS, RS_MAX_RADIUS)
+      }
     return this
   }
 
@@ -581,6 +605,10 @@ class GlassBlurController(
 
   private companion object {
     const val TAG = "GlassBlur"
+    // ScriptIntrinsicBlur's documented bound: 0 < r <= 25. Exceeding it is not
+    // a clamp inside the platform, it is an RSIllegalArgumentException.
+    const val RS_MIN_RADIUS = 1f
+    const val RS_MAX_RADIUS = 25f
     const val REINIT_AFTER_FAILURES = 3
     const val HEARTBEAT_MS = 2000L
     const val CAPTURE_MIN_INTERVAL_MS = 30L
