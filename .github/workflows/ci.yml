@@ -1,0 +1,41 @@
+name: ci
+
+# There was no CI at all before this: no workflows, no e2e, and no native
+# tests (android/app/src/androidTest and .../test do not exist). 70 Jest suites,
+# all JS. Everything else — including a 600-line GlassBlurController — was
+# verified by one person launching one build on one phone.
+#
+# That is how a blur radius raised from 20 to 40 for a visual complaint on an
+# API 34 device made the app unlaunchable on API 26-30 and stayed that way for
+# eleven days. Nothing between the change and a human noticing.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes the previous run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js:
+    name: lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20' # package.json engines: >=20
+          cache: npm
+
+      # --ignore-scripts would skip patch-package, which this repo needs:
+      # react-native-track-player is patched (postinstall runs patch-package).
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npx jest --ci

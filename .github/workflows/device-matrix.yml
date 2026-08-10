@@ -1,0 +1,73 @@
+name: device matrix
+
+# Does the app survive being launched, on every API level we claim to support?
+#
+# minSdkVersion is 26 (android/build.gradle:6) and the only phones this has ever
+# run on are API 30 and 34. On 2026-07-30 a blur radius was raised from 20 to 40
+# to fix a visual complaint on the API 34 device. RenderScript's
+# ScriptIntrinsicBlur throws above 25 and is the blur path below API 31, so the
+# app became unlaunchable on 26-30 — a first-frame crash, five major Android
+# versions, and nothing noticed for eleven days.
+#
+# The whole test is: install it, open it, and see whether it is still running.
+# That is all it would have taken.
+#
+# Manual by default. Emulator jobs are slow and burn Actions minutes, so this is
+# the pre-release gate and the after-touching-native gate, not a per-push one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api-levels:
+        description: 'JSON array of API levels'
+        required: false
+        default: '[26, 28, 30, 31, 34]'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  levels:
+    name: API ${{ matrix.api }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false # one broken level must not hide the others
+      matrix:
+        api: ${{ fromJSON(github.event.inputs.api-levels || '[26, 28, 30, 31, 34]') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - run: npm ci
+
+      # Emulators are x86_64; the app ships arm64-v8a only
+      # (android/gradle.properties:42). The override is already documented on
+      # the line above it, and nothing here is ABI-locked — there are no
+      # prebuilt .so blobs or jniLibs anywhere under android/.
+      - name: Build debug APK for x86_64
+        working-directory: android
+        run: ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+      # google_apis rather than default: @react-native-firebase/messaging needs
+      # Play services present or the app fails at a different layer and the
+      # smoke test stops testing what it is here to test.
+      - name: Launch on API ${{ matrix.api }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: bash .github/scripts/smoke.sh
