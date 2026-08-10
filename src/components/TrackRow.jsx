@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, type } from '../theme/tokens';
@@ -15,15 +15,32 @@ function artUrl(track, res = 150) {
 
 // Cover thumb with a lettered fallback when there's no image (or it 404s) —
 // never a broken-image glyph. `round` renders artist avatars.
-export function TrackArt({ track, size = 48, radius = 8, res = 150, round = false }) {
+//
+// Memoized because this mounts once per row in every long list in the app, and
+// its parents re-render for reasons that have nothing to do with the artwork.
+export const TrackArt = React.memo(function TrackArt({
+  track,
+  size = 48,
+  radius = 8,
+  res = 150,
+  round = false,
+}) {
   const { t } = useTheme();
   const [failed, setFailed] = useState(false);
   const uri = failed ? null : artUrl(track, res);
-  const shape = {
-    width: size,
-    height: size,
-    borderRadius: round ? size / 2 : radius,
-  };
+  const shape = useMemo(
+    () => ({
+      width: size,
+      height: size,
+      borderRadius: round ? size / 2 : radius,
+    }),
+    [size, radius, round],
+  );
+  // Both memoized so a re-render hands the native Image the SAME props and it
+  // has nothing to diff — a fresh {uri} object per render is a prop change to
+  // the view even when the string never moved.
+  const source = useMemo(() => (uri ? { uri } : null), [uri]);
+  const onError = useCallback(() => setFailed(true), []);
   if (!uri) {
     const letter = (track?.title ?? track?.name ?? '·').trim()[0] ?? '·';
     return (
@@ -41,13 +58,19 @@ export function TrackArt({ track, size = 48, radius = 8, res = 150, round = fals
   // phone this app keeps getting OOM-killed on.
   return (
     <Image
-      source={{ uri }}
-      onError={() => setFailed(true)}
+      source={source}
+      onError={onError}
       resizeMethod="resize"
+      // Android fades every image in over 300ms by default. Scrolling a long
+      // list mounts cells continuously — a fling starts a dozen of these per
+      // batch, each an animation the UI thread has to run while it is already
+      // busy committing rows. The art is a 54px thumb; nobody is watching it
+      // arrive.
+      fadeDuration={0}
       style={shape}
     />
   );
-}
+});
 
 // One list row: art, title, artist; press plays. `menu` ({ omit, extras })
 // adds the ⋯ button + long-press into the track actions sheet.

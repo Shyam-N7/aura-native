@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,12 +17,14 @@ import {
   PlayAllPill,
   CountLine,
   DetailRow,
+  DETAIL_ITEM_LAYOUT,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
 import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
 import { LONG_LIST } from '../lib/listWindow';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
 // total runtime, numbered rows with a heart that drops the row on unlike,
@@ -34,7 +36,45 @@ const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
   ReduceMotion.System,
 );
 
+// One liked row, memoized.
+//
+// The point is not memo itself — it is that NOTHING inline is handed to a row
+// any more. The previous renderItem passed `onPress={() => playFrom(index)}`
+// (a fresh closure), `menu={{ omit: ['like'] }}` (a fresh object) and
+// `right={<HeartButton …/>}` (a fresh element) to every row on every render.
+// Any one of those defeats memo completely, so wrapping the row without fixing
+// them first would have looked like a fix and changed nothing.
+//
+// The heart moved INSIDE here for the same reason: an element prop can never
+// be shallow-equal across renders.
+const ROW_MENU = { omit: ['like'] };
+
+const LikedRow = React.memo(function LikedRow({
+  track,
+  index,
+  highlight,
+  onPlay,
+  faint,
+  accent,
+}) {
+  const press = useCallback(() => onPlay(index), [onPlay, index]);
+  return (
+    <DetailRow
+      track={track}
+      index={index}
+      highlight={highlight}
+      onPress={press}
+      menu={ROW_MENU}
+      right={
+        <HeartButton trackId={track.id} size={18} color={faint} accent={accent} />
+      }
+    />
+  );
+});
+
 export default function LikedScreen({ navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('LikedScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
@@ -75,8 +115,21 @@ export default function LikedScreen({ navigation }) {
   // Show the server's liked list, dropping a row the moment it's unliked here.
   // Guard on `ready`: until the client like-set has booted, isLiked() is empty
   // and would hide everything (the "liked looks empty" race).
-  const liked = (hit.data ?? []).filter(x => !ready || isLiked(x.id));
-  const likedKey = liked.map(x => x.id).join(',');
+  // Both of these used to run on EVERY render — a filter over the whole liked
+  // set, then a map+join building one long string from every id. On a 200-track
+  // library that is two full passes and a large string concat per render, and
+  // this screen re-renders on every debounced keystroke and every sort change.
+  // It is the clearest cost here that scales with list length, which is exactly
+  // the reported symptom.
+  //
+  // `isLiked` is module-scope (useLikes returns isLikedId directly), so its
+  // identity never changes and these deps are honest.
+  const { data } = hit;
+  const liked = useMemo(
+    () => (data ?? []).filter(x => !ready || isLiked(x.id)),
+    [data, ready, isLiked],
+  );
+  const likedKey = useMemo(() => liked.map(x => x.id).join(','), [liked]);
   const shown = useMemo(
     () => sortTracks(filterTracks(liked, query), sort),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,10 +137,21 @@ export default function LikedScreen({ navigation }) {
   );
 
   // Play what's on screen: a filtered or re-sorted view queues in that order.
-  const playFrom = i => {
-    player.playQueue(shown, i, 'your liked');
-    player.ui?.openPlayer?.();
-  };
+  // Stable, so the memoized row below is not invalidated on every render.
+  // shownRef rather than a `shown` dep: the callback must see the CURRENT list
+  // when tapped, without changing identity every time the list does.
+  // playerRef for the same reason: the context value takes a new identity on
+  // every track advance and every play/pause, so depending on it here handed
+  // the rows a new onPlay each time — which is exactly what the memo above
+  // exists to prevent.
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const playFrom = useCallback(i => {
+    playerRef.current.playQueue(shownRef.current, i, 'your liked');
+    playerRef.current.ui?.openPlayer?.();
+  }, []);
 
   const header = (
     <View style={styles.header}>
@@ -141,22 +205,18 @@ export default function LikedScreen({ navigation }) {
   );
 
   // The heart handles like/unlike, so the menu omits it (web parity).
-  const renderItem = ({ item, index }) => (
-    <DetailRow
-      track={item}
-      index={index}
-      highlight={query}
-      onPress={() => playFrom(index)}
-      menu={{ omit: ['like'] }}
-      right={
-        <HeartButton
-          trackId={item.id}
-          size={18}
-          color={t.inkFaint}
-          accent={t.accent}
-        />
-      }
-    />
+  const renderItem = useCallback(
+    ({ item, index }) => (
+      <LikedRow
+        track={item}
+        index={index}
+        highlight={query}
+        onPlay={playFrom}
+        faint={t.inkFaint}
+        accent={t.accent}
+      />
+    ),
+    [query, playFrom, t.inkFaint, t.accent],
   );
 
   return (
@@ -168,6 +228,7 @@ export default function LikedScreen({ navigation }) {
         data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}
+        getItemLayout={DETAIL_ITEM_LAYOUT}
         itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
         {...LONG_LIST}

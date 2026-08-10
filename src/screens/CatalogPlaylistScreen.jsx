@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceFlatList } from '../components/ui/Bounce';
@@ -17,12 +17,14 @@ import {
   PlayAllPill,
   CountLine,
   DetailRow,
+  DETAIL_ITEM_LAYOUT,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
 // Serves catalog/editorial playlists (fetched by id) AND auto "made for you"
@@ -34,7 +36,50 @@ import { useBackToTop } from '../hooks/useBackToTop';
 const SORT_KEY = PLAYLIST_SORT_KEY;
 const SORTS = PLAYLIST_SORTS;
 
+// Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
+// (`onPress={() => playFrom(i)}`), a fresh object (the `menu={{extras: …}}`
+// literal) or a renderItem redefined in the render body each defeats that
+// compare on its own. Same shape as LikedScreen.
+const ROW_MENU = { extras: [] };
+
+const CatalogRow = React.memo(function CatalogRow({
+  track,
+  index,
+  highlight,
+  onPlay,
+  onHide,
+}) {
+  const press = useCallback(() => onPlay(index), [onPlay, index]);
+  const menu = useMemo(
+    () =>
+      onHide
+        ? {
+            extras: [
+              {
+                label: "don't show this again",
+                danger: true,
+                onPress: () => onHide(track),
+              },
+            ],
+          }
+        : ROW_MENU,
+    [onHide, track],
+  );
+  return (
+    <DetailRow
+      track={track}
+      index={index}
+      highlight={highlight}
+      reason={track.reason}
+      onPress={press}
+      menu={menu}
+    />
+  );
+});
+
 export default function CatalogPlaylistScreen({ route, navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('CatalogPlaylistScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
@@ -86,7 +131,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   // isn't a pick of ours to apologise for). Removes the row immediately; the
   // undo lives in the library's settings shelf.
   const isAutoMix = initialData?.kind === 'auto';
-  const hideOne = async track => {
+  const hideOne = useCallback(async track => {
     try {
       await hideTrack(track.id);
       setHit(h =>
@@ -106,40 +151,41 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
     } catch {
       showToast("couldn't hide that — try again.");
     }
-  };
+  }, []);
 
   // Play what's on screen: a filtered or re-sorted view queues in that order.
-  const playFrom = i => {
-    player.playQueue(
-      shown,
-      i,
-      (hit.data?.name ?? 'this playlist').toLowerCase(),
-    );
-    player.ui?.openPlayer?.();
-  };
+  //
+  // shownRef / playerRef rather than deps: both change on things that must not
+  // reach the rows — `shown` on every keystroke, the player value on every
+  // track advance — and this only ever runs on a tap, so it must read the
+  // CURRENT values without taking a new identity when they move.
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const source = (hit.data?.name ?? 'this playlist').toLowerCase();
+  const playFrom = useCallback(
+    i => {
+      playerRef.current.playQueue(shownRef.current, i, source);
+      playerRef.current.ui?.openPlayer?.();
+    },
+    [source],
+  );
 
   // Rows are windowed FlatList data — catalog playlists run to hundreds of
   // tracks, and mounting them all on open (the old ScrollView map) is the
   // measured OOM-kill spike. Everything above the rows rides as the header.
-  const renderRow = ({ item: track, index: i }) => (
-    <DetailRow
-      track={track}
-      index={i}
-      highlight={query}
-      reason={track.reason}
-      onPress={() => playFrom(i)}
-      menu={{
-        extras: isAutoMix
-          ? [
-              {
-                label: "don't show this again",
-                danger: true,
-                onPress: () => hideOne(track),
-              },
-            ]
-          : [],
-      }}
-    />
+  const renderRow = useCallback(
+    ({ item: track, index: i }) => (
+      <CatalogRow
+        track={track}
+        index={i}
+        highlight={query}
+        onPlay={playFrom}
+        onHide={isAutoMix ? hideOne : null}
+      />
+    ),
+    [query, playFrom, isAutoMix, hideOne],
   );
 
   return (
@@ -151,6 +197,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
         data={status === 'ok' ? shown : []}
         renderItem={renderRow}
         keyExtractor={item => item.id}
+        getItemLayout={DETAIL_ITEM_LAYOUT}
         {...LONG_LIST}
         contentContainerStyle={[
           styles.content,
