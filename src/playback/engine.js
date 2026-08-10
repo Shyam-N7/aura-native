@@ -756,8 +756,9 @@ let giveUpStreak = 0;
 // and announcing those would be noise. So this is a debounce: say something
 // only once a failure has lasted long enough to be worth a user's attention.
 //
-// Past the first two same-URL reloads (0s and ~1s) and well inside the 25s
-// ceiling.
+// Past the first two same-URL reloads (0s and ~1s) and well inside the 20s
+// ceiling (MAX_RECOVERY_MS in lib/retryPolicy). This comment said 25s until
+// 2026-08-10; the ladder never ran that long.
 const TROUBLE_NOTICE_MS = 6000;
 let troubleTimer = null;
 // Whether we have told the user something is wrong. It also gates the
