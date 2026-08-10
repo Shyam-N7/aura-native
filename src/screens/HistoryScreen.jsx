@@ -21,6 +21,7 @@ import { fonts, label, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Full listening history, ported from web DesktopHistory: the time-of-day
 // "music clock" insight on top, then every play grouped by local day, newest
@@ -144,6 +145,8 @@ function MusicClock({ clock }) {
 }
 
 export default function HistoryScreen({ navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('HistoryScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();

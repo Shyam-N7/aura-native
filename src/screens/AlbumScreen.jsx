@@ -17,6 +17,7 @@ import {
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
 // (`onPress={() => playFrom(i)}`), a fresh object (`menu={{}}`) or a renderItem
@@ -34,6 +35,8 @@ const AlbumRow = React.memo(function AlbumRow({ track, index, onPlay }) {
 // Album / movie detail, ported from web DesktopAlbumDetail. Indian-cinema
 // soundtracks are albums with isMovie — the eyebrow names it a movie.
 export default function AlbumScreen({ route, navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('AlbumScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();

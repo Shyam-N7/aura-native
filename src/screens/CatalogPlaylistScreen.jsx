@@ -24,6 +24,7 @@ import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSort
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
 // Serves catalog/editorial playlists (fetched by id) AND auto "made for you"
@@ -77,6 +78,8 @@ const CatalogRow = React.memo(function CatalogRow({
 });
 
 export default function CatalogPlaylistScreen({ route, navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('CatalogPlaylistScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();

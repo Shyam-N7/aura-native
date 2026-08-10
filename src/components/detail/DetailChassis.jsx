@@ -9,6 +9,7 @@ import { splitMatch } from '../../lib/listFilter';
 import { fonts, label, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 import { fmtTime, fmtRuntime } from '../../utils/fmtTime';
+import { countRender } from '../../lib/renderCount';
 
 // The shared detail-screen chassis, the native aura-dpd: every entity page
 // (liked, artist, album, catalog playlist) is back-crumb + hero + play-all
@@ -123,6 +124,9 @@ function DetailRowBase({
   menu,
   highlight,
 }) {
+  // The whole prop-stability argument, in one number. __DEV__-only; stripped
+  // from release (lib/renderCount).
+  countRender('DetailRow');
   const { t } = useTheme();
   const title = cleanTitle(track.title);
   const openMenu = menu ? () => openTrackActions({ track, menu }) : undefined;

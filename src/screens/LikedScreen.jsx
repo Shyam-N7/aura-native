@@ -24,6 +24,7 @@ import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
 import { LONG_LIST } from '../lib/listWindow';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
 // total runtime, numbered rows with a heart that drops the row on unlike,
@@ -72,6 +73,8 @@ const LikedRow = React.memo(function LikedRow({
 });
 
 export default function LikedScreen({ navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('LikedScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();

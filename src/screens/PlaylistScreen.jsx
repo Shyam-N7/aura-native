@@ -53,6 +53,7 @@ import { Icon } from '../components/Icon';
 import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { countRender } from '../lib/renderCount';
 
 // Your (or a shared) playlist, ported from web DesktopPlaylistDetail: cover +
 // hero + who-can-see-this share chip, collaborator cluster with a members
@@ -163,6 +164,8 @@ function SheetHead({ text }) {
 }
 
 export default function PlaylistScreen({ route, navigation }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('PlaylistScreen');
   const backToTop = useBackToTop();
   const { t } = useTheme();
   const insets = useSafeAreaInsets();

@@ -53,6 +53,7 @@ import { fmtTime } from '../utils/fmtTime';
 import { LONG_LIST } from '../lib/listWindow';
 import { fonts, label, radii } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
+import { countRender } from '../lib/renderCount';
 
 const ROW_HEIGHT = 62;
 // The list's own top padding — shared with styles.list so the drop indicator
@@ -219,6 +220,8 @@ const Row = React.memo(function Row({
   fingerTransY,
   listTop,
 }) {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('QueueSheet.Row');
   const { t } = useTheme();
   const { width: winW } = useWindowDimensions();
   const title = cleanTitle(item.title);
@@ -824,6 +827,8 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
 // up like the player, drags down from its header to dismiss, hardware back
 // closes it first (registered later than the player's handler, LIFO).
 export function QueueSheet() {
+  // __DEV__-only; stripped from release (lib/renderCount).
+  countRender('QueueSheet');
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
