@@ -141,6 +141,49 @@ class GlassViewManager : SimpleViewManager<GlassBlurView>() {
     return blurView
   }
 
+  // Nothing else releases the controller. BlurView's own lifecycle calls
+  // blurController.destroy() in exactly one place — setupWith(), to tear down
+  // the controller it is replacing (BlurView.java:90, version-2.0.6) — and
+  // installGlassController is the same shape, so it only ever destroys the
+  // NoOpController it displaces. onDetachedFromWindow does not destroy; it
+  // calls setBlurAutoUpdate(false) and nothing more (BlurView.java:67-70).
+  // createViewInstance installs once and guards on controllerReady, so without
+  // this hook GlassBlurController.destroy() was unreachable code.
+  //
+  // What that costs — and ONLY this. reports/11-onboarding-audit.md item 18
+  // raised this same gap, then corrected itself, and the correction is the
+  // part worth carrying: unmounted glass views do NOT keep capturing.
+  //   - Real: blurAlgorithm.destroy() never runs, so on API 26-30 a
+  //     RenderScript context, a ScriptIntrinsicBlur and an Allocation stay
+  //     alive per unmounted glass view. RenderScript.destroy() is the only
+  //     release path for the native context. The two staging/internal bitmaps
+  //     are likewise never released and just wait on GC. This is the app tuned
+  //     around a 741 MB low-memory kill, so per-screen native heap matters.
+  //   - NOT true, though it reads that way from the "immortal" heartbeat
+  //     comment: the heartbeat does not tick forever against a dropped view.
+  //     Its terminal postDelayed lands in the detached view's
+  //     HandlerActionQueue, which only drains on dispatchAttachedToWindow, so
+  //     the chain stops one tick after detach (GlassBlurController's init
+  //     block says the same thing about its first post).
+  //   - NOT true either: no preDraw listener survives to drive captures.
+  //     BlurView.onDetachedFromWindow calls setBlurAutoUpdate(false)
+  //     unconditionally, and that is exactly the call that removes the
+  //     listener from rootView's ViewTreeObserver.
+  // So this hook is worth having for the native resources alone. Do not
+  // re-inflate the severity story; it has now been wrong twice.
+  //
+  // Fabric calls onDropViewInstance when React unmounts the view, which is the
+  // matching edge for createViewInstance and the only one that means "gone for
+  // good" — onDetachedFromWindow fires on every routine re-parent that
+  // react-native-screens does on a detail push, and destroying there would
+  // break the attach-path revival the view's onAttachedToWindow relies on.
+  override fun onDropViewInstance(view: GlassBlurView) {
+    super.onDropViewInstance(view)
+    view.controller?.destroy()
+    view.controller = null
+    view.controllerReady = false
+  }
+
   @ReactProp(name = "blurRadius", defaultFloat = DEFAULT_RADIUS)
   fun setBlurRadius(view: GlassBlurView, radius: Float) {
     view.pendingRadius = radius

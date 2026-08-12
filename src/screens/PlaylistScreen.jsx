@@ -42,7 +42,6 @@ import {
   PlayAllPill,
   CountLine,
   DetailRow,
-  DETAIL_ITEM_LAYOUT,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
@@ -540,7 +539,6 @@ export default function PlaylistScreen({ route, navigation }) {
         data={status === 'ok' ? shown : []}
         renderItem={renderRow}
         keyExtractor={item => item.id}
-        getItemLayout={DETAIL_ITEM_LAYOUT}
         {...LONG_LIST}
         contentContainerStyle={[
           styles.content,
