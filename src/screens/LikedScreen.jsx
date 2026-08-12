@@ -79,7 +79,7 @@ export default function LikedScreen({ navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  const { isLiked, ready } = useLikes();
+  const { isLiked, ready, rev } = useLikes();
   const [hit, setHit] = useState({ data: null, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
@@ -122,12 +122,23 @@ export default function LikedScreen({ navigation }) {
   // It is the clearest cost here that scales with list length, which is exactly
   // the reported symptom.
   //
-  // `isLiked` is module-scope (useLikes returns isLikedId directly), so its
-  // identity never changes and these deps are honest.
+  // `rev` is what makes these deps honest, and it is not decoration.
+  //
+  // This memo replaced a render-body filter, which re-ran on EVERY render —
+  // including the one useLikes forces when the like-set changes. The memo's
+  // first deps were [data, ready, isLiked], and the comment here argued they
+  // were complete because "isLiked is module-scope, so its identity never
+  // changes". That is exactly backwards: an identity that never changes can
+  // never signal that the SET changed. `data` is written once by the fetch
+  // effect and `ready` only moves at boot, so nothing in that list moved on an
+  // unlike — the memo returned its cached array, likedKey was unchanged,
+  // `shown` never recomputed, and the row stayed on screen with a hollow heart
+  // while CountLine kept counting it.
   const { data } = hit;
   const liked = useMemo(
     () => (data ?? []).filter(x => !ready || isLiked(x.id)),
-    [data, ready, isLiked],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, ready, isLiked, rev],
   );
   const likedKey = useMemo(() => liked.map(x => x.id).join(','), [liked]);
   const shown = useMemo(

@@ -84,7 +84,16 @@ export function resetLikesStore() {
 onSessionReset(resetLikesStore);
 
 export function useLikes() {
-  const [, force] = useState(0);
+  // `rev` is the counter behind the re-render, exposed rather than discarded.
+  //
+  // Every other value this hook returns is IDENTITY-STABLE across a like or an
+  // unlike: `isLiked` is the module function itself, and `ready` only moves
+  // when the store boots. That is fine for rendering — a subscriber re-renders
+  // and simply calls isLiked() again — but it means a consumer that MEMOISES
+  // over the like-set has nothing honest to put in its dependency array, and
+  // will silently freeze. LikedScreen did exactly that and stopped removing
+  // rows on unlike. `rev` is the dependency that case needs.
+  const [rev, force] = useState(0);
   useEffect(() => {
     boot();
     const bump = () => force(n => n + 1);
@@ -93,5 +102,5 @@ export function useLikes() {
       subscribers.delete(bump);
     };
   }, []);
-  return { isLiked: isLikedId, ready, like, unlike };
+  return { isLiked: isLikedId, ready, like, unlike, rev };
 }
