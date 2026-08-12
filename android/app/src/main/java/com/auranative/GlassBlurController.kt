@@ -100,6 +100,7 @@ class GlassBlurController(
   private var desiredAutoUpdate = true
   private var dead = false
   private var consecutiveFailures = 0
+  private var consecutiveBlurFailures = 0
   private var lastSuccessUptime = 0L
   private var lastCaptureUptime = 0L
 
@@ -426,8 +427,16 @@ class GlassBlurController(
     if (!ok) {
       consecutiveFailures++
       if (consecutiveFailures >= REINIT_AFTER_FAILURES) {
-        // Something is persistently wrong with this controller's state —
-        // rebuild it (fresh bitmaps, fresh listeners) outside this pass.
+        // Something is persistently wrong with this controller's state — go
+        // back through init() outside this pass, so the geometry is re-read
+        // and a capture is retried off the throttle.
+        //
+        // It does NOT rebuild anything, despite how this used to read: a
+        // snapshot failure does not change the view's measured size, so
+        // init() takes its "keep the buffers" early return every time and
+        // only calls updateBlur(). No fresh bitmaps, no fresh listeners.
+        // Re-reading geometry is the whole benefit, and for the wedges this
+        // counter was written against that is in fact the useful part.
         consecutiveFailures = 0
         blurView.post { updateBlurViewSize() }
       }
@@ -492,18 +501,116 @@ class GlassBlurController(
       Log.i(TAG, "paint gap=${paintGap}ms scale=${scaleFactorW}x$scaleFactorH ${state()}")
     }
 
+    // Shielded, and bracketed with restoreToCount rather than restore(), for
+    // the same reason the capture pass is: a throw here must not leave the
+    // caller's canvas unbalanced, and it must not kill the process over a
+    // decorative effect.
+    //
+    // The concrete escape route on API 31+ (verified against BlurView
+    // version-2.0.6, RenderEffectBlur.java): render() takes the RenderNode
+    // path only when `canvas.isHardwareAccelerated()`. On a SOFTWARE canvas it
+    // lazily builds a RenderScriptBlur fallback and calls
+    // `fallbackAlgorithm.blur(bitmap, lastBlurRadius)` — with lastBlurRadius
+    // being whatever blurAndSave() last passed, i.e. the tuned 40 that
+    // setBlurRadius deliberately does NOT clamp on the RenderEffect path. That
+    // lands in RenderScriptBlur.blur → blurScript.setRadius(40) → the same
+    // RSIllegalArgumentException that crashed the 6T, on a device that never
+    // goes near RenderScript otherwise.
+    //
+    // Clamping to 25 up front would fix it by giving up the tuned radius on
+    // every 31+ device to protect a rare path, so: contain instead. Skipping
+    // this frame is the correct degrade — the fallback is per-canvas, not
+    // latched, so the next hardware-accelerated draw renders normally. Do NOT
+    // set a permanent disable flag here; one screenshot would then flatten the
+    // glass for the rest of the process.
+    val base = canvas.saveCount
     canvas.save()
-    canvas.scale(scaleFactorW, scaleFactorH)
-    blurAlgorithm.render(canvas, internalBitmap)
-    canvas.restore()
+    try {
+      canvas.scale(scaleFactorW, scaleFactorH)
+      blurAlgorithm.render(canvas, internalBitmap)
+    } catch (e: RuntimeException) {
+      // Rate-limited on the paint-log clock: a software-layered ancestor draws
+      // every frame, and logging per frame would bury the trace.
+      if (drawAt - lastPaintLogUptime > PAINT_LOG_GAP_MS) {
+        lastPaintLogUptime = drawAt
+        Log.w(TAG, "render skipped: ${e.javaClass.simpleName} hw=${canvas.isHardwareAccelerated}")
+      }
+    } finally {
+      try {
+        canvas.restoreToCount(base)
+      } catch (e: IllegalStateException) {
+        Log.w(TAG, "render restore skipped: canvas unbalanced")
+      }
+    }
     if (overlayColor != PreDrawBlurController.TRANSPARENT) {
       canvas.drawColor(overlayColor)
     }
     return true
   }
 
+  // Shielded so a blur throw cannot kill the process over a decorative
+  // effect. That is ALL this does — read what the failure path actually
+  // leaves on screen before adding anything to it:
+  //
+  // updateBlur() promotes BEFORE it blurs. One statement above the call to
+  // this function, `internalCanvas.drawBitmap(stagingBitmap, promotePaint)`
+  // full-replaces internalBitmap (promotePaint is PorterDuff.Mode.SRC — see
+  // its own comment above) with this frame's sharp, 180%-saturated capture.
+  // And in RenderScriptBlur.blur every throw site (createFromBitmap,
+  // createTyped, setRadius, setInput, forEach) precedes the single write-back
+  // (outAllocation.copyTo(bitmap)). So on a caught failure internalBitmap
+  // holds the RAW capture — never a half-written bitmap, and never the
+  // previous blurred frame, which the promote already destroyed.
+  //
+  // What that looks like differs by API branch, and only one of them is
+  // benign:
+  //   - API 31+: render() draws the RenderNode, which retains its last
+  //     recording and RenderEffect, so the pill genuinely holds its previous
+  //     look and a failure here is invisible.
+  //   - API 26-30: render() is canvas.drawBitmap(internalBitmap), so the raw
+  //     capture reaches the screen — a ~1/6-scale, 6x-upscaled, over-saturated
+  //     mirror of the content behind, refreshed at the capture cap for as long
+  //     as blurs keep failing. Ugly, but not a crash, which is the trade this
+  //     shield exists to make.
+  // Fixing that second case means a new degrade path in a file no build in
+  // this environment can compile, for a failure never yet observed in the
+  // field, so it is documented here and left for the emulator matrix rather
+  // than written blind.
+  //
+  // NO re-init on repeated failure. The obvious move — post
+  // updateBlurViewSize() the way the capture path does — does not do what it
+  // reads as: init() early-returns whenever the scaled bitmap size is
+  // unchanged (see its "keep the buffers" branch), and a blur failure never
+  // changes the view's measured size, so that branch is taken every time and
+  // Bitmap.createBitmap is never reached. It would buy one wasted post and one
+  // extra unthrottled capture per three failures, on a device already short of
+  // memory. The counter therefore only rate-limits the log.
+  //
+  // Its OWN counter, not the snapshot one. The capture pass sets
+  // consecutiveFailures = 0 immediately before calling this, so sharing it
+  // would reset the tally on every frame where the snapshot succeeded and only
+  // the blur failed — precisely the case being counted.
   private fun blurAndSave() {
-    internalBitmap = blurAlgorithm.blur(internalBitmap, blurRadius)
+    val blurred = try {
+      blurAlgorithm.blur(internalBitmap, blurRadius)
+    } catch (e: RuntimeException) {
+      consecutiveBlurFailures++
+      // First one always, then sparsely: this runs at the capture cap, so an
+      // unthrottled line here would flood logcat and bury the trace it exists
+      // to produce.
+      if (consecutiveBlurFailures == 1 ||
+        consecutiveBlurFailures % BLUR_FAIL_LOG_EVERY == 0
+      ) {
+        Log.w(
+          TAG,
+          "blur failed x$consecutiveBlurFailures: ${e.javaClass.simpleName} " +
+            "r=$blurRadius — showing the unblurred capture ${state()}",
+        )
+      }
+      return
+    }
+    consecutiveBlurFailures = 0
+    internalBitmap = blurred
     if (!blurAlgorithm.canModifyBitmap()) {
       internalCanvas.setBitmap(internalBitmap)
     }
@@ -610,6 +717,9 @@ class GlassBlurController(
     const val RS_MIN_RADIUS = 1f
     const val RS_MAX_RADIUS = 25f
     const val REINIT_AFTER_FAILURES = 3
+    // Blur failures arrive at the capture cap, so log the first and then one
+    // in every N rather than one per frame.
+    const val BLUR_FAIL_LOG_EVERY = 60
     const val HEARTBEAT_MS = 2000L
     const val CAPTURE_MIN_INTERVAL_MS = 30L
     // Only log a paint that follows a real gap — a run of ordinary frames is
