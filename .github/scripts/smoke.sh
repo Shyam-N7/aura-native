@@ -17,9 +17,16 @@
 # net, because it reads as coverage.
 #
 # What this DOES cover: process start, native module init, the RN bridge, the
-# JS bundle evaluating, and first paint of the auth screen. That is a real
+# JS bundle downloading and EVALUATING, and React committing its first tree —
+# check 3 below waits for perfMarks' `first-render` in logcat. That is a real
 # smoke test and it catches a real class of launch crash. It is just not the
 # one that prompted it.
+#
+# Check 3 exists because the first version of this script did NOT observe any of
+# that, while its header claimed to. In a debug build a bundle failure shows a
+# redbox: the process stays alive and RN logs under tag `ReactNative`, never the
+# string `FATAL EXCEPTION`. Both of the other checks passed and the script
+# exited 0 for an app that had not run a line of JS.
 #
 # Closing the gap properly means an instrumented test
 # (android/app/src/androidTest) that constructs the controller and asserts the
@@ -48,6 +55,10 @@ APK=android/app/build/outputs/apk/debug/app-debug.apk
 # dependency graph takes a minute or more on a CI runner, so the process would
 # still be showing a blank screen when the script declared it healthy.
 SETTLE_SECONDS=25
+# How long to wait for React's first tree after launch. Generous: a cold API 26
+# emulator downloading a dev bundle over adb reverse is slow, and a false
+# failure here would be worse than the vacuous pass it replaces.
+BOOT_TIMEOUT_SECONDS=90
 
 echo "::group::Start Metro"
 npx react-native start --no-interactive >/tmp/metro.log 2>&1 &
@@ -84,6 +95,26 @@ echo "::endgroup::"
 
 adb logcat -c
 adb shell monkey -p "${PKG}" -c android.intent.category.LAUNCHER 1 >/dev/null
+
+# Wait for React to commit a tree, rather than sleeping and hoping. perfMarks
+# logs `[perf] first-render <n>ms` from App.jsx's mount effect (__DEV__ only),
+# so this line appearing means the bundle downloaded, evaluated, and rendered.
+FIRST_RENDER=0
+for _ in $(seq 1 "${BOOT_TIMEOUT_SECONDS}"); do
+  if adb logcat -d -s ReactNativeJS 2>/dev/null | tr -d '\r' | grep -q '\[perf\] first-render'; then
+    FIRST_RENDER=1
+    break
+  fi
+  # A bundle that cannot be fetched is terminal — stop waiting for a render
+  # that is never coming and report the real reason.
+  if adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'Unable to download JS bundle'; then
+    break
+  fi
+  sleep 1
+done
+
+# Then let it settle, so a crash a beat after first paint is still caught — the
+# blur crash landed one requestAnimationFrame after first paint.
 sleep "${SETTLE_SECONDS}"
 
 FAILED=0
@@ -97,7 +128,18 @@ else
   echo "OK: still running after ${SETTLE_SECONDS}s."
 fi
 
-# 2. Did anything fatal land IN OUR PROCESS? Checked even when a process
+# 2. Did JS actually run? This is the check whose absence made the whole script
+#    able to pass vacuously.
+if [ "${FIRST_RENDER}" -ne 1 ]; then
+  echo "FAIL: no [perf] first-render within ${BOOT_TIMEOUT_SECONDS}s — the app started but never rendered."
+  echo "--- ReactNative / ReactNativeJS tail ---"
+  adb logcat -d -s ReactNative:E ReactNativeJS:V 2>/dev/null | tr -d '\r' | tail -40 || true
+  FAILED=1
+else
+  echo "OK: React committed its first tree."
+fi
+
+# 3. Did anything fatal land IN OUR PROCESS? Checked even when a process
 #    exists: RN can restart after a native throw, so "alive" is not health.
 #
 #    Scoped to the package on purpose. A google_apis image has GMS and a pile

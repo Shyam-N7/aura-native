@@ -50,7 +50,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - run: npm ci
+      # `npm install`, not `npm ci` — same reason ci.yml gives, same lockfile.
+      # `npm ci` demands package.json and package-lock.json in exact sync and
+      # this one has drifted since the initial import (typescript@6.0.3 missing,
+      # picomatch 2.3.2 vs 4.0.5). That check is local and offline, so it fails
+      # identically on every runner: the job would die here, at step 4 of 7,
+      # before Enable KVM and long before the emulator.
+      - run: npm install --no-audit --no-fund
 
       # Required by android-emulator-runner on ubuntu-24.04 (what ubuntu-latest
       # now is): without it the emulator dies with /dev/kvm permission denied
