@@ -17,7 +17,6 @@ import {
   PlayAllPill,
   CountLine,
   DetailRow,
-  DETAIL_ITEM_LAYOUT,
 } from '../components/detail/DetailChassis';
 import { ListTools } from '../components/detail/ListTools';
 import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
@@ -239,7 +238,6 @@ export default function LikedScreen({ navigation }) {
         data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}
-        getItemLayout={DETAIL_ITEM_LAYOUT}
         itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
         {...LONG_LIST}

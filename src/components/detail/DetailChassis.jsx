@@ -1,5 +1,5 @@
 import React from 'react';
-import { PixelRatio, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
@@ -74,33 +74,24 @@ export function DetailSection({ title, sub }) {
   );
 }
 
-// The row's geometry, in one place, because getItemLayout below promises it to
-// the virtualizer and a drifted padding would be a VISIBLE bug — overlapping or
-// gapped rows — not a slow one. The art dominates the row: the meta column runs
-// to about 50px with all three lines, under the 54 the thumb occupies.
+// Row geometry, shared so the art size and the vertical padding cannot drift
+// apart. There is deliberately NO getItemLayout built from these.
+//
+// 804bac1 added one (DETAIL_ITEM_LAYOUT) and it was wrong on every screen that
+// used it. VirtualizedList treats getItemLayout's `offset` as an ABSOLUTE
+// content offset, and it does not add the header: _headerLength is declared at
+// VirtualizedList.js:1229, assigned at :1437, and read nowhere. Supplying
+// getItemLayout also switches cell onLayout off (:806), so nothing corrects the
+// model afterwards. Every one of the four screens has a ListHeaderComponent —
+// Liked's is ~290dp, Playlist adds a 148px cover on top — so the whole list was
+// modelled several rows above where it really sat.
+//
+// The pattern came from QueueSheet, which is the one list here with no header
+// and where it is correct. Do not copy it back without threading each screen's
+// measured header height in; these headers are not a fixed size (loading vs
+// loaded, the find-in-list tools appearing), so a single constant cannot work.
 const ROW_ART = 54;
 const ROW_PAD_V = 7;
-export const DETAIL_ROW_H = ROW_ART + ROW_PAD_V * 2;
-
-// Every one of these lists measures each cell through onLayout, and at
-// windowSize 3 (lib/listWindow) the virtualizer cannot place the next cell
-// until the previous one reports back — which is what a fling into blank rows
-// actually is. getItemLayout removes the round trip.
-//
-// Gated on the font scale, and this is the whole reason it is conditional:
-// nothing in this app sets allowFontScaling or maxFontSizeMultiplier, so an
-// enlarged system font grows the meta column past the art and the row with it.
-// A constant that lies to the virtualizer is worse than no constant. Large-font
-// users keep exactly today's behaviour — measured rows, no pinned height.
-const FIXED_ROWS = PixelRatio.getFontScale() === 1;
-
-export const DETAIL_ITEM_LAYOUT = FIXED_ROWS
-  ? (_data, index) => ({
-      length: DETAIL_ROW_H,
-      offset: DETAIL_ROW_H * index,
-      index,
-    })
-  : undefined;
 
 // label() builds a NEW style object every time it is called, and these two sat
 // inline in the row body — so a 200-row list allocated 400 of them per render.
@@ -131,9 +122,7 @@ function DetailRowBase({
   const title = cleanTitle(track.title);
   const openMenu = menu ? () => openTrackActions({ track, menu }) : undefined;
   return (
-    // Pinned when getItemLayout is live, so the promised height is true by
-    // construction rather than by arithmetic that can drift.
-    <View style={FIXED_ROWS ? styles.rowFixed : styles.row}>
+    <View style={styles.row}>
       <Text style={[styles.idx, { color: t.inkFaint }]}>
         {String(index + 1).padStart(2, '0')}
       </Text>
@@ -229,13 +218,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingVertical: ROW_PAD_V,
-  },
-  rowFixed: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: ROW_PAD_V,
-    height: DETAIL_ROW_H,
   },
   pressed: { opacity: 0.6 },
   idx: {
