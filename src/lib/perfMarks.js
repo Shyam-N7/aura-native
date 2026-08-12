@@ -23,6 +23,21 @@ export function mark(name) {
   const ms = Date.now() - t0;
   stages[name] = ms;
   crumb('perf', name, { ms });
+  // One greppable line per stage, same shape as [drift] and [renders], so one
+  // logcat filter reads all three. A breadcrumb only leaves the device attached
+  // to an event, which is no use while you are watching a boot.
+  //
+  // __DEV__ gates the LOG ONLY — never the mark itself. perfMarks is
+  // deliberately live in release and ships the cold-open table to Sentry; that
+  // must not change, and release swallows console anyway.
+  //
+  // .github/scripts/smoke.sh waits for `first-render` on this channel. It is
+  // the only evidence available that JS actually ran: a debug build whose
+  // bundle fails shows a redbox with a live PID and no FATAL EXCEPTION, so
+  // process-alive plus an empty crash buffer is not health.
+  if (__DEV__) {
+    console.log(`[perf] ${name} ${ms}ms`);
+  }
 }
 
 // Called once from index.js after registration; waits out the boot so late

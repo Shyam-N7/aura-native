@@ -15,4 +15,6 @@ module.exports = {
   ],
   // Concatenated after the preset's own setup by jest's preset merge.
   setupFiles: ['<rootDir>/jest.setup.js'],
+  // Framework-dependent hooks (afterEach) must go here, not in setupFiles.
+  setupFilesAfterEnv: ['<rootDir>/jest.afterEnv.js'],
 };

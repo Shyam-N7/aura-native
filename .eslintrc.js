@@ -12,8 +12,16 @@ module.exports = {
   },
   overrides: [
     {
-      // @react-native's jest override only matches .js/.ts/.tsx test files — add .jsx.
-      files: ['**/__tests__/**/*.jsx', '**/*.{spec,test}.jsx'],
+      // @react-native's jest override only matches .js/.ts/.tsx test files — add
+      // .jsx, plus the two root harness files. jest.afterEnv.js runs after the
+      // framework is installed and legitimately calls afterEach; without it
+      // listed here that reads as no-undef.
+      files: [
+        '**/__tests__/**/*.jsx',
+        '**/*.{spec,test}.jsx',
+        'jest.setup.js',
+        'jest.afterEnv.js',
+      ],
       env: { jest: true },
     },
   ],
