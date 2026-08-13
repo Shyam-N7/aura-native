@@ -13,11 +13,27 @@ import { crumb } from './crumbs';
 
 const t0 = Date.now();
 const stages = {};
-let shipped = false;
 const SAMPLE = 1.0;
 
+// There is deliberately NO "already shipped" guard in here, and it must not
+// come back.
+//
+// There was one — `if (shipped || …) return` — and because it gated the whole
+// function it also silenced the console.log below, six seconds after
+// shipBootTiming() started its timer. That put a hard ~6s deadline on the one
+// line .github/scripts/smoke.sh waits for, while smoke.sh waits
+// BOOT_TIMEOUT_SECONDS=90 for it. Any boot slower than six seconds therefore
+// failed CI with "the app started but never rendered" — for an app that had
+// started and rendered perfectly. Cold API 26/28 emulators under nested
+// virtualisation with no GPU are exactly the slow case, and exactly the levels
+// the device matrix exists to protect, so the gate would have gone red first
+// where a human is least able to dismiss it.
+//
+// A late stage belongs in the table anyway: Sentry.setContext holds this same
+// object, so a crash after the boot event carries the fuller timeline rather
+// than a truncated one. What bounds this is the 32-entry cap, not a clock.
 export function mark(name) {
-  if (shipped || stages[name] != null || Object.keys(stages).length >= 32) {
+  if (stages[name] != null || Object.keys(stages).length >= 32) {
     return;
   }
   const ms = Date.now() - t0;
@@ -44,7 +60,6 @@ export function mark(name) {
 // stages (first-ready on a slow network) still make the table.
 export function shipBootTiming() {
   setTimeout(() => {
-    shipped = true;
     try {
       Sentry.setContext('boot-timing', stages);
       if (Math.random() < SAMPLE) {

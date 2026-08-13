@@ -37,6 +37,32 @@ describe('the boot-stage log', () => {
     }
   });
 
+  test('a stage arriving after the boot event still logs', () => {
+    // The fourth CI blocker. perfMarks used to carry an `if (shipped || …)`
+    // guard at the top of mark(), so six seconds after shipBootTiming() every
+    // mark went silent — including this line. smoke.sh waits
+    // BOOT_TIMEOUT_SECONDS=90 for `[perf] first-render`, so a cold API 26/28
+    // emulator that took longer than six seconds to render failed the job with
+    // "the app started but never rendered", for an app that rendered fine.
+    jest.useFakeTimers();
+    try {
+      jest.doMock('@sentry/react-native', () => ({
+        setContext: jest.fn(),
+        captureMessage: jest.fn(),
+      }));
+      const { mark, shipBootTiming } = require('../src/lib/perfMarks');
+      shipBootTiming();
+      jest.advanceTimersByTime(7000); // past the ship window
+      log.mockClear();
+      mark('first-render');
+      expect(log).toHaveBeenCalledWith(
+        expect.stringMatching(/^\[perf\] first-render \d+ms$/),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('release still records the stage for Sentry', () => {
     // The half that must NOT be gated. If a future change moves the __DEV__
     // check up a line, this fails and the "says nothing in release" test above

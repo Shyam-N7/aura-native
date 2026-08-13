@@ -48,8 +48,18 @@ boundary — the other half of the gap fix. Battery cost: radio finishes sooner 
 (bursts), not more total data.
 
 **5. Artwork.** RN `Image` disk/memory cache already covers it; `service.js` already
-prefetches the next track's 150px art at track change (field-report fix). No new layer;
-decode sizing stays at the 150/500 px variants already in use.
+warms the 150px art of the track that just became **current**, at track change
+(field-report fix — the home banner sat on the previous cover for seconds after a
+screen-off advance). No new layer; decode sizing stays at the 150/500 px variants
+already in use.
+
+> Corrected 2026-08-13: this said "prefetches the **next** track's 150px art".
+> It does not, and never did. The handler is `Event.PlaybackActiveTrackChanged`
+> (`src/playback/service.js:183-191`), so `e.track` is the track that just
+> started — the warm is for the *current* cover, racing the UI's own fetch at
+> wake, not a look-ahead. Genuine next-track prefetch does not exist anywhere in
+> the app, so anyone planning caching work from this line would have skipped
+> building a layer that was never there.
 
 **6. Playback snapshot (instant-open UI).** Already done: queue + position in MMKV,
 read synchronously before first frame (f344252). Write cadence: queue on mutation,
