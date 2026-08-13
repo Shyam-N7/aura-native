@@ -4,6 +4,11 @@
 with code evidence → what would disprove → runtime confirmation → fix → risk. Citations at
 commit `7a7fdd7`; see `00-architecture-map.md` for the layer map.*
 
+> **Stale pin — resolve citations at `7a7fdd7`, not HEAD.** The commit is real and
+> is an ancestor of HEAD, but 163 commits have landed since, so these 17
+> citations resolve to unrelated code. See the note at the top of
+> `00-architecture-map.md` for the mechanism and how to read them.
+
 ## 1. Playback stops mid-song
 
 **Causes, ranked:**

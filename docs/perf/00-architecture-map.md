@@ -3,6 +3,21 @@
 *Perf & reliability recon, 2026-07-27. Every claim carries a file:line citation; line
 numbers are as of commit `7a7fdd7`.*
 
+> **The line numbers below are stale — resolve them at `7a7fdd7`, not at HEAD.**
+> `7a7fdd7` is real (`refine(share): the link survives the gates…`, 2026-07-26)
+> and is an ancestor of HEAD, but **163 commits** have landed since, so the 31
+> citations in this file and the 17 in `01` now point at unrelated code. That is
+> worse than a broken pin, because they still resolve: `00:105` cites
+> `service.js:100-103` for the PlaybackError listener, which at HEAD is a
+> remote-like handler — the listener moved to `:197-203`. Read a citation with
+> `git show 7a7fdd7:<path>`, and if the clone is shallow (it is, by default)
+> `git fetch --depth=200 origin main` first.
+>
+> Previously recorded here and in `reports/11:164` as "`7a7fdd7` does not exist
+> in this repository". That was a **shallow-clone artifact** — `.git/shallow`
+> makes the squashed-looking `70e10b3` a graft boundary rather than a root, so
+> `git cat-file` reports the commit missing when it is merely not fetched.
+
 ## Ownership chain
 
 ```
