@@ -114,6 +114,13 @@ export default function RootTabs() {
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
+        name="YouTubeImport"
+        getComponent={() =>
+          require('../screens/YouTubeImportScreen').default
+        }
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
         name="AdminCompose"
         getComponent={() => require('../screens/AdminComposeScreen').default}
         options={{ animation: 'slide_from_right' }}

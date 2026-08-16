@@ -95,7 +95,16 @@ test('playlists library groups yours, shared-with-you and saved', async () => {
 
   const navigate = jest.fn();
   const tree = await render(
-    <PlaylistsScreen navigation={{ navigate, goBack: jest.fn() }} />,
+    <PlaylistsScreen
+      navigation={{
+        navigate,
+        goBack: jest.fn(),
+        // The screen refetches on focus (the stack keeps it mounted, so a
+        // playlist created elsewhere would otherwise never appear); the stub
+        // needs the listener the real navigation object always has.
+        addListener: jest.fn(() => jest.fn()),
+      }}
+    />,
   );
 
   const body = texts(tree.toJSON());
