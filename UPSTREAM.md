@@ -78,7 +78,26 @@ bar together instead of easing toward a finish that is not happening. Rows show
 YouTube's own title, not the catalog's cleaner one — swapping it at resolve time
 would make rows appear to rewrite themselves mid-import.
 
-Port this back to web rather than letting it diverge.
+Native then went further, and this part has not been ported back yet. Under the
+stage line sits a **rotating word** (`COPY.progress.words`), an **elapsed
+counter**, a **gliding bar**, a **pulsing dot** on the frontier row, and the
+house `AuraLoader` during the fetch — the stretch that has nothing to list,
+because `fetchPhase` writes every item row in one transaction at the end.
+
+The load-bearing rule: **the word is advanced by the POLL, never by a clock.**
+The poll is the server's worker, so a new job object is proof a slice of
+matching just ran — an advancing word is evidence of work, which no timer could
+claim. A hung poll or a stalled job therefore freezes it with no special case.
+Every string in a phase's pool must be true of that whole phase, so which one is
+showing carries no information and cannot lie; a test asserts no pool string
+contains a digit or the word "of".
+
+The bar uses `scaleX`, never `width: '<pct>%'` — percentage width cannot run on
+the UI thread. The frontier pulse is the screen's only repeating animation and
+gates on `useAppActive() && useNavFocused()`, because this screen's poll keeps
+running while parked and its `BackHandler` invites switching away mid-import:
+the work continues, the animation does not. Rows carry `LinearTransition` but
+deliberately no `entering` — see the reanimated/Fabric note on `Shelf.jsx`.
 
 **Lyrics overlay.** Reduced motion never enters cinematic mode — deliberate,
 the 800 ms dissolve would be a one-frame snap. "Song ended" is a position

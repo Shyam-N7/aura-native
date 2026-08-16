@@ -8,10 +8,26 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Animated, {
+  Easing,
+  LinearTransition,
+  ReduceMotion,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { CrumbBack } from '../components/detail/DetailChassis';
+import { AuraLoader } from '../components/ui/AuraLoader';
+import { useAppActive } from '../hooks/useAppActive';
+import { useNavFocused } from '../hooks/useNavFocused';
+import { fmtTime } from '../utils/fmtTime';
+import { DUR, EASE } from '../theme/motion';
 import { useTheme } from '../theme/ThemeContext';
 import { previewLink, startImport, cancelImport } from '../api/ytImport';
 import { useImportJob, progressOf } from '../hooks/useImportJob';
@@ -436,7 +452,17 @@ function rowStatus(item, isFrontier) {
   return { text: COPY.progress.row.missing, tone: 'faint' };
 }
 
-function ImportRow({ item, isFrontier, waiting }) {
+// The window slides by one row whenever the frontier crosses WINDOW_BEHIND.
+// Without this that is a teleport. Same idiom as LikedScreen.jsx:34 — and
+// deliberately NO `entering={FadeIn}`: Shelf.jsx documents the reanimated
+// 4.2.3/Fabric native-abort class for entering animations on a tree the
+// navigator can tear down mid-flight, and this screen is torn down mid-flight
+// BY DESIGN (abandon() → goBack()).
+const ROW_LAYOUT = LinearTransition.duration(280).reduceMotion(
+  ReduceMotion.System,
+);
+
+function ImportRow({ item, isFrontier, waiting, pulse }) {
   const { t } = useTheme();
   const status = rowStatus(item, isFrontier);
   const tone =
@@ -445,8 +471,28 @@ function ImportRow({ item, isFrontier, waiting }) {
       : status?.tone === 'faint'
       ? t.inkFaint
       : t.inkSoft;
+  // One shared value for the whole list, owned by the parent — only ever one
+  // frontier, and a per-row value would churn as the window slides.
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: 0.3 + pulse.value * 0.7,
+    transform: [{ scale: 0.85 + pulse.value * 0.3 }],
+  }));
   return (
-    <View style={[styles.row, waiting && styles.rowWaiting]}>
+    <Animated.View
+      layout={ROW_LAYOUT}
+      style={[styles.row, waiting && styles.rowWaiting]}
+    >
+      {/* Fixed-width gutter so the frontier advancing causes no horizontal
+          jitter in the titles beside it. */}
+      <View style={styles.gutter}>
+        {isFrontier ? (
+          <Animated.View
+            style={[styles.dotNow, { backgroundColor: t.accent }, dotStyle]}
+          />
+        ) : waiting ? null : (
+          <View style={[styles.dotDone, { backgroundColor: t.inkFaint }]} />
+        )}
+      </View>
       <Text
         numberOfLines={1}
         style={[
@@ -464,26 +510,119 @@ function ImportRow({ item, isFrontier, waiting }) {
           {status.text}
         </Text>
       )}
-    </View>
+    </Animated.View>
   );
+}
+
+/**
+ * Which of the four stages this job is in. One place, because the stage line
+ * and the rotating word must never disagree about it.
+ */
+export function phaseOf(job) {
+  const { total, pct } = progressOf(job);
+  if (job?.status === 'queued') {
+    return 'queued';
+  }
+  if (job?.status === 'fetching' || total === 0) {
+    return 'fetching';
+  }
+  return (job?.counts?.matching ?? 0) <= 3 || pct >= 90 ? 'closing' : 'matching';
 }
 
 function ProgressState({ job, pollError, stalled, onResume }) {
   const { t } = useTheme();
   const { done, total, pct } = progressOf(job);
   const items = job.items ?? [];
+  const phase = phaseOf(job);
 
-  // Three stages, each read off real state. Nothing here advances on a timer,
-  // so a drain that stalls freezes the words and the bar together — which is
-  // the truth, and the whole reason this is not a decorative loader.
+  // The stage line: countable, and the only thing here that claims progress.
   const line =
-    job.status === 'queued'
+    phase === 'queued'
       ? COPY.progress.starting
-      : job.status === 'fetching' || total === 0
+      : phase === 'fetching'
       ? COPY.progress.fetching
-      : (job.counts?.matching ?? 0) <= 3 || pct >= 90
+      : phase === 'closing'
       ? COPY.progress.almostThere(done, total)
       : COPY.progress.matching(done, total);
+
+  // The rotating word underneath, advanced by the POLL rather than by a clock.
+  //
+  // That distinction is the whole design. The poll IS the server's worker, so a
+  // new job object is proof a slice of matching just ran — an advancing word is
+  // evidence of work, which no timer could honestly claim. It also means a hung
+  // poll or a stalled job freezes the word exactly where it is, beside the note
+  // explaining why, with no special case anywhere. (A setInterval here would be
+  // the obvious implementation and would cheerfully cycle through a dead drain.)
+  const [turn, setTurn] = useState(0);
+  useEffect(() => {
+    setTurn(n => n + 1);
+  }, [job]);
+  const pool = COPY.progress.words[phase] ?? COPY.progress.words.matching;
+  const word = pool[turn % pool.length];
+
+  // How long this has been going. Recomputed from a stored start rather than
+  // accumulated, so backgrounding and coming back shows the right total with no
+  // drift and no catch-up. It is also the one thing that keeps moving during a
+  // stall, which is right — "this has been going 6:20" is the information that
+  // makes the "keep checking" button worth pressing.
+  const startedAt = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAt.current) / 1000)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  // Glide the bar rather than snapping it. scaleX, never width:'<pct>%' —
+  // percentage width cannot run on the UI thread and forces a layout pass per
+  // frame. 900ms against a 2s poll means the bar is moving for nearly half of
+  // every otherwise-dead interval, and the glide IS the reveal.
+  const reduced = useReducedMotion();
+  const fill = useSharedValue(0);
+  useEffect(() => {
+    const to = Math.max(0, Math.min(1, pct / 100));
+    if (reduced) {
+      fill.value = to;
+      return undefined;
+    }
+    fill.value = withTiming(to, {
+      duration: DUR.crossfade,
+      easing: EASE.settle,
+    });
+    return () => cancelAnimation(fill);
+  }, [pct, reduced, fill]);
+  const fillStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: fill.value }],
+  }));
+
+  // The frontier heartbeat — the only repeating animation on this screen, and
+  // therefore the one that has to be gated properly.
+  //
+  // Both gates, not one. useImportJob deliberately keeps polling while this
+  // screen is parked (the poll is the worker), and the BackHandler above
+  // actively invites switching away mid-import — so a loop gated only on mount
+  // would run for the entire import, invisibly. That is the reports/10 class:
+  // ~40 MB/min of native heap with the screen off. The WORK continues while
+  // parked; the ANIMATION does not.
+  const appActive = useAppActive();
+  const focused = useNavFocused();
+  const pulse = useSharedValue(0.6);
+  const beating = !reduced && appActive && focused && !stalled;
+  useEffect(() => {
+    if (!beating) {
+      cancelAnimation(pulse);
+      pulse.value = 0.6;
+      return undefined;
+    }
+    pulse.value = withRepeat(
+      withTiming(1, { duration: DUR.breathe / 2, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(pulse);
+  }, [beating, pulse]);
 
   const at = frontierIndex(items);
   const start = Math.max(0, Math.min(at - WINDOW_BEHIND, items.length - WINDOW_ROWS));
@@ -491,17 +630,29 @@ function ProgressState({ job, pollError, stalled, onResume }) {
 
   return (
     <>
-      {/* Plain views, no reanimated: the value moves at most once every 2s, so
-          an animated width buys nothing and costs a shared value. */}
       <View style={[styles.track, { backgroundColor: t.line }]}>
-        <View
-          style={[styles.fill, { backgroundColor: t.accent, width: `${pct}%` }]}
+        <Animated.View
+          style={[styles.fill, { backgroundColor: t.accent }, fillStyle]}
         />
       </View>
-      <Text style={[styles.progressLine, { color: t.ink }]}>{line}</Text>
 
-      {/* Empty until the fetch phase commits — it writes every item row in one
-          transaction — so this simply isn't there for the first stage. */}
+      <View style={styles.stage}>
+        <Text style={[styles.progressLine, { color: t.ink }]}>{line}</Text>
+        <Text
+          accessibilityLabel={`${COPY.progress.elapsedLabel} ${fmtTime(elapsed)}`}
+          style={[type.time, { color: t.inkFaint }]}
+        >
+          {fmtTime(elapsed)}
+        </Text>
+      </View>
+
+      <Text style={[styles.word, { color: t.inkFaint }]}>{word}</Text>
+
+      {/* Nothing to list until the fetch phase commits — it writes every item
+          row in one transaction — so the house loader carries that stretch,
+          which is the one part of this screen that used to be entirely blank. */}
+      {window.length === 0 && <AuraLoader style={styles.loader} />}
+
       {window.length > 0 && (
         <View style={styles.rows}>
           {window.map((item, i) => (
@@ -510,6 +661,7 @@ function ProgressState({ job, pollError, stalled, onResume }) {
               item={item}
               isFrontier={start + i === at}
               waiting={start + i > at}
+              pulse={pulse}
             />
           ))}
         </View>
@@ -694,8 +846,20 @@ const styles = StyleSheet.create({
   ghosts: { gap: 9, paddingTop: 10 },
   ghost: { height: 42, borderRadius: 8 },
   track: { height: 3, borderRadius: 999, overflow: 'hidden', marginTop: 6 },
-  fill: { height: 3, borderRadius: 999 },
-  progressLine: { fontFamily: fonts.medium, fontSize: 15 },
+  // Full width, scaled from the left — scaleX runs on the UI thread where a
+  // percentage width cannot.
+  fill: { height: 3, borderRadius: 999, width: '100%', transformOrigin: 'left' },
+  stage: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  progressLine: { flex: 1, fontFamily: fonts.medium, fontSize: 15 },
+  // Prose, not a MonoLabel: these strings run to 36 characters and the
+  // uppercase label() register would make them shout over the line above.
+  word: { fontFamily: fonts.regular, fontSize: 12.5, marginTop: -3 },
+  loader: { alignSelf: 'flex-start', marginTop: 10 },
   rows: { gap: 2, paddingTop: 6 },
   row: {
     flexDirection: 'row',
@@ -704,6 +868,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 7,
   },
+  gutter: { width: 10, alignItems: 'center', justifyContent: 'center' },
+  dotDone: { width: 3, height: 3, borderRadius: 999 },
+  dotNow: { width: 5, height: 5, borderRadius: 999 },
   // Songs the drain has not reached yet, dimmed so the eye lands on the one
   // being worked rather than on the queue behind it.
   rowWaiting: { opacity: 0.45 },

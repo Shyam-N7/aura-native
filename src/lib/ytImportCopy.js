@@ -223,6 +223,49 @@ export const COPY = {
     // enough that something is wrong rather than slow.
     stalled: 'this is taking longer than it should.',
     resume: 'keep checking',
+    // The rotating under-line.
+    //
+    // Advanced by the POLL, never by a clock, and that is what makes it honest.
+    // The poll IS the server's worker — each GET performs a slice of the
+    // matching — so an advancing word is evidence that work actually happened,
+    // which is a stronger claim than any timer could make. A hung poll or a
+    // stalled job freezes the word automatically, beside the note that explains
+    // why, with no special case anywhere.
+    //
+    // The second half of the rule, which is what keeps it safe: every string in
+    // a pool must be true of the WHOLE phase, for its whole duration. If one
+    // were true only sometimes, then WHICH string is on screen becomes
+    // information — and information delivered on a polling schedule is a lie
+    // waiting to happen. So none of these counts, ranks, or estimates. The
+    // countable claim stays on the line above, driven by real counts.
+    words: {
+      queued: ['lining this up', 'about to start reading'],
+      fetching: [
+        'asking youtube for the list',
+        'reading the tracklist',
+        'youtube sends these a page at a time',
+        // Earns its place twice: it is true, and it explains why the song list
+        // below is still empty — fetchPhase writes every item row in ONE
+        // transaction at the end.
+        'writing them all down at once',
+      ],
+      matching: [
+        'looking this one up',
+        'searching our catalogue',
+        // These two quietly pre-teach the exact two facts the review screen
+        // will later use to justify its candidates.
+        'reading the title',
+        'comparing what came back',
+        'checking the length',
+      ],
+      closing: [
+        'nearly through the list',
+        'finishing the last few',
+        'putting the playlist together',
+      ],
+    },
+    // Spoken aloud rather than read as a bare numeral.
+    elapsedLabel: 'time so far',
     // Per-song status in the live list. The drain resolves items strictly in
     // position order (matchPhase: ORDER BY position ASC LIMIT 1), so "the one
     // being worked on" is the first item with no tier yet — a fact about the

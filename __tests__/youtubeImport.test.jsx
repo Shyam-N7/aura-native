@@ -2,6 +2,7 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { BackHandler } from 'react-native';
 import { ThemeProvider } from '../src/theme/ThemeContext';
+import { AuraLoader } from '../src/components/ui/AuraLoader';
 import YouTubeImportScreen from '../src/screens/YouTubeImportScreen';
 import { YouTubeReview } from '../src/overlays/YouTubeReview';
 import PlaylistsScreen from '../src/screens/PlaylistsScreen';
@@ -269,6 +270,108 @@ test('a finished window does not fall off the end of the list', async () => {
   expect(body).toContain('a');
   expect(body).toContain('c');
   expect(body).not.toContain(COPY.progress.row.working);
+});
+
+// ── The rotating word, and the rule that keeps it honest ────────────
+
+const wordsOnScreen = tree => {
+  const body = texts(tree.toJSON());
+  return Object.values(COPY.progress.words)
+    .flat()
+    .filter(w => body.includes(w));
+};
+
+test('the word advances on a POLL, because the poll is the work', async () => {
+  const tree = await startWith(midImport);
+  const before = wordsOnScreen(tree);
+  expect(before).toHaveLength(1);
+  expect(COPY.progress.words.matching).toContain(before[0]);
+
+  // A DISTINCT object — the harness otherwise resolves the same reference every
+  // tick, so setJob is a no-op and nothing turns.
+  pollImport.mockResolvedValue({ ...midImport });
+  await flush(() => jest.advanceTimersByTime(2000));
+  const after = wordsOnScreen(tree);
+  expect(after).toHaveLength(1);
+  expect(after[0]).not.toBe(before[0]);
+  expect(COPY.progress.words.matching).toContain(after[0]);
+});
+
+// The headline test. A word that kept cycling through a dead drain would be the
+// decorative loader this whole screen exists to avoid.
+test('a poll that never answers freezes the word', async () => {
+  const tree = await startWith(midImport);
+  const before = wordsOnScreen(tree);
+
+  pollImport.mockRejectedValue(new Error('down'));
+  await flush(() => jest.advanceTimersByTime(20000));
+
+  expect(wordsOnScreen(tree)).toEqual(before);
+  expect(texts(tree.toJSON())).toContain(COPY.progress.building);
+});
+
+test('each phase speaks only from its own vocabulary', async () => {
+  let tree = await startWith({ id: 'yti_a', status: 'queued', counts: {}, items: [] });
+  expect(COPY.progress.words.queued).toContain(wordsOnScreen(tree)[0]);
+
+  tree = await startWith({
+    id: 'yti_b', status: 'matching', counts: { total: 30, matching: 2 }, items: [],
+  });
+  expect(COPY.progress.words.closing).toContain(wordsOnScreen(tree)[0]);
+});
+
+// A pure data test, and the guard that stops someone adding "12 of 30 done" to
+// a pool in two years. The countable claim belongs on the stage line, which is
+// driven by real counts; the word must never carry one.
+test('no rotating word ever claims progress', () => {
+  for (const [phase, pool] of Object.entries(COPY.progress.words)) {
+    for (const w of pool) {
+      expect(`${phase}: ${w}`).not.toMatch(/\d/);
+      expect(`${phase}: ${w}`).not.toMatch(/\bof\b/);
+    }
+  }
+});
+
+// ── Elapsed, and the house loader ───────────────────────────────────
+
+test('the elapsed counter ticks, and is gone when the screen is', async () => {
+  // Recomputed from a stored start rather than accumulated, so this is also
+  // the assertion that backgrounding cannot make it drift.
+  const setSpy = jest.spyOn(global, 'setInterval');
+  const clearSpy = jest.spyOn(global, 'clearInterval');
+
+  const tree = await startWith(midImport);
+  await flush(() => jest.advanceTimersByTime(5000));
+  expect(texts(tree.toJSON())).toContain('0:05');
+  await flush(() => jest.advanceTimersByTime(60000));
+  expect(texts(tree.toJSON())).toContain('1:05');
+
+  // Every interval this screen opened is closed again. An uncancelled 1Hz
+  // ticker on a screen the stack keeps mounted is the cheap version of exactly
+  // the leak the animation gating exists to prevent.
+  const opened = setSpy.mock.results.map(r => r.value);
+  await ReactTestRenderer.act(async () => tree.unmount());
+  const closed = clearSpy.mock.calls.map(c => c[0]);
+  expect(opened.filter(id => !closed.includes(id))).toEqual([]);
+
+  setSpy.mockRestore();
+  clearSpy.mockRestore();
+});
+
+test('the blank stretch before any songs gets the house loader', async () => {
+  // fetchPhase writes every item row in ONE transaction at the end, so until it
+  // commits there is genuinely nothing to list — that stretch used to be a
+  // single line of text on an otherwise empty screen.
+  const tree = await startWith({
+    id: 'yti_a', status: 'fetching', counts: { total: 0 }, items: [],
+  });
+  expect(tree.root.findAllByType(AuraLoader)).toHaveLength(1);
+});
+
+test('the loader gives way once there is something specific to say', async () => {
+  const tree = await startWith(midImport);
+  expect(tree.root.findAllByType(AuraLoader)).toHaveLength(0);
+  expect(texts(tree.toJSON())).toContain('sixth song');
 });
 
 // On a stack screen the navigator owns back and would pop straight out — no
