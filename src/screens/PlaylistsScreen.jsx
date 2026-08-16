@@ -29,14 +29,16 @@ import { showToast } from '../lib/toast';
 import { confirm } from '../lib/confirm';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { CrumbBack } from '../components/detail/DetailChassis';
+import { Sheet } from '../components/ui/Sheet';
+import { SheetRow } from '../components/ui/SheetRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, type } from '../theme/tokens';
 
 // The playlists library, ported from web PlaylistsScreen: made-for-you mixes
 // (read-only, full suite), made by you (+ create), shared with you, and
 // saved-from-others — each group hidden when empty. The web's per-row
-// anchored menu holds exactly one action (delete or leave), so native goes
-// straight to the confirm from the ⋯ button.
+// anchored menu becomes a bottom sheet; it holds exactly one action (delete
+// or leave), and it exists anyway — see the note on menuFor.
 
 // Why home sometimes shows fewer mixes than this screen: home windows the
 // daypart mixes to their own local hours; here the full suite always shows,
@@ -79,6 +81,14 @@ export default function PlaylistsScreen({ navigation }) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [hintOn, setHintOn] = useState(() => hintAvailable('newPlaylist'));
+  // The playlist whose ⋯ menu is open, or null. The menu exists so that the
+  // dots do what dots promise: field report was "tapped 3 dots, clicked
+  // delete, no confirmation" — the dots went STRAIGHT to the confirm sheet,
+  // which therefore read as an options menu, and its red "delete" pill read as
+  // choosing an action rather than answering a question. The confirmation
+  // existed in code and was invisible in experience. Menu first, question
+  // second: two steps, each reading as itself.
+  const [menuFor, setMenuFor] = useState(null);
   const [ytOn, setYtOn] = useState(false);
   const inputRef = useRef(null);
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
@@ -256,8 +266,8 @@ export default function PlaylistsScreen({ navigation }) {
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={p.role === 'owner' ? `delete ${p.name}` : `leave ${p.name}`}
-        onPress={() => (p.role === 'owner' ? remove(p) : leave(p))}
+        accessibilityLabel={`${p.name} options`}
+        onPress={() => setMenuFor(p)}
         hitSlop={8}
         style={({ pressed }) => [styles.more, pressed && styles.pressed]}
       >
@@ -544,6 +554,34 @@ export default function PlaylistsScreen({ navigation }) {
           </>
         )}
       </BounceScrollView>
+
+      {/* The ⋯ menu. One row today, and that is fine — the point is the
+          structure, not the count: the destructive question must be a SECOND
+          step, asked by the confirm sheet that remove()/leave() already run. */}
+      {menuFor && (
+        <Sheet onClose={() => setMenuFor(null)} closeLabel="close options">
+          <SheetRow
+            danger
+            label={
+              // Same ownership predicate as the owned/joined partition above —
+              // a row without a role field is yours, not one you can leave.
+              !menuFor.shared || menuFor.role === 'owner'
+                ? 'delete playlist'
+                : 'leave playlist'
+            }
+            onPress={() => {
+              const p = menuFor;
+              // Close before asking, so the question is not stacked on the menu.
+              setMenuFor(null);
+              if (!p.shared || p.role === 'owner') {
+                remove(p);
+              } else {
+                leave(p);
+              }
+            }}
+          />
+        </Sheet>
+      )}
     </View>
   );
 }

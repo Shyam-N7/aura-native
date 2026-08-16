@@ -7,7 +7,9 @@ import {
   listPlaylists,
   listSavedPlaylists,
   getPlaylist,
+  deletePlaylist,
 } from '../src/api/playlists';
+import { confirm } from '../src/lib/confirm';
 import { listAutoPlaylists } from '../src/api/autoPlaylists';
 
 // The rev-poll's focus gate — these tests render bare (no NavigationContainer),
@@ -44,6 +46,9 @@ jest.mock('../src/api/playlists', () => ({
   unsavePlaylist: jest.fn(),
 }));
 jest.mock('../src/api/autoPlaylists', () => ({ listAutoPlaylists: jest.fn() }));
+// The real confirm() publishes to a sheet mounted in App; nothing renders it
+// here, so the promise would hang and the delete flow with it.
+jest.mock('../src/lib/confirm', () => ({ confirm: jest.fn() }));
 jest.mock('../src/lib/auth', () => ({
   getModeEpoch: () => 0,
   API_BASE: 'https://www.aurafm.live',
@@ -117,9 +122,69 @@ test('playlists library groups yours, shared-with-you and saved', async () => {
 
   byLabel(tree, 'Drive').props.onPress();
   expect(navigate).toHaveBeenCalledWith('Playlist', { id: 'p1' });
-  // Owner rows delete; joined rows leave.
-  expect(byLabel(tree, 'delete Drive')).toBeTruthy();
-  expect(byLabel(tree, 'leave Us')).toBeTruthy();
+  // The ⋯ opens a MENU now, per the field report: it used to go straight to
+  // the confirm sheet, which therefore read as a menu — and its red "delete"
+  // pill read as choosing an action, not answering a question.
+  expect(byLabel(tree, 'Drive options')).toBeTruthy();
+  expect(byLabel(tree, 'Us options')).toBeTruthy();
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('deleting a playlist is two steps: a menu, then a question', async () => {
+  listPlaylists.mockResolvedValue([
+    { id: 'p1', name: 'Drive', trackCount: 3, updatedAt: Date.now() },
+    {
+      id: 'p2', name: 'Us', trackCount: 5, shared: true, role: 'editor',
+      updatedAt: Date.now(),
+    },
+  ]);
+  listSavedPlaylists.mockResolvedValue([]);
+  listAutoPlaylists.mockResolvedValue([]);
+
+  const tree = await render(
+    <PlaylistsScreen
+      navigation={{
+        navigate: jest.fn(),
+        goBack: jest.fn(),
+        addListener: jest.fn(() => jest.fn()),
+      }}
+    />,
+  );
+
+  // Step one: the dots open a menu — nothing is asked, nothing is deleted.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'Drive options').props.onPress();
+  });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(deletePlaylist).not.toHaveBeenCalled();
+
+  // Step two: the menu row raises the confirm. Declining deletes nothing.
+  confirm.mockResolvedValueOnce(false);
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'delete playlist').props.onPress();
+  });
+  expect(confirm).toHaveBeenCalledWith(
+    expect.objectContaining({ title: 'delete "Drive"?' }),
+  );
+  expect(deletePlaylist).not.toHaveBeenCalled();
+
+  // Accepting deletes.
+  confirm.mockResolvedValueOnce(true);
+  deletePlaylist.mockResolvedValueOnce({});
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'Drive options').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'delete playlist').props.onPress();
+  });
+  expect(deletePlaylist).toHaveBeenCalledWith('p1');
+
+  // A collaborator's menu offers leave, not delete.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'Us options').props.onPress();
+  });
+  expect(byLabel(tree, 'leave playlist')).toBeTruthy();
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
