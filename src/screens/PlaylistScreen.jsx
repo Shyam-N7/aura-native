@@ -29,6 +29,10 @@ import {
   savePlaylist,
   unsavePlaylist,
 } from '../api/playlists';
+import { getFeatures, getYtLink, refreshPlaylist } from '../api/ytImport';
+import { useImportJob } from '../hooks/useImportJob';
+import { COPY as YT_COPY, copyForCode } from '../lib/ytImportCopy';
+import { YouTubeReview } from '../overlays/YouTubeReview';
 import { API_BASE, getUser } from '../lib/auth';
 import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
@@ -212,6 +216,71 @@ export default function PlaylistScreen({ route, navigation }) {
     load(ctl.signal);
     return () => ctl.abort();
   }, [load]);
+
+  // ── Check YouTube for new songs ───────────────────────────────────
+  //
+  // Gated on the deployment having the key AND on this playlist having a stored
+  // source row. The second is the real gate: the server writes a link row only
+  // for a FINITE playlist, never for a mix — a mix regenerates every time
+  // YouTube builds it, so there is nothing stable to diff against. "No row" and
+  // "not refreshable" are the same statement, so no kind check is needed here.
+  // Both lookups are session-cached and neither throws; a failure means no
+  // chip, which is the right way to fail — a button that 503s is worse than no
+  // button.
+  const [ytLink, setYtLink] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const {
+    job: refreshJob,
+    setJob: setRefreshJob,
+    live: refreshLive,
+  } = useImportJob(null);
+
+  useEffect(() => {
+    // A public view of someone else's playlist has nothing to refresh.
+    if (publicId) {
+      return undefined;
+    }
+    let alive = true;
+    getFeatures()
+      .then(f => (f.youtubeImport ? getYtLink(id) : null))
+      .then(link => {
+        if (alive) {
+          setYtLink(link ?? null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [id, publicId]);
+
+  // The refresh finished. Reuse `load` rather than writing a second fetch — it
+  // already handles both the owned and public shapes.
+  useEffect(() => {
+    if (!refreshJob || refreshLive) {
+      return;
+    }
+    load();
+    showToast(YT_COPY.refresh.added(refreshJob.counts?.auto ?? 0));
+  }, [refreshJob, refreshLive, load]);
+
+  const checkForNewSongs = async () => {
+    setRefreshing(true);
+    try {
+      const result = await refreshPlaylist(id);
+      if (!result.changed) {
+        showToast(YT_COPY.refresh.unchanged);
+        return;
+      }
+      setRefreshJob(result);
+    } catch (err) {
+      // YT_NO_LINK lands here and renders as the mixes explanation.
+      showToast(copyForCode(err.code, err.message).title);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const tracks = useMemo(() => hit.data?.tracks ?? [], [hit.data]);
   const shown = useMemo(
@@ -701,6 +770,43 @@ export default function PlaylistScreen({ route, navigation }) {
                   </Text>
                 </Pressable>
               )}
+              {!!ytLink && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={YT_COPY.refresh.action}
+                  disabled={refreshing || refreshLive}
+                  onPress={checkForNewSongs}
+                  style={({ pressed }) => [
+                    styles.visChip,
+                    { borderColor: t.line },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[label(9.5), { color: t.inkSoft }]}>
+                    {refreshing || refreshLive
+                      ? YT_COPY.refresh.checking
+                      : YT_COPY.refresh.action}
+                  </Text>
+                </Pressable>
+              )}
+              {!refreshLive &&
+                !reviewing &&
+                (refreshJob?.counts?.review ?? 0) > 0 && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={YT_COPY.done.reviewAction}
+                    onPress={() => setReviewing(true)}
+                    style={({ pressed }) => [
+                      styles.visChip,
+                      { borderColor: t.accent, backgroundColor: t.accentSoft },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[label(9.5), { color: t.accent }]}>
+                      {YT_COPY.done.reviewAction}
+                    </Text>
+                  </Pressable>
+                )}
             </View>
 
             {tracks.length === 0 && (
@@ -883,6 +989,22 @@ export default function PlaylistScreen({ route, navigation }) {
           </View>
         </Sheet>
       )}
+
+      {/* Rendered over this screen rather than pushed, so onDone can hand back
+          the re-polled job — navigation cannot return a value from a pop. */}
+      {reviewing && refreshJob && (
+        <YouTubeReview
+          job={refreshJob}
+          onDone={updated => {
+            if (updated) {
+              setRefreshJob(updated);
+            }
+            setReviewing(false);
+            load();
+          }}
+          onOpenPlaylist={() => setReviewing(false)}
+        />
+      )}
     </View>
   );
 }
@@ -935,6 +1057,10 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Wraps because this row can hold four controls (play all, visibility,
+    // save, check-for-new-songs) and they overflow a 360dp screen in one line.
+    // visChip already carries marginTop: 10, so a second line looks intended.
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 2,
   },

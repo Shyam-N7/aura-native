@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -21,6 +21,8 @@ import {
   listSavedPlaylists,
 } from '../api/playlists';
 import { listAutoPlaylists } from '../api/autoPlaylists';
+import { getFeatures } from '../api/ytImport';
+import { COPY as YT_COPY } from '../lib/ytImportCopy';
 import { getUser } from '../lib/auth';
 import { relTime } from '../lib/time';
 import { showToast } from '../lib/toast';
@@ -77,19 +79,54 @@ export default function PlaylistsScreen({ navigation }) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [hintOn, setHintOn] = useState(() => hintAvailable('newPlaylist'));
+  const [ytOn, setYtOn] = useState(false);
   const inputRef = useRef(null);
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    listPlaylists({ signal: ctl.signal })
+  const reload = useCallback(signal => {
+    listPlaylists({ signal })
       .then(data => setHit({ data, error: null }))
       .catch(err => {
         if (err.name !== 'AbortError') {
           setHit({ data: null, error: err.message });
         }
       });
+  }, []);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    reload(ctl.signal);
     return () => ctl.abort();
+  }, [reload]);
+
+  // Refetch when the screen is focused again. The stack keeps parked screens
+  // MOUNTED (see hooks/useNavFocused), so coming back from a finished import
+  // would otherwise show the list exactly as it was — without the playlist the
+  // import just created, which reads as an import that failed.
+  useEffect(() => {
+    let first = true;
+    return navigation.addListener('focus', () => {
+      if (first) {
+        first = false;
+        return;
+      }
+      reload();
+    });
+  }, [navigation, reload]);
+
+  // Whether this deployment has the YouTube key set. A button that leads to a
+  // 503 is worse than no button, so a failed lookup means no entry point —
+  // getFeatures never throws and answers {} when it cannot tell.
+  useEffect(() => {
+    let alive = true;
+    getFeatures().then(f => {
+      if (alive) {
+        setYtOn(!!f.youtubeImport);
+      }
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // Smart sets from the user's listening (read-only). Best-effort: if it
@@ -405,6 +442,33 @@ export default function PlaylistsScreen({ navigation }) {
               <Text style={[label(8), styles.hint, { color: t.accent }]}>
                 start your first playlist
               </Text>
+            )}
+            {/* The one gate that decides whether this feature exists for a
+                user. On web the equivalent edit was the piece that got missed,
+                and the refresh button sat built-and-unreachable for four PRs. */}
+            {ytOn && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={YT_COPY.entry.label}
+                onPress={() => navigation.navigate('YouTubeImport')}
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              >
+                <Cover fallback="▶" />
+                <View style={styles.rowMeta}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.rowName, { color: t.ink }]}
+                  >
+                    {YT_COPY.entry.label}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[label(8.5), { color: t.inkSoft }]}
+                  >
+                    {YT_COPY.entry.hint}
+                  </Text>
+                </View>
+              </Pressable>
             )}
           </>
         )}
