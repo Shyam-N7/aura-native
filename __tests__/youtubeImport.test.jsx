@@ -2,7 +2,9 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { BackHandler } from 'react-native';
 import { ThemeProvider } from '../src/theme/ThemeContext';
-import { AuraLoader } from '../src/components/ui/AuraLoader';
+import { Image } from 'react-native';
+import { ImportJourney, sceneLayout } from '../src/components/yt/ImportJourney';
+import { revealItem } from '../src/screens/YouTubeImportScreen';
 import YouTubeImportScreen from '../src/screens/YouTubeImportScreen';
 import { YouTubeReview } from '../src/overlays/YouTubeReview';
 import PlaylistsScreen from '../src/screens/PlaylistsScreen';
@@ -343,8 +345,12 @@ test('the elapsed counter ticks, and is gone when the screen is', async () => {
   const tree = await startWith(midImport);
   await flush(() => jest.advanceTimersByTime(5000));
   expect(texts(tree.toJSON())).toContain('0:05');
-  await flush(() => jest.advanceTimersByTime(60000));
-  expect(texts(tree.toJSON())).toContain('1:05');
+  // A short second advance proves it keeps recomputing; a minute-long one
+  // proved only fmtTime's formatting, at the cost of stepping every running
+  // animation through 60s of fake frames — which is what pushed this past the
+  // 5s jest timeout on CI's slower runner.
+  await flush(() => jest.advanceTimersByTime(7000));
+  expect(texts(tree.toJSON())).toContain('0:12');
 
   // Every interval this screen opened is closed again. An uncancelled 1Hz
   // ticker on a screen the stack keeps mounted is the cheap version of exactly
@@ -358,20 +364,103 @@ test('the elapsed counter ticks, and is gone when the screen is', async () => {
   clearSpy.mockRestore();
 });
 
-test('the blank stretch before any songs gets the house loader', async () => {
+test('the journey scene carries the whole import, blank stretch included', async () => {
   // fetchPhase writes every item row in ONE transaction at the end, so until it
-  // commits there is genuinely nothing to list — that stretch used to be a
-  // single line of text on an otherwise empty screen.
-  const tree = await startWith({
+  // commits there is genuinely nothing to list — the scene (left mass breathing,
+  // traveller wobbling) is what keeps that stretch from being an empty screen.
+  let tree = await startWith({
     id: 'yti_a', status: 'fetching', counts: { total: 0 }, items: [],
   });
-  expect(tree.root.findAllByType(AuraLoader)).toHaveLength(1);
+  expect(tree.root.findAllByType(ImportJourney)).toHaveLength(1);
+
+  // And it stays as the centrepiece once the rows exist.
+  tree = await startWith(midImport);
+  expect(tree.root.findAllByType(ImportJourney)).toHaveLength(1);
+  expect(texts(tree.toJSON())).toContain('sixth song');
 });
 
-test('the loader gives way once there is something specific to say', async () => {
-  const tree = await startWith(midImport);
-  expect(tree.root.findAllByType(AuraLoader)).toHaveLength(0);
-  expect(texts(tree.toJSON())).toContain('sixth song');
+// ── The scene's sizing is pure math, tested as math (Skia is mocked) ─
+
+test('scene masses track the real counts and never vanish', () => {
+  const empty = sceneLayout({});
+  expect(empty.left.r).toBeGreaterThan(0);
+  expect(empty.right.r).toBeGreaterThan(0);
+
+  const mid = sceneLayout({ total: 30, matching: 20, auto: 8, review: 2 });
+  const late = sceneLayout({ total: 30, matching: 2, auto: 26, review: 2 });
+  // The story reads left-to-right: remaining shrinks, the playlist grows.
+  expect(late.left.r).toBeLessThan(mid.left.r);
+  expect(late.right.r).toBeGreaterThan(mid.right.r);
+  expect(mid.review).toBe(2);
+});
+
+// ── The match reveal card: what the last song BECAME ────────────────
+
+const resolvedWith = candidates => ({
+  id: 'r1',
+  position: 1,
+  youtube: { title: 'Milana | Kannada Movie Video Song | HD', durationSec: 300 },
+  tier: 'auto',
+  state: 'done',
+  candidates,
+});
+
+test('the reveal picks the newest resolved item that carries its winner', () => {
+  const winner = { id: 'c1', title: 'Milana', artist: 'Sonu Nigam', imageUrl: 'https://x/150x150.jpg' };
+  const items = [
+    { ...resolvedWith([winner]), id: 'old', position: 0 },
+    { ...resolvedWith([winner]), id: 'new', position: 1 },
+    // A cache hit: resolved, but candidates:null — it cannot be shown, so the
+    // card holds the newest row that CAN be, rather than a blank.
+    { ...resolvedWith(null), id: 'cachehit', position: 2 },
+    { id: 'pending', position: 3, tier: null, youtube: { title: 'next' } },
+  ];
+  expect(revealItem(items)?.id).toBe('new');
+  // Nothing resolved with a winner yet → no card, not an empty shell.
+  expect(revealItem([{ id: 'p', tier: null, youtube: {} }])).toBeNull();
+});
+
+test('the card shows the clean identity over the messy source title', async () => {
+  const winner = { id: 'c1', title: 'Milana', artist: 'Sonu Nigam', imageUrl: 'https://x/150x150.jpg' };
+  const tree = await startWith({
+    ...midImport,
+    items: [resolvedWith([winner]), { id: 'p2', position: 2, tier: null, youtube: { title: 'next up' } }],
+  });
+  const body = texts(tree.toJSON());
+  expect(body).toContain(COPY.progress.found);
+  expect(body).toContain('Milana');
+  expect(body).toContain('Sonu Nigam');
+  expect(body).toContain(COPY.progress.was('Milana | Kannada Movie Video Song | HD'));
+});
+
+test('a cache-hit import shows no card rather than an empty one', async () => {
+  const tree = await startWith({
+    ...midImport,
+    items: [resolvedWith(null), { id: 'p2', position: 2, tier: null, youtube: { title: 'next' } }],
+  });
+  expect(texts(tree.toJSON())).not.toContain(COPY.progress.found);
+});
+
+test('the done payoff fans the matched covers', async () => {
+  const winner = i => ({
+    id: `c${i}`, title: `Song ${i}`, artist: 'A', imageUrl: `https://x/${i}_150x150.jpg`,
+  });
+  const tree = await startWith({
+    id: 'yti_a',
+    status: 'done',
+    playlistId: 'p1',
+    counts: { total: 3, auto: 3, review: 0, unmatched: 0, matching: 0 },
+    items: [1, 2, 3].map(i => ({
+      id: String(i), position: i, tier: 'auto', state: 'done',
+      youtube: { title: `yt ${i}` }, candidates: [winner(i)],
+    })),
+  });
+  const images = tree.root
+    .findAllByType(Image)
+    .filter(n => n.props.source?.uri?.includes('150x150'));
+  expect(images.length).toBeGreaterThanOrEqual(3);
+  // The canonical sentence survives as the a11y label while the numeral rolls.
+  expect(texts(tree.toJSON())).toContain('songs added');
 });
 
 // On a stack screen the navigator owns back and would pop straight out — no

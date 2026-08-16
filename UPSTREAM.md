@@ -93,11 +93,33 @@ showing carries no information and cannot lie; a test asserts no pool string
 contains a digit or the word "of".
 
 The bar uses `scaleX`, never `width: '<pct>%'` — percentage width cannot run on
-the UI thread. The frontier pulse is the screen's only repeating animation and
-gates on `useAppActive() && useNavFocused()`, because this screen's poll keeps
-running while parked and its `BackHandler` invites switching away mid-import:
-the work continues, the animation does not. Rows carry `LinearTransition` but
-deliberately no `entering` — see the reanimated/Fabric note on `Shelf.jsx`.
+the UI thread. The frontier pulse gates on `useAppActive() && useNavFocused()`,
+because this screen's poll keeps running while parked and its `BackHandler`
+invites switching away mid-import: the work continues, the animation does not.
+Rows carry `LinearTransition` but deliberately no `entering` — see the
+reanimated/Fabric note on `Shelf.jsx`.
+
+The third round made the import a spectacle, and none of it exists on web:
+
+- **`components/yt/ImportJourney.jsx`** — the import told in the app's own goo
+  language: remaining songs as a mass on the left, the playlist growing on the
+  right, the one being matched wobbling between them. The metaball canvas
+  mounts ONLY for the ~700ms of a landing (the dock's 460ms-morph-window
+  pattern; `Goo.jsx`: "keep the canvas as small as the effect") — the idle
+  layer is plain transform views. Travels fire only on a real `auto` delta;
+  radius/wobble claim nothing, exactly `AuraLoader`'s licence. Blobs are opaque
+  accent and exit by radius, never fade — the goo threshold eats
+  semi-transparency.
+- **The match reveal card** — the winning catalog track (art, clean title,
+  artist) over `was: <yt title>`. The data was always on the wire:
+  `writeVerdict` stores `candidates[0]` for every fresh non-unmatched row; only
+  cache hits store null, and then no card renders rather than a stale one.
+- **Art discs** replace the gutter dots on rows that carry their winner, and
+  the done state fans up to five matched covers with a `CountUp` numeral
+  (canonical sentence kept as the a11y label).
+- **Phase rise-ins** via manual shared values — deliberately not a full
+  crossfade: holding the old phase behind an animation callback means stale
+  content and a completion racing teardown, to animate an exit nobody watches.
 
 **Lyrics overlay.** Reduced motion never enters cinematic mode — deliberate,
 the 800 ms dissolve would be a one-frame snap. "Song ended" is a position

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
+  Image,
   Keyboard,
   Pressable,
   StyleSheet,
@@ -16,6 +17,7 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
@@ -23,10 +25,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { CrumbBack } from '../components/detail/DetailChassis';
-import { AuraLoader } from '../components/ui/AuraLoader';
+import { CountUp } from '../components/ui/CountUp';
+import { ImportJourney } from '../components/yt/ImportJourney';
 import { useAppActive } from '../hooks/useAppActive';
 import { useNavFocused } from '../hooks/useNavFocused';
 import { fmtTime } from '../utils/fmtTime';
+import { artUrl } from '../utils/artUrl';
 import { DUR, EASE } from '../theme/motion';
 import { useTheme } from '../theme/ThemeContext';
 import { previewLink, startImport, cancelImport } from '../api/ytImport';
@@ -239,57 +243,126 @@ export default function YouTubeImportScreen({ navigation }) {
           from youtube.
         </Text>
 
-        {phase === 'paste' && (
-          <PasteState
-            url={url}
-            setUrl={changeUrl}
-            inputRef={inputRef}
-            checking={checking}
-            linkError={linkError}
-          />
-        )}
+        <PhaseBody
+          phase={phase}
+          render={shown => (
+            <>
+              {shown === 'paste' && (
+                <PasteState
+                  url={url}
+                  setUrl={changeUrl}
+                  inputRef={inputRef}
+                  checking={checking}
+                  linkError={linkError}
+                />
+              )}
 
-        {phase === 'confirm' && (
-          <ConfirmState
-            preview={preview}
-            starting={starting}
-            linkError={linkError}
-            onBack={() => changeUrl('')}
-            onStart={begin}
-          />
-        )}
+              {shown === 'confirm' && (
+                <ConfirmState
+                  preview={preview}
+                  starting={starting}
+                  linkError={linkError}
+                  onBack={() => changeUrl('')}
+                  onStart={begin}
+                />
+              )}
 
-        {phase === 'progress' && (
-          <ProgressState
-            job={job}
-            pollError={pollError}
-            stalled={stalled}
-            onResume={resume}
-          />
-        )}
+              {shown === 'progress' && (
+                <ProgressState
+                  job={job}
+                  pollError={pollError}
+                  stalled={stalled}
+                  onResume={resume}
+                />
+              )}
 
-        {phase === 'failed' && (
-          <FailedState
-            job={job}
-            onRetry={() => {
-              setJob(null);
-              changeUrl('');
-            }}
-            onClose={() => navigation.goBack()}
-          />
-        )}
+              {shown === 'failed' && (
+                <FailedState
+                  job={job}
+                  onRetry={() => {
+                    setJob(null);
+                    changeUrl('');
+                  }}
+                  onClose={() => navigation.goBack()}
+                />
+              )}
 
-        {phase === 'done' && (
-          <DoneState
-            job={job}
-            onReview={() => setReviewing(true)}
-            onOpen={open}
-            onLater={() => navigation.goBack()}
-          />
-        )}
+              {shown === 'done' && (
+                <DoneState
+                  job={job}
+                  onReview={() => setReviewing(true)}
+                  onOpen={open}
+                  onLater={() => navigation.goBack()}
+                />
+              )}
+            </>
+          )}
+        />
       </BounceScrollView>
     </View>
   );
+}
+
+// Each state RISES IN when the flow reaches it: content swaps immediately and
+// only the entrance animates. Deliberately not a full crossfade — holding the
+// old phase on screen behind an animation callback means 120ms of stale
+// content, a runOnJS, and a completion callback that can race teardown, all to
+// animate an exit nobody is looking at. Manual shared values, not
+// entering=/exiting= (the reanimated/Fabric abort class documented on
+// Shelf.jsx — this screen is torn down mid-flight by design). A child
+// component, so the screen's hook order is untouched by its early return into
+// review.
+function PhaseBody({ phase, render }) {
+  const reduced = useReducedMotion();
+  const v = useSharedValue(1);
+  const prev = useRef(phase);
+  useEffect(() => {
+    if (prev.current === phase) {
+      return undefined;
+    }
+    prev.current = phase;
+    if (reduced) {
+      v.value = 1;
+      return undefined;
+    }
+    v.value = 0;
+    v.value = withTiming(1, { duration: 240, easing: EASE.enter });
+    return () => cancelAnimation(v);
+  }, [phase, reduced, v]);
+  const style = useAnimatedStyle(() => ({
+    opacity: v.value,
+    transform: [{ translateY: (1 - v.value) * 6 }],
+  }));
+  return (
+    <Animated.View style={[styles.phaseBody, style]}>
+      {render(phase)}
+    </Animated.View>
+  );
+}
+
+// One summary line rising into place, slightly after the one above it — the
+// SensingScreen reveal, done with opacity so the text is in the tree from the
+// first frame (a conditional mount would hide copy from anyone — or any test —
+// reading the screen immediately).
+function StaggerIn({ delay, children }) {
+  const reduced = useReducedMotion();
+  const v = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) {
+      v.value = 1;
+      return undefined;
+    }
+    v.value = withDelay(
+      delay,
+      withTiming(1, { duration: DUR.screen, easing: EASE.enter }),
+    );
+    return () => cancelAnimation(v);
+  }, [delay, reduced, v]);
+  const style = useAnimatedStyle(() => ({
+    opacity: v.value,
+    transform: [{ translateY: (1 - v.value) * 8 }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 function Note({ title, body, warn }) {
@@ -462,6 +535,27 @@ const ROW_LAYOUT = LinearTransition.duration(280).reduceMotion(
   ReduceMotion.System,
 );
 
+// A resolved row's art disc pops in once — a one-shot, so no gating needed.
+function ArtDisc({ uri }) {
+  const v = useSharedValue(0);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    v.value = reduced
+      ? 1
+      : withTiming(1, { duration: DUR.upNext, easing: EASE.enter });
+    return () => cancelAnimation(v);
+  }, [v, reduced]);
+  const style = useAnimatedStyle(() => ({
+    opacity: v.value,
+    transform: [{ scale: 0.6 + v.value * 0.4 }],
+  }));
+  return (
+    <Animated.View style={style}>
+      <Image source={{ uri }} style={styles.rowArt} />
+    </Animated.View>
+  );
+}
+
 function ImportRow({ item, isFrontier, waiting, pulse }) {
   const { t } = useTheme();
   const status = rowStatus(item, isFrontier);
@@ -477,6 +571,10 @@ function ImportRow({ item, isFrontier, waiting, pulse }) {
     opacity: 0.3 + pulse.value * 0.7,
     transform: [{ scale: 0.85 + pulse.value * 0.3 }],
   }));
+  // The winning track's cover, where the row carries one — fresh matches do,
+  // cache hits store candidates: null and keep the dot. The window becomes a
+  // strip of real album art: the playlist visibly assembling.
+  const art = !waiting && !isFrontier && item.candidates?.[0]?.imageUrl;
   return (
     <Animated.View
       layout={ROW_LAYOUT}
@@ -489,7 +587,9 @@ function ImportRow({ item, isFrontier, waiting, pulse }) {
           <Animated.View
             style={[styles.dotNow, { backgroundColor: t.accent }, dotStyle]}
           />
-        ) : waiting ? null : (
+        ) : waiting ? null : art ? (
+          <ArtDisc uri={artUrl(item.candidates[0], 150)} />
+        ) : (
           <View style={[styles.dotDone, { backgroundColor: t.inkFaint }]} />
         )}
       </View>
@@ -510,6 +610,98 @@ function ImportRow({ item, isFrontier, waiting, pulse }) {
           {status.text}
         </Text>
       )}
+    </Animated.View>
+  );
+}
+
+/**
+ * The item the reveal card should show: the most recently RESOLVED item that
+ * actually carries its winner (fresh matches store candidates[0] — the catalog
+ * track's title, artist and art; cache hits store null).
+ *
+ * Deterministic on purpose: scan backwards from the frontier and take the
+ * highest-position row with a candidate. The card re-animates only when this
+ * item's id changes, and renders nothing at all before one exists — an empty
+ * shell, or a stale card dressed as news, would both be worse than absence.
+ */
+export function revealItem(items) {
+  const at = frontierIndex(items);
+  for (let i = at - 1; i >= 0; i--) {
+    if (items[i]?.tier && items[i].tier !== 'unmatched' && items[i].candidates?.[0]) {
+      return items[i];
+    }
+  }
+  return null;
+}
+
+// What the last song BECAME: art, clean catalog identity, and the messy
+// YouTube title underneath — the before and after of the entire feature,
+// updating live as the drain works. This is the data the screen used to throw
+// away while printing "added".
+function RevealCard({ item }) {
+  const { t } = useTheme();
+  const reduced = useReducedMotion();
+  const v = useSharedValue(1);
+  const shownId = useRef(item.id);
+  // Manual swap, not entering=/exiting= (the reanimated/Fabric abort class
+  // documented on Shelf.jsx — this screen is torn down mid-flight by design).
+  useEffect(() => {
+    if (shownId.current === item.id) {
+      return undefined;
+    }
+    shownId.current = item.id;
+    if (reduced) {
+      v.value = 1;
+      return undefined;
+    }
+    v.value = 0;
+    v.value = withTiming(1, { duration: DUR.upNext, easing: EASE.enter });
+    return () => cancelAnimation(v);
+  }, [item.id, reduced, v]);
+  const style = useAnimatedStyle(() => ({
+    opacity: v.value,
+    transform: [{ translateY: (1 - v.value) * 6 }],
+  }));
+  const c = item.candidates[0];
+  const review = item.tier === 'review';
+  return (
+    <Animated.View
+      style={[styles.reveal, { backgroundColor: t.surface }, style]}
+    >
+      {c.imageUrl ? (
+        <Image source={{ uri: artUrl(c, 150) }} style={styles.revealArt} />
+      ) : (
+        <View
+          style={[
+            styles.revealArt,
+            styles.revealArtFallback,
+            { backgroundColor: t.accentSoft },
+          ]}
+        >
+          <Text style={[styles.revealLetter, { color: t.accent }]}>
+            {c.title?.[0]?.toUpperCase() ?? '·'}
+          </Text>
+        </View>
+      )}
+      <View style={styles.revealMeta}>
+        <Text style={[label(7.5), { color: review ? t.accent : t.inkFaint }]}>
+          {review ? COPY.progress.row.review : COPY.progress.found}
+        </Text>
+        <Text numberOfLines={1} style={[styles.revealTitle, { color: t.ink }]}>
+          {c.title}
+        </Text>
+        {!!c.artist && (
+          <Text
+            numberOfLines={1}
+            style={[styles.revealArtist, { color: t.inkSoft }]}
+          >
+            {c.artist}
+          </Text>
+        )}
+        <Text numberOfLines={1} style={[styles.revealWas, { color: t.inkFaint }]}>
+          {COPY.progress.was(item.youtube?.title ?? '')}
+        </Text>
+      </View>
     </Animated.View>
   );
 }
@@ -628,8 +820,16 @@ function ProgressState({ job, pollError, stalled, onResume }) {
   const start = Math.max(0, Math.min(at - WINDOW_BEHIND, items.length - WINDOW_ROWS));
   const window = items.slice(start, start + WINDOW_ROWS);
 
+  const reveal = revealItem(items);
+
   return (
     <>
+      {/* The story, told with real state: songs still to match on the left,
+          the playlist growing on the right, the one being matched wobbling
+          between them — and a goo fuse when a poll lands one. Carries the
+          fetch stretch too, which used to be a blank screen with one line. */}
+      <ImportJourney counts={job.counts} live={!stalled} />
+
       <View style={[styles.track, { backgroundColor: t.line }]}>
         <Animated.View
           style={[styles.fill, { backgroundColor: t.accent }, fillStyle]}
@@ -648,10 +848,7 @@ function ProgressState({ job, pollError, stalled, onResume }) {
 
       <Text style={[styles.word, { color: t.inkFaint }]}>{word}</Text>
 
-      {/* Nothing to list until the fetch phase commits — it writes every item
-          row in one transaction — so the house loader carries that stretch,
-          which is the one part of this screen that used to be entirely blank. */}
-      {window.length === 0 && <AuraLoader style={styles.loader} />}
+      {reveal && <RevealCard item={reveal} />}
 
       {window.length > 0 && (
         <View style={styles.rows}>
@@ -739,8 +936,35 @@ function DoneState({ job, onReview, onOpen, onLater }) {
   const { t } = useTheme();
   const { auto = 0, review = 0, unmatched = 0 } = job.counts ?? {};
   const nothing = auto === 0 && review === 0;
+  // These are in your playlist now: up to five of the matched covers, fanned.
+  // Only rows that carry their winner have art (cache hits store null), so the
+  // fan simply shows fewer — or none, and then it doesn't render.
+  const fanArts = (job.items ?? [])
+    .filter(i => (i.tier === 'auto' || i.state === 'accepted') && i.candidates?.[0]?.imageUrl)
+    .slice(0, 5);
   return (
     <>
+      {fanArts.length > 0 && (
+        <StaggerIn delay={0}>
+          <View style={styles.fan}>
+            {fanArts.map((i, idx) => (
+              <Image
+                key={i.id}
+                source={{ uri: artUrl(i.candidates[0], 150) }}
+                style={[
+                  styles.fanArt,
+                  idx > 0 && styles.fanArtOverlap,
+                  {
+                    transform: [{ rotate: `${(idx - (fanArts.length - 1) / 2) * 8}deg` }],
+                    zIndex: idx,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        </StaggerIn>
+      )}
+
       <View style={[styles.note, { backgroundColor: t.surface }]}>
         {nothing ? (
           <Text style={[styles.noteBody, { color: t.ink }]}>
@@ -748,23 +972,36 @@ function DoneState({ job, onReview, onOpen, onLater }) {
           </Text>
         ) : (
           <>
-            <Text style={[styles.summaryHead, { color: t.ink }]}>
-              {COPY.done.ready(auto)}
+            {/* The number rolls up (CountUp); the canonical sentence stays the
+                copy pack's, worn as the accessibility label so a screen reader
+                hears it whole rather than a numeral and a fragment. */}
+            <Text
+              accessibilityLabel={COPY.done.ready(auto)}
+              style={[styles.summaryHead, { color: t.ink }]}
+            >
+              <CountUp to={auto} />
+              {COPY.done.ready(auto).replace(/^\d+/, '')}
             </Text>
             {review > 0 && (
-              <Text style={[styles.noteBody, { color: t.inkSoft }]}>
-                {COPY.done.review(review)}
-              </Text>
+              <StaggerIn delay={140}>
+                <Text style={[styles.noteBody, { color: t.inkSoft }]}>
+                  {COPY.done.review(review)}
+                </Text>
+              </StaggerIn>
             )}
             {unmatched > 0 && (
-              <Text style={[styles.noteBody, { color: t.inkFaint }]}>
-                {COPY.done.missing(unmatched)}
-              </Text>
+              <StaggerIn delay={280}>
+                <Text style={[styles.noteBody, { color: t.inkFaint }]}>
+                  {COPY.done.missing(unmatched)}
+                </Text>
+              </StaggerIn>
             )}
             {review === 0 && unmatched === 0 && (
-              <Text style={[styles.noteBody, { color: t.inkSoft }]}>
-                {COPY.done.allAuto}
-              </Text>
+              <StaggerIn delay={140}>
+                <Text style={[styles.noteBody, { color: t.inkSoft }]}>
+                  {COPY.done.allAuto}
+                </Text>
+              </StaggerIn>
             )}
           </>
         )}
@@ -859,7 +1096,6 @@ const styles = StyleSheet.create({
   // Prose, not a MonoLabel: these strings run to 36 characters and the
   // uppercase label() register would make them shout over the line above.
   word: { fontFamily: fonts.regular, fontSize: 12.5, marginTop: -3 },
-  loader: { alignSelf: 'flex-start', marginTop: 10 },
   rows: { gap: 2, paddingTop: 6 },
   row: {
     flexDirection: 'row',
@@ -868,7 +1104,32 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 7,
   },
-  gutter: { width: 10, alignItems: 'center', justifyContent: 'center' },
+  phaseBody: { gap: 9 },
+  // Wide enough for the 22px art disc; dots simply centre in the same space.
+  gutter: { width: 24, alignItems: 'center', justifyContent: 'center' },
+  rowArt: { width: 22, height: 22, borderRadius: 999 },
+  reveal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    padding: 12,
+  },
+  revealArt: { width: 48, height: 48, borderRadius: 8 },
+  revealArtFallback: { alignItems: 'center', justifyContent: 'center' },
+  revealLetter: { fontFamily: fonts.semibold, fontSize: 19 },
+  revealMeta: { flex: 1, minWidth: 0, gap: 1 },
+  revealTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  revealArtist: { fontFamily: fonts.regular, fontSize: 12.5 },
+  revealWas: { fontFamily: fonts.regular, fontSize: 11, marginTop: 3 },
+  fan: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  fanArt: { width: 64, height: 64, borderRadius: 10 },
+  fanArtOverlap: { marginLeft: -26 },
   dotDone: { width: 3, height: 3, borderRadius: 999 },
   dotNow: { width: 5, height: 5, borderRadius: 999 },
   // Songs the drain has not reached yet, dimmed so the eye lands on the one
