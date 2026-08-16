@@ -266,6 +266,11 @@ export const COPY = {
     },
     // Spoken aloud rather than read as a bare numeral.
     elapsedLabel: 'time so far',
+    // The match reveal card: what the last song BECAME. `found` is its
+    // eyebrow; `was` shows the messy YouTube title underneath the clean
+    // catalog identity — the before and after of the whole feature.
+    found: 'found',
+    was: t => `was: ${t}`,
     // Per-song status in the live list. The drain resolves items strictly in
     // position order (matchPhase: ORDER BY position ASC LIMIT 1), so "the one
     // being worked on" is the first item with no tier yet — a fact about the
