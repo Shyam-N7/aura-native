@@ -372,6 +372,7 @@ const reviewJob = {
           title: 'Milana',
           artist: 'Sonu Nigam',
           album: 'Milana',
+          language: 'Kannada',
           durationSec: 312,
           reading: { title: 'Milana', artists: ['Sonu Nigam'] },
         },
@@ -395,6 +396,9 @@ test('review explains the reading and the length drift, then records the choice'
   expect(body).toContain('we read this as "Milana" by Sonu Nigam');
   // "12s longer" is a fact the user can act on; "0.83" is not.
   expect(body).toContain('12s longer');
+  // The matcher deliberately sends same-title-different-language rows here, so
+  // the language has to be visible or the question is unanswerable.
+  expect(body).toContain('Kannada');
 
   await flush(() => byLabel(tree, 'Milana').props.onPress());
   expect(resolveItem).toHaveBeenCalledWith('yti_a', '1', { trackId: 'c1' });
