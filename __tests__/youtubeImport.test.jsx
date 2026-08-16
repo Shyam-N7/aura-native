@@ -169,6 +169,108 @@ test('starting the import shows countable progress and says leaving is safe', as
   expect(body).toContain(COPY.progress.safeToLeave);
 });
 
+// ── The live import screen ──────────────────────────────────────────
+
+const item = (id, title, tier) => ({
+  id,
+  position: Number(id),
+  youtube: { title, channel: 'c', durationSec: 200 },
+  tier: tier ?? null,
+  state: tier && tier !== 'review' ? 'done' : 'pending',
+});
+
+// 12 songs, the first 5 resolved — so the server's cursor is on #6.
+const midImport = {
+  id: 'yti_a',
+  status: 'matching',
+  counts: { total: 12, matching: 7, auto: 4, review: 1, unmatched: 0 },
+  items: [
+    item('1', 'first song', 'auto'),
+    item('2', 'second song', 'auto'),
+    item('3', 'third song', 'review'),
+    item('4', 'fourth song', 'unmatched'),
+    item('5', 'fifth song', 'auto'),
+    item('6', 'sixth song'),
+    item('7', 'seventh song'),
+    item('8', 'eighth song'),
+    item('9', 'ninth song'),
+    item('10', 'tenth song'),
+    item('11', 'eleventh song'),
+    item('12', 'twelfth song'),
+  ],
+};
+
+async function startWith(job) {
+  previewLink.mockResolvedValue({ windowed: false });
+  startImport.mockResolvedValue(job);
+  pollImport.mockResolvedValue(job);
+  const tree = await render(<YouTubeImportScreen navigation={nav()} />);
+  await typeUrl(tree, 'https://youtube.com/playlist?list=PL1');
+  await flush(() => jest.advanceTimersByTime(350));
+  await flush(() => byLabel(tree, COPY.confirm.action).props.onPress());
+  return tree;
+}
+
+test('the queued moment says starting — there are no items yet to show', async () => {
+  const tree = await startWith({ id: 'yti_a', status: 'queued', counts: {} });
+  const body = texts(tree.toJSON());
+  expect(body).toContain(COPY.progress.starting);
+  // fetchPhase writes every item row in one transaction at the END of the
+  // fetch, so there is genuinely nothing to list yet.
+  expect(body).not.toContain(COPY.progress.row.working);
+});
+
+test('the last few songs get their own line, driven by the real remaining count', async () => {
+  const tree = await startWith({
+    id: 'yti_a',
+    status: 'matching',
+    counts: { total: 30, matching: 2 },
+    items: [],
+  });
+  expect(texts(tree.toJSON())).toContain(COPY.progress.almostThere(28, 30));
+});
+
+test('the live list names the song being matched and what happened to the rest', async () => {
+  const tree = await startWith(midImport);
+  const body = texts(tree.toJSON());
+
+  // The frontier is the first item with no tier — the server drains strictly in
+  // position order, so this is its actual cursor, not an estimate.
+  expect(body).toContain('sixth song');
+  expect(body).toContain(COPY.progress.row.working);
+  // Each resolved tier wears its own outcome.
+  expect(body).toContain(COPY.progress.row.matched);
+  expect(body).toContain(COPY.progress.row.review);
+  expect(body).toContain(COPY.progress.row.missing);
+});
+
+test('the window follows the work instead of showing the whole tracklist', async () => {
+  const tree = await startWith(midImport);
+  const body = texts(tree.toJSON());
+
+  // 8 rows around the frontier: a few done above it, the rest waiting below.
+  expect(body).toContain('third song');
+  expect(body).toContain('sixth song');
+  // Neither end of a 12-song import is on screen at once.
+  expect(body).not.toContain('first song');
+  expect(body).not.toContain('twelfth song');
+});
+
+test('a finished window does not fall off the end of the list', async () => {
+  // Every item resolved — the frontier is past the last row, and the window
+  // must clamp rather than slice past the end.
+  const tree = await startWith({
+    id: 'yti_a',
+    status: 'matching',
+    counts: { total: 3, matching: 0 },
+    items: [item('1', 'a', 'auto'), item('2', 'b', 'auto'), item('3', 'c', 'auto')],
+  });
+  const body = texts(tree.toJSON());
+  expect(body).toContain('a');
+  expect(body).toContain('c');
+  expect(body).not.toContain(COPY.progress.row.working);
+});
+
 // On a stack screen the navigator owns back and would pop straight out — no
 // confirm, no cancel — and popping unmounts the hook, which stops the drain
 // with a once-a-day cron as the only recovery.

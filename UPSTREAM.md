@@ -58,10 +58,27 @@ Blanket adaptations (apply to every port):
 | src/lib/ytImportCopy.js | src/lib/ytImportCopy.js | keys and error CODES unchanged (they are the contract with the server); strings lowercased to the native voice. `progress.safeToLeave` rescoped: the web's "leave this screen" is backwards here — the stack keeps parked screens mounted, so opening another screen keeps the poll running and only backing out stops it. +`progress.stalled`/`progress.resume` for the tick cap below |
 | src/api/ytImport.js | src/api/ytImport.js | web's hand-rolled `fail()` → the house `apiError` (it already carries `status` + `code`). Every signal-taking call composes its OWN deadline: `fetchAuthed` disables its 15s one the moment a caller passes a signal (`lib/auth.js:557`) and RN's fetch has none, so `pollImport` would otherwise have no timeout at all. A client timeout is raised as `TimeoutError`/`YT_TIMEOUT`, never `AbortError`. `startImport`/`refreshPlaylist` pass `deadlineMs: 45000` for the server's 20s inline drain. `getFeatures` is session-memoised like the link set; both clear on session reset |
 | src/hooks/useImportJob.js | src/hooks/useImportJob.js | next tick scheduled in `finally`, so an unexpected throw cannot silently end the loop; `MAX_TICKS` cap (this JS context survives backgrounding for hours, a web tab does not) with a `resume()`; deliberately NOT focus/AppState-gated, unlike the rev-poll in PlaylistScreen — that poll is a read, this one is the worker |
-| src/screens/YouTubeImportScreen.jsx | src/screens/YouTubeImportScreen.jsx | hardware back during a live import runs the same stop-import confirm (a stack pop would unmount the hook and stop the drain with no dialog); `autoFocus` is the only paste affordance there is — no clipboard library, no Expo; the serif/italic hero is one line (single typeface, no italic face); `navigation.replace` into the finished playlist |
+| src/screens/YouTubeImportScreen.jsx | src/screens/YouTubeImportScreen.jsx | hardware back during a live import runs the same stop-import confirm (a stack pop would unmount the hook and stop the drain with no dialog); `autoFocus` is the only paste affordance there is — no clipboard library, no Expo; the serif/italic hero is one line (single typeface, no italic face); `navigation.replace` into the finished playlist. Progress is a live list, not a bar — see the note below |
 | src/overlays/YouTubeReview.jsx | src/screens/YouTubeReviewScreen.jsx | a component over its host, not a stack route: two hosts need it (import and playlist-refresh) and `onDone(updated)` must hand back the re-polled job, which navigation params cannot carry |
 
 ## Notes that outgrew the table
+
+**YouTube import progress.** The web renders a bar and one line; native renders
+a bar, a stage line, and a live list of the songs as they resolve. The list is a
+sliding window of 8 rows centred on the song being matched, not the whole
+tracklist — the full list looks right for ten seconds, then the frontier scrolls
+under the fold and the screen is static again, and auto-scrolling to follow it
+fights the user's thumb.
+
+Naming the current song is honest rather than decorative because `matchPhase`
+claims items with `ORDER BY position ASC LIMIT 1`: the queue drains strictly in
+order, so the first item with no `tier` is the server's actual cursor. Every
+line is derived from real counts, so a stalled drain freezes the words and the
+bar together instead of easing toward a finish that is not happening. Rows show
+YouTube's own title, not the catalog's cleaner one — swapping it at resolve time
+would make rows appear to rewrite themselves mid-import.
+
+Port this back to web rather than letting it diverge.
 
 **Lyrics overlay.** Reduced motion never enters cinematic mode — deliberate,
 the 800 ms dissolve would be a one-frame snap. "Song ended" is a position
