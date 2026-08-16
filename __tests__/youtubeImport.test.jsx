@@ -345,8 +345,12 @@ test('the elapsed counter ticks, and is gone when the screen is', async () => {
   const tree = await startWith(midImport);
   await flush(() => jest.advanceTimersByTime(5000));
   expect(texts(tree.toJSON())).toContain('0:05');
-  await flush(() => jest.advanceTimersByTime(60000));
-  expect(texts(tree.toJSON())).toContain('1:05');
+  // A short second advance proves it keeps recomputing; a minute-long one
+  // proved only fmtTime's formatting, at the cost of stepping every running
+  // animation through 60s of fake frames — which is what pushed this past the
+  // 5s jest timeout on CI's slower runner.
+  await flush(() => jest.advanceTimersByTime(7000));
+  expect(texts(tree.toJSON())).toContain('0:12');
 
   // Every interval this screen opened is closed again. An uncancelled 1Hz
   // ticker on a screen the stack keeps mounted is the cheap version of exactly
