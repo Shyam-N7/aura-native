@@ -250,7 +250,13 @@ export function YouTubeReview({ job, onDone, onOpenPlaylist }) {
                     numberOfLines={2}
                     style={[styles.candSub, { color: t.inkSoft }]}
                   >
+                    {/* Language first. When this screen is asking about the
+                        same song title in two languages — the case the
+                        matcher's tiebreak sends here on purpose — it is the
+                        ONLY thing separating the rows, and it belongs where
+                        the eye lands rather than at the end of a run of dots. */}
                     {[
+                      c.language,
                       c.artist,
                       c.album,
                       mmss(c.durationSec),

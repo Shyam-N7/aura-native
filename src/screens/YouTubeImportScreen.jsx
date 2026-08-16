@@ -399,13 +399,96 @@ function ConfirmState({ preview, starting, linkError, onBack, onStart }) {
   );
 }
 
+// How many songs the live list shows at once, and how many of them sit BEHIND
+// the one being matched. Deliberately small: this is a window that follows the
+// work, not the whole tracklist. Rendering all N rows looks right for ten
+// seconds and then the frontier scrolls under the fold and the screen goes
+// static again — which is the problem this feature exists to fix. Auto-scrolling
+// instead would fight the user's thumb. A sliding window needs neither.
+const WINDOW_ROWS = 8;
+const WINDOW_BEHIND = 3;
+
+// The song the server is on right now.
+//
+// Not an estimate. matchPhase claims items with ORDER BY position ASC LIMIT 1,
+// so the queue drains strictly in order: everything above the first
+// tier-less item is finished and everything below it is waiting. That is a fact
+// about the server's cursor, which is the only reason it is honest to put a
+// song title on screen and say we are working on it.
+function frontierIndex(items) {
+  const i = items.findIndex(it => !it.tier);
+  return i === -1 ? items.length : i;
+}
+
+function rowStatus(item, isFrontier) {
+  if (isFrontier) {
+    return { text: COPY.progress.row.working, tone: 'accent' };
+  }
+  if (!item.tier) {
+    return null; // still waiting — say nothing rather than something empty
+  }
+  if (item.tier === 'auto') {
+    return { text: COPY.progress.row.matched, tone: 'soft' };
+  }
+  if (item.tier === 'review') {
+    return { text: COPY.progress.row.review, tone: 'soft' };
+  }
+  return { text: COPY.progress.row.missing, tone: 'faint' };
+}
+
+function ImportRow({ item, isFrontier, waiting }) {
+  const { t } = useTheme();
+  const status = rowStatus(item, isFrontier);
+  const tone =
+    status?.tone === 'accent'
+      ? t.accent
+      : status?.tone === 'faint'
+      ? t.inkFaint
+      : t.inkSoft;
+  return (
+    <View style={[styles.row, waiting && styles.rowWaiting]}>
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.rowTitle,
+          { color: isFrontier ? t.ink : waiting ? t.inkFaint : t.inkSoft },
+        ]}
+      >
+        {/* YouTube's own name for it, warts and all. Swapping in the catalog's
+            cleaner title once a row resolves would make rows appear to rewrite
+            themselves mid-import, which reads as a glitch. */}
+        {item.youtube?.title ?? ''}
+      </Text>
+      {status && (
+        <Text style={[label(8), styles.rowStatus, { color: tone }]}>
+          {status.text}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function ProgressState({ job, pollError, stalled, onResume }) {
   const { t } = useTheme();
   const { done, total, pct } = progressOf(job);
+  const items = job.items ?? [];
+
+  // Three stages, each read off real state. Nothing here advances on a timer,
+  // so a drain that stalls freezes the words and the bar together — which is
+  // the truth, and the whole reason this is not a decorative loader.
   const line =
-    job.status === 'fetching' || total === 0
+    job.status === 'queued'
+      ? COPY.progress.starting
+      : job.status === 'fetching' || total === 0
       ? COPY.progress.fetching
+      : (job.counts?.matching ?? 0) <= 3 || pct >= 90
+      ? COPY.progress.almostThere(done, total)
       : COPY.progress.matching(done, total);
+
+  const at = frontierIndex(items);
+  const start = Math.max(0, Math.min(at - WINDOW_BEHIND, items.length - WINDOW_ROWS));
+  const window = items.slice(start, start + WINDOW_ROWS);
+
   return (
     <>
       {/* Plain views, no reanimated: the value moves at most once every 2s, so
@@ -416,6 +499,22 @@ function ProgressState({ job, pollError, stalled, onResume }) {
         />
       </View>
       <Text style={[styles.progressLine, { color: t.ink }]}>{line}</Text>
+
+      {/* Empty until the fetch phase commits — it writes every item row in one
+          transaction — so this simply isn't there for the first stage. */}
+      {window.length > 0 && (
+        <View style={styles.rows}>
+          {window.map((item, i) => (
+            <ImportRow
+              key={item.id ?? start + i}
+              item={item}
+              isFrontier={start + i === at}
+              waiting={start + i > at}
+            />
+          ))}
+        </View>
+      )}
+
       {/* True, and worth saying: the stack keeps this screen mounted when the
           user opens another, and the daily cron finishes whatever is left.
           Without this line people sit and watch. */}
@@ -597,6 +696,19 @@ const styles = StyleSheet.create({
   track: { height: 3, borderRadius: 999, overflow: 'hidden', marginTop: 6 },
   fill: { height: 3, borderRadius: 999 },
   progressLine: { fontFamily: fonts.medium, fontSize: 15 },
+  rows: { gap: 2, paddingTop: 6 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 7,
+  },
+  // Songs the drain has not reached yet, dimmed so the eye lands on the one
+  // being worked rather than on the queue behind it.
+  rowWaiting: { opacity: 0.45 },
+  rowTitle: { flex: 1, minWidth: 0, fontFamily: fonts.regular, fontSize: 13.5 },
+  rowStatus: { flexShrink: 0 },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

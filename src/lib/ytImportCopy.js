@@ -197,11 +197,20 @@ export const COPY = {
   },
 
   progress: {
+    // The queued moment. There are no items yet — fetchPhase writes them all in
+    // one transaction at the END of the fetch — so for this stretch the stage
+    // line is genuinely the only thing there is to show.
+    starting: 'starting…',
     fetching: 'reading the playlist…',
     // Progress must be countable. "finding songs — 12 of 30" is the only honest
     // progress indicator here, since per-song time varies by an order of
     // magnitude between a cache hit and a cold search.
     matching: (done, total) => `finding songs — ${done} of ${total}`,
+    // Same count, different words, for the last few. Earned rather than
+    // decorative: it is driven by the real remaining count, so a drain that
+    // stalls at 28 of 30 sits on this line instead of easing toward a finish
+    // that is not happening.
+    almostThere: (done, total) => `almost there — ${done} of ${total}`,
     building: 'building your playlist…',
     // Rescoped from the web's "you can leave this screen". Native is the other
     // way round: the stack keeps parked screens MOUNTED, so opening another
@@ -214,6 +223,17 @@ export const COPY = {
     // enough that something is wrong rather than slow.
     stalled: 'this is taking longer than it should.',
     resume: 'keep checking',
+    // Per-song status in the live list. The drain resolves items strictly in
+    // position order (matchPhase: ORDER BY position ASC LIMIT 1), so "the one
+    // being worked on" is the first item with no tier yet — a fact about the
+    // server's cursor, not a guess dressed up as one. That is what makes it
+    // honest to name the song on screen.
+    row: {
+      working: 'matching…',
+      matched: 'added',
+      review: 'needs a check',
+      missing: 'not in our catalogue',
+    },
   },
 
   // The result summary. Ordered auto / review / missing, because that is
