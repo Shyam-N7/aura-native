@@ -45,6 +45,21 @@ jest.mock('../src/api/playlists', () => ({
   unsavePlaylist: jest.fn(),
 }));
 jest.mock('../src/api/autoPlaylists', () => ({ listAutoPlaylists: jest.fn() }));
+// The streaming tail drives the real useImportJob hook; only the wire is
+// mocked. isLive is the real predicate — the loop's stop condition is under
+// test and must not be stubbed into agreement.
+jest.mock('../src/api/ytImport', () => ({
+  getFeatures: jest.fn(() => Promise.resolve({})),
+  getYtLink: jest.fn(() => Promise.resolve(null)),
+  refreshPlaylist: jest.fn(),
+  pollImport: jest.fn(),
+  invalidateYtLinks: jest.fn(),
+  isLive: status => ['queued', 'fetching', 'matching'].includes(status),
+}));
+// The review overlay is its own tested surface; here it only needs to exist.
+jest.mock('../src/overlays/YouTubeReview', () => ({
+  YouTubeReview: () => null,
+}));
 // The real confirm() publishes to a sheet mounted in App; nothing renders it
 // here, so the promise would hang and the delete flow with it.
 jest.mock('../src/lib/confirm', () => ({ confirm: jest.fn() }));
@@ -239,5 +254,101 @@ test('playlist detail shows hero, share chip, added-by and row actions', async (
   expect(sheet).toContain('only you');
   expect(sheet).toContain('make a public view link');
 
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+
+test('the streaming handoff: footer counts up, rows refetch, review takes over', async () => {
+  jest.useFakeTimers();
+  const { pollImport } = require('../src/api/ytImport');
+  const { COPY: YT } = require('../src/lib/ytImportCopy');
+
+  const playlistOf = n => ({
+    id: 'p9', name: 'Trip', shared: false, canEdit: true, isPublic: false,
+    updatedAt: 1, collaborators: [],
+    tracks: Array.from({ length: n }, (_, i) => ({
+      id: `t${i}`, title: `Song ${i}`, artist: 'A', language: 'ta',
+    })),
+  });
+  // Paired to the flow: the initial load, then one refetch per poll that
+  // landed songs (the poll's counts trigger it), then the terminal refetch.
+  getPlaylist
+    .mockResolvedValueOnce(playlistOf(16))
+    .mockResolvedValueOnce(playlistOf(16))
+    .mockResolvedValueOnce(playlistOf(24))
+    .mockResolvedValue(playlistOf(58));
+  const liveCounts = (auto, matching) => ({
+    total: 60, auto, review: 0, unmatched: 0, matching,
+  });
+  pollImport
+    .mockResolvedValueOnce({
+      id: 'yti_9', status: 'matching', playlistId: 'p9',
+      counts: liveCounts(16, 44), items: [],
+    })
+    .mockResolvedValueOnce({
+      id: 'yti_9', status: 'matching', playlistId: 'p9',
+      counts: liveCounts(24, 36), items: [],
+    })
+    .mockResolvedValue({
+      id: 'yti_9', status: 'ready', playlistId: 'p9',
+      counts: { total: 60, auto: 55, review: 3, unmatched: 2, matching: 0 },
+      items: [],
+    });
+
+  const setParams = jest.fn();
+  const tree = await render(
+    <PlaylistScreen
+      route={{ params: { id: 'p9', importJobId: 'yti_9' } }}
+      navigation={{ goBack: jest.fn(), setParams, addListener: jest.fn(() => jest.fn()) }}
+    />,
+  );
+  // Bare seed → immediate first poll; the param is consumed exactly once.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(0);
+  });
+  expect(pollImport).toHaveBeenCalledTimes(1);
+  expect(setParams).toHaveBeenCalledWith({ importJobId: undefined });
+  expect(texts(tree.toJSON())).toContain(YT.streaming.footer(16, 60));
+
+  // Next poll lands more songs: the playlist refetches, the footer counts up.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(2000);
+  });
+  await ReactTestRenderer.act(async () => {});
+  expect(texts(tree.toJSON())).toContain(YT.streaming.footer(24, 60));
+
+  // Terminal with review left: the footer becomes the review entry.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(2000);
+  });
+  await ReactTestRenderer.act(async () => {});
+  expect(texts(tree.toJSON())).toContain(YT.streaming.review(3));
+
+  // Entering review retires the chip (the overlay owns the screen now).
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, YT.streaming.review(3)).props.onPress();
+  });
+  expect(texts(tree.toJSON())).not.toContain(YT.streaming.review(3));
+
+  await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
+});
+
+test('without the handoff param the playlist screen is inert — no footer, no polls', async () => {
+  const { pollImport } = require('../src/api/ytImport');
+  const { COPY: YT } = require('../src/lib/ytImportCopy');
+  getPlaylist.mockResolvedValue({
+    id: 'p1', name: 'Quiet', shared: false, canEdit: true, isPublic: false,
+    updatedAt: 1, collaborators: [],
+    tracks: [{ id: 't1', title: 'One', artist: 'A', language: 'ta' }],
+  });
+  const tree = await render(
+    <PlaylistScreen
+      route={{ params: { id: 'p1' } }}
+      navigation={{ goBack: jest.fn(), setParams: jest.fn(), addListener: jest.fn(() => jest.fn()) }}
+    />,
+  );
+  expect(pollImport).not.toHaveBeenCalled();
+  expect(texts(tree.toJSON())).not.toContain(YT.streaming.footer(1, 1));
   await ReactTestRenderer.act(() => tree.unmount());
 });

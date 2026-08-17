@@ -50,6 +50,15 @@ export function useImportJob(initialJob) {
   // Refs, not state: the polling loop reads these and must not be a reason to
   // re-render or to re-create itself.
   const timerRef = useRef(null);
+  // A BARE seed — a job with an id but no counts — is a screen arriving
+  // mid-import knowing nothing (PlaylistScreen seeded from the handoff
+  // param). It polls IMMEDIATELY: there is no fresher data to wait out, and
+  // the first FAST_MS of a streaming screen would otherwise be a blank
+  // footer. A full job (from the POST, or any later poll) keeps the 2s first
+  // delay — its data is seconds old at most. Render-time ref write, read at
+  // effect time: deliberate, so `job` need not be an effect dependency.
+  const bareRef = useRef(false);
+  bareRef.current = job != null && job.counts == null;
   const abortRef = useRef(null);
   const tickRef = useRef(0);
   const stoppedRef = useRef(false);
@@ -154,7 +163,7 @@ export function useImportJob(initialJob) {
       }
     };
 
-    timerRef.current = setTimeout(tick, FAST_MS);
+    timerRef.current = setTimeout(tick, bareRef.current ? 0 : FAST_MS);
     // Covers unmount AND the transition to a terminal status, because `live` is
     // in the dependency list. Both must stop the timer; only one of them is
     // obvious, and the other is the one that would leak.

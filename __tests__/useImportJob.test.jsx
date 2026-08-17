@@ -42,6 +42,15 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 
+test('a bare seed polls immediately — a screen arriving mid-job knows nothing', async () => {
+  // The handoff param seeds {id, status} with no counts: the playlist screen
+  // must not stare at a blank footer for the first 2s.
+  pollImport.mockResolvedValue(LIVE);
+  await mount({ id: 'yti_a', status: 'matching' });
+  await tickBy(0);
+  expect(pollImport).toHaveBeenCalledTimes(1);
+});
+
 test('the first poll waits 2s, and does not fire early', async () => {
   pollImport.mockResolvedValue(LIVE);
   await mount(LIVE);

@@ -145,6 +145,13 @@ export const IMPORT_ERRORS = {
     body: "an update shipped but its database step hasn't run yet. nothing was lost — imports resume the moment it does.",
     retryable: false,
   },
+  YT_EXPIRED: {
+    // The retention prune stopped a job that sat unfinished past the 30-day
+    // window. The playlist keeps what arrived — cancel semantics, by time.
+    title: 'that import never finished',
+    body: 'it sat too long, so we stopped it. everything already added is still in your playlist.',
+    retryable: false,
+  },
   YT_INTERNAL: {
     title: 'something went wrong on our side',
     body: 'nothing was lost — try again.',
@@ -284,12 +291,13 @@ export const COPY = {
     // being worked on" is the first item with no tier yet — a fact about the
     // server's cursor, not a guess dressed up as one. That is what makes it
     // honest to name the song on screen.
-    // Labels under the journey scene's two masses — the story made legible:
-    // songs still to match on the left, the playlist growing on the right.
-    scene: {
-      toGo: n => `${n} to go`,
-      added: n => `${n} added`,
-    },
+    // Streaming handoff: the playlist exists mid-import (server creates it
+    // after ~16 resolved) and these carry the user into it while the rest
+    // streams in behind them.
+    openNow: 'open it now',
+    openNowHint: 'the rest will keep arriving',
+    autoOpen: 'opening in a moment — tap to stay',
+    cancelKeeps: 'songs already added will stay in your playlist.',
     row: {
       working: 'matching…',
       matched: 'added',
@@ -300,6 +308,14 @@ export const COPY = {
 
   // The result summary. Ordered auto / review / missing, because that is
   // descending order of "already done for you".
+  // The playlist-screen streaming tail: the footer under the last row while
+  // songs are still arriving, and what it settles into when they stop.
+  streaming: {
+    footer: (n, total) => `adding the rest — ${n} of ${total}`,
+    settled: n => `all ${n} in`,
+    paused: 'paused — tap to keep going',
+    review: n => `${n} to check — whenever you like`,
+  },
   done: {
     ready: auto => `${auto} ${auto === 1 ? 'song' : 'songs'} added`,
     // ~35% of an import lands here. It is a normal part of the flow, so the

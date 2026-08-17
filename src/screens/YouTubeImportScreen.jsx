@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
   Image,
@@ -27,7 +27,7 @@ import { BounceScrollView } from '../components/ui/Bounce';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { CountUp } from '../components/ui/CountUp';
-import { ImportJourney } from '../components/yt/ImportJourney';
+import { PressScale } from '../components/ui/PressScale';
 import { useAppActive } from '../hooks/useAppActive';
 import { useNavFocused } from '../hooks/useNavFocused';
 import { fmtTime } from '../utils/fmtTime';
@@ -132,10 +132,100 @@ export default function YouTubeImportScreen({ navigation }) {
     }
   };
 
+  // ── The streaming handoff ──────────────────────────────────────────
+  //
+  // Once the server has created the playlist mid-import (playlistId non-null
+  // while still live) and it holds enough songs to be worth opening, the pill
+  // appears — and, for a user who is actually watching, a 3s timer walks them
+  // in on its own. The timer is a JS setTimeout, never an animation callback:
+  // it must fire under reduced motion too. Latched: flickers of the gate
+  // (counts wobbling across a poll) must not re-arm a cancelled timer.
+  const [handoff, setHandoff] = useState(false);
+  const [autoOpening, setAutoOpening] = useState(false);
+  const autoTimerRef = useRef(null);
+  const sweep = useSharedValue(0);
+  const screenActive = useAppActive();
+  const screenFocused = useNavFocused();
+  const reducedHere = useReducedMotion();
+
+  const openEarly = useCallback(() => {
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+    // replace, not navigate: the import screen's job is done the moment the
+    // playlist takes over as the streaming surface — and replace unmounts
+    // this screen, which stops its poll; the playlist screen's hook becomes
+    // the worker with no overlap.
+    const p = jobRef.current;
+    if (p?.playlistId) {
+      navigation.replace('Playlist', {
+        id: String(p.playlistId),
+        importJobId: String(p.id),
+      });
+    }
+  }, [navigation]);
+
+  const cancelAutoOpen = useCallback(() => {
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+    cancelAnimation(sweep);
+    sweep.value = 0;
+    setAutoOpening(false);
+  }, [sweep]);
+
+  // jobRef: openEarly fires from a timer; it must read the CURRENT job, not
+  // the one closed over when the timer armed.
+  const jobRef = useRef(null);
+  jobRef.current = job;
+
+  const handoffReady =
+    live && !!job?.playlistId && (job?.counts?.auto ?? 0) >= 10;
+  useEffect(() => {
+    if (!handoffReady || handoff) {
+      return;
+    }
+    setHandoff(true);
+    // Auto-open only when actually being watched — a user who parked the
+    // screen must not be teleported on return. No restart either: coming back
+    // finds the pill waiting, which is the calmer promise.
+    if (screenActive && screenFocused) {
+      setAutoOpening(true);
+      if (!reducedHere) {
+        sweep.value = withTiming(1, { duration: 3000, easing: Easing.linear });
+      }
+      autoTimerRef.current = setTimeout(openEarly, 3000);
+    }
+  }, [handoffReady, handoff, screenActive, screenFocused, reducedHere, sweep, openEarly]);
+
+  // Leaving or backgrounding mid-countdown cancels it.
+  useEffect(() => {
+    if (autoOpening && !(screenActive && screenFocused)) {
+      cancelAutoOpen();
+    }
+  }, [autoOpening, screenActive, screenFocused, cancelAutoOpen]);
+
+  useEffect(() => () => {
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+    }
+  }, []);
+
+  const sweepStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: sweep.value }],
+  }));
+
   const abandon = async () => {
     const ok = await confirm({
       title: COPY.cancel.confirm,
-      body: COPY.cancel.body,
+      // Once the playlist exists mid-import, cancelling keeps it (server
+      // behaviour since the first cut) — the sheet must say so, or "stop"
+      // reads as "throw away what arrived".
+      body: job?.playlistId
+        ? `${COPY.cancel.body} ${COPY.progress.cancelKeeps}`
+        : COPY.cancel.body,
       action: COPY.cancel.stop,
       danger: true,
     });
@@ -217,6 +307,9 @@ export default function YouTubeImportScreen({ navigation }) {
         // Without this the first tap on "import" only dismisses the keyboard.
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        // Any touch cancels a pending auto-open: the user reached for the
+        // screen, so the screen stops deciding for them. The pill stays.
+        onTouchStart={autoOpening ? cancelAutoOpen : undefined}
       >
         <View style={styles.head}>
           <CrumbBack onPress={() => (live ? abandon() : navigation.goBack())} />
@@ -274,6 +367,12 @@ export default function YouTubeImportScreen({ navigation }) {
                   pollError={pollError}
                   stalled={stalled}
                   onResume={resume}
+                  pill={{
+                    show: handoff && live,
+                    autoOpening,
+                    sweepStyle,
+                    onPress: openEarly,
+                  }}
                 />
               )}
 
@@ -754,7 +853,7 @@ export function phaseOf(job) {
   return (job?.counts?.matching ?? 0) <= 3 || pct >= 90 ? 'closing' : 'matching';
 }
 
-function ProgressState({ job, pollError, stalled, onResume }) {
+function ProgressState({ job, pollError, stalled, onResume, pill }) {
   const { t } = useTheme();
   const { done, total, pct } = progressOf(job);
   const items = job.items ?? [];
@@ -857,12 +956,12 @@ function ProgressState({ job, pollError, stalled, onResume }) {
 
   return (
     <>
-      {/* The story, told with real state: songs still to match on the left,
-          the playlist growing on the right, the one being matched wobbling
-          between them — and a goo fuse when a poll lands one. Carries the
-          fetch stretch too, which used to be a blank screen with one line. */}
-      <ImportJourney counts={job.counts} live={!stalled} />
-
+      {/* No abstract scene here any more — field verdict: "too subtle,
+          concept isn't working". The arriving songs themselves are the
+          progress display: the reveal card celebrates the newest match, the
+          windowed rows below it name the one being worked and what happened
+          to the rest, and the pill (once the playlist exists) hands the user
+          into it while the rest keeps streaming. */}
       <View style={[styles.track, { backgroundColor: t.line }]}>
         <Animated.View
           style={[styles.fill, { backgroundColor: t.accent }, fillStyle]}
@@ -880,6 +979,32 @@ function ProgressState({ job, pollError, stalled, onResume }) {
       </View>
 
       <Text style={[styles.word, { color: t.inkFaint }]}>{word}</Text>
+
+      {/* The handoff. Rendered from screen-owned state: the pill invites, and
+          for a user who just watches, the sweep fills as a 3s timer walks
+          them in. Any touch anywhere on this scroll cancels the timer — the
+          pill stays for a manual tap. */}
+      {pill?.show && (
+        <View style={styles.pillWrap}>
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel={COPY.progress.openNow}
+            onPress={pill.onPress}
+            style={[styles.openPill, { borderColor: t.accent }]}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.pillSweep, { backgroundColor: t.accentSoft }, pill.sweepStyle]}
+            />
+            <Text style={[styles.openPillText, { color: t.accent }]}>
+              {COPY.progress.openNow}
+            </Text>
+          </PressScale>
+          <Text style={[label(8.5), styles.pillHint, { color: t.inkFaint }]}>
+            {pill.autoOpening ? COPY.progress.autoOpen : COPY.progress.openNowHint}
+          </Text>
+        </View>
+      )}
 
       {reveal && <RevealCard item={reveal} />}
 
@@ -977,10 +1102,6 @@ function DoneState({ job, onReview, onOpen, onLater }) {
     .slice(0, 5);
   return (
     <>
-      {/* The scene, resolved: everything on the right, nothing left to do.
-          live={false}, so it holds still — the payoff is a settled picture. */}
-      <ImportJourney counts={job.counts} live={false} />
-
       {fanArts.length > 0 && (
         <View style={styles.fan}>
           {fanArts.map((i, idx) => (
@@ -1151,6 +1272,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
+  pillWrap: { alignItems: 'center', gap: 6, marginVertical: 4 },
+  openPill: {
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 26,
+    overflow: 'hidden',
+  },
+  pillSweep: {
+    ...StyleSheet.absoluteFillObject,
+    transformOrigin: 'left',
+  },
+  openPillText: { fontFamily: fonts.semibold, fontSize: 15 },
+  pillHint: { textAlign: 'center' },
   revealArt: { width: 48, height: 48, borderRadius: 8 },
   revealRing: {
     position: 'absolute',
