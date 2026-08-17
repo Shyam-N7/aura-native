@@ -8,6 +8,16 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  LinearTransition,
+  ReduceMotion,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { BounceFlatList } from '../components/ui/Bounce';
@@ -55,6 +65,7 @@ import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
+import { EASE } from '../theme/motion';
 import { useBackToTop } from '../hooks/useBackToTop';
 import { countRender } from '../lib/renderCount';
 
@@ -79,6 +90,44 @@ const SORT_KEY = PLAYLIST_SORT_KEY;
 const SORTS = PLAYLIST_SORTS;
 
 const POLL_MS = 15000;
+
+// Row settling while the stream is live — LikedScreen's exact recipe. Armed
+// ONLY while streaming: the layout-animation machinery runs a per-cell pass
+// every frame while enabled (the QueueSheet drag jitter finding), and a
+// static playlist should pay nothing.
+const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
+  ReduceMotion.System,
+);
+
+// One arriving row's materialization: the Arrive idiom (YouScreen.jsx) — a
+// shared value cancelled on unmount, never an entering= animation (the
+// reanimated 4.2.3/Fabric abort class). Stagger capped so a big batch reads
+// as a quick cascade, not a minute of drip.
+function RowArrive({ animate, i = 0, children }) {
+  const reduced = useReducedMotion();
+  const on = animate && !reduced;
+  const v = useSharedValue(on ? 0 : 1);
+  useEffect(() => {
+    if (!on) {
+      v.value = 1;
+      return undefined;
+    }
+    v.value = 0;
+    v.value = withDelay(
+      70 * Math.min(i, 6),
+      withTiming(1, { duration: 380, easing: EASE.enter }),
+    );
+    return () => cancelAnimation(v);
+  }, [on, i, v]);
+  const style = useAnimatedStyle(() => ({
+    opacity: v.value,
+    transform: [{ translateY: (1 - v.value) * 14 }],
+  }));
+  // Always the same tree shape: an `animate` flip must restyle, never remount
+  // the row underneath (a remount would blink every settled row when the
+  // stream ends).
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
 
 // Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
 // (`onPress={() => playFrom(i)}`), a fresh object (the `menu={{extras: …}}`
@@ -173,7 +222,8 @@ export default function PlaylistScreen({ route, navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  const { id = null, publicId = null, share = false } = route.params ?? {};
+  const { id = null, publicId = null, share = false, importJobId = null } =
+    route.params ?? {};
   const [hit, setHit] = useState({ data: null, error: null });
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -245,7 +295,49 @@ export default function PlaylistScreen({ route, navigation }) {
     job: refreshJob,
     setJob: setRefreshJob,
     live: refreshLive,
+    stalled: jobStalled,
+    resume: jobResume,
   } = useImportJob(null);
+
+  // ── The streaming tail ─────────────────────────────────────────────
+  //
+  // Arrived via the import screen's handoff: the playlist already exists and
+  // the server is still matching. The SAME hook instance that serves the
+  // refresh flow takes the job over (one poller per screen — and since the
+  // poll is the worker, this screen is now what drives the import). The seed
+  // is a bare {id, status} — the hook polls immediately for those. Consumed
+  // once: setParams clears it so a remount does not re-adopt a finished job.
+  const importOriginRef = useRef(false);
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (importJobId && !seededRef.current) {
+      seededRef.current = true;
+      importOriginRef.current = true;
+      setRefreshJob({ id: importJobId, status: 'matching' });
+      navigation.setParams({ importJobId: undefined });
+    }
+  }, [importJobId, setRefreshJob, navigation]);
+
+  const streaming = refreshLive && !publicId;
+
+  // Every poll that lands new songs refetches the playlist — full replace via
+  // the same setHit path everything else uses; 'default' sort preserves the
+  // server's order, so appended songs land at the bottom, which is where the
+  // footer says they will.
+  const jobAuto = refreshJob?.counts?.auto ?? 0;
+  const jobTotal = refreshJob?.counts?.total ?? 0;
+  useEffect(() => {
+    if (!refreshLive || !hitRef.current.data) {
+      return;
+    }
+    load();
+  }, [jobAuto, jobTotal, refreshLive, load]);
+
+  // How many rows existed before the latest batch — rows past this index get
+  // the arrival rise-in. A ref, deliberately one render behind: by the time
+  // the new data paints, prevLenRef still holds the OLD length, which is
+  // exactly the boundary the animation needs.
+  const prevLenRef = useRef(0);
 
   useEffect(() => {
     // A public view of someone else's playlist has nothing to refresh.
@@ -273,7 +365,13 @@ export default function PlaylistScreen({ route, navigation }) {
       return;
     }
     load();
-    showToast(YT_COPY.refresh.added(refreshJob.counts?.auto ?? 0));
+    // A REFRESH announces its result — the user asked a question and the
+    // toast is the answer. A streamed import ends in place: the footer
+    // settles and the review chip (if any) takes over; a toast on top of
+    // that would be the same news twice.
+    if (!importOriginRef.current) {
+      showToast(YT_COPY.refresh.added(refreshJob.counts?.auto ?? 0));
+    }
   }, [refreshJob, refreshLive, load]);
 
   const checkForNewSongs = async () => {
@@ -298,6 +396,35 @@ export default function PlaylistScreen({ route, navigation }) {
     () => sortTracks(filterTracks(tracks, query), sort),
     [tracks, query, sort],
   );
+
+  // One render BEHIND tracks.length by design: when a batch paints, this
+  // still holds the pre-batch length — the exact boundary the arrival
+  // animation needs. The effect then catches it up for the next batch.
+  useEffect(() => {
+    prevLenRef.current = tracks.length;
+  }, [tracks.length]);
+
+  // The stream just ended with nothing to review: the footer settles ("all N
+  // in") and then bows out. Review-carrying jobs skip this — their footer
+  // becomes the review entry instead, which should not evaporate.
+  const [settledShown, setSettledShown] = useState(false);
+  const wasStreamingRef = useRef(false);
+  useEffect(() => {
+    if (streaming) {
+      wasStreamingRef.current = true;
+      return undefined;
+    }
+    if (!wasStreamingRef.current || !refreshJob) {
+      return undefined;
+    }
+    wasStreamingRef.current = false;
+    if ((refreshJob.counts?.review ?? 0) === 0) {
+      setSettledShown(true);
+      const timer = setTimeout(() => setSettledShown(false), 2200);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [streaming, refreshJob]);
   const hitRef = useRef(hit);
   hitRef.current = hit;
 
@@ -591,24 +718,86 @@ export default function PlaylistScreen({ route, navigation }) {
   // tracks, and mounting them all on open (the old ScrollView map) was the
   // measured OOM-kill spike. Everything above the rows rides as the header.
   const renderRow = useCallback(
+    // prevLenRef is read through the ref ON PURPOSE (not a dep): rows painted
+    // in the same commit as a new batch see the pre-batch boundary, and the
+    // closure need not be rebuilt per batch — only `streaming` flipping
+    // rebuilds it, which is once per import, not once per wave.
     ({ item: track, index: i }) => (
-      <PlaylistTrackRow
-        track={track}
-        index={i}
-        highlight={query}
-        reason={
-          shared && track.addedBy
-            ? `added by ${
-                track.addedBy.userId === myId ? 'you' : track.addedBy.name
-              }`
-            : undefined
-        }
-        onPlay={playFrom}
-        onRemove={canEdit ? removeTrack : null}
-      />
+      <RowArrive
+        animate={streaming && i >= prevLenRef.current}
+        i={i - prevLenRef.current}
+      >
+        <PlaylistTrackRow
+          track={track}
+          index={i}
+          highlight={query}
+          reason={
+            shared && track.addedBy
+              ? `added by ${
+                  track.addedBy.userId === myId ? 'you' : track.addedBy.name
+                }`
+              : undefined
+          }
+          onPlay={playFrom}
+          onRemove={canEdit ? removeTrack : null}
+        />
+      </RowArrive>
     ),
-    [query, shared, myId, playFrom, canEdit, removeTrack],
+    [query, shared, myId, playFrom, canEdit, removeTrack, streaming],
   );
+
+  // The streaming tail's footer — under the last row, where the next song
+  // will land. One of four voices, never two at once: adding / paused /
+  // settled / review. Absent entirely on public views and quiet playlists.
+  const reviewCount = refreshJob?.counts?.review ?? 0;
+  const footer = publicId
+    ? null
+    : streaming
+    ? (
+      <View style={styles.streamFoot}>
+        <AuraLoader
+          label={YT_COPY.streaming.footer(
+            tracks.length,
+            jobTotal || tracks.length,
+          )}
+        />
+      </View>
+    )
+    : jobStalled
+    ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={YT_COPY.streaming.paused}
+        onPress={jobResume}
+        style={({ pressed }) => [styles.streamFoot, pressed && styles.pressed]}
+      >
+        <Text style={[label(9.5), { color: t.accent }]}>
+          {YT_COPY.streaming.paused}
+        </Text>
+      </Pressable>
+    )
+    : settledShown
+    ? (
+      <View style={styles.streamFoot}>
+        <Text style={[label(9.5), { color: t.inkSoft }]}>
+          {YT_COPY.streaming.settled(tracks.length)}
+        </Text>
+      </View>
+    )
+    : importOriginRef.current && !refreshLive && reviewCount > 0 && !reviewing
+    ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={YT_COPY.streaming.review(reviewCount)}
+        onPress={() => setReviewing(true)}
+        style={({ pressed }) => [styles.streamFoot, pressed && styles.pressed]}
+      >
+        <Text style={[label(9.5), { color: t.accent }]}>
+          {YT_COPY.streaming.review(reviewCount)}
+        </Text>
+      </Pressable>
+    )
+    : null;
 
   return (
     <View
@@ -620,6 +809,8 @@ export default function PlaylistScreen({ route, navigation }) {
         renderItem={renderRow}
         keyExtractor={item => item.id}
         {...LONG_LIST}
+        itemLayoutAnimation={streaming ? ROW_LAYOUT : undefined}
+        ListFooterComponent={footer}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
@@ -1021,6 +1212,7 @@ export default function PlaylistScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  streamFoot: { alignItems: 'center', paddingVertical: 18, gap: 6 },
   root: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   // The old content gap, now scoped to the header block so it can't leak

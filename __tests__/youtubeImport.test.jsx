@@ -3,7 +3,6 @@ import ReactTestRenderer from 'react-test-renderer';
 import { BackHandler } from 'react-native';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { Image } from 'react-native';
-import { ImportJourney, sceneLayout } from '../src/components/yt/ImportJourney';
 import { revealItem } from '../src/screens/YouTubeImportScreen';
 import YouTubeImportScreen from '../src/screens/YouTubeImportScreen';
 import { YouTubeReview } from '../src/overlays/YouTubeReview';
@@ -203,6 +202,25 @@ const midImport = {
   ],
 };
 
+// A job mid-stream: the server created the playlist at the threshold and
+// keeps appending — playlistId non-null while status is still live.
+const streamingJob = {
+  ...midImport,
+  playlistId: 'pl_9',
+  counts: { total: 60, matching: 44, auto: 12, review: 3, unmatched: 1 },
+};
+
+async function startWithNav(job, navObj) {
+  previewLink.mockResolvedValue({ windowed: false });
+  startImport.mockResolvedValue(job);
+  pollImport.mockResolvedValue(job);
+  const tree = await render(<YouTubeImportScreen navigation={navObj} />);
+  await typeUrl(tree, 'https://youtube.com/playlist?list=PL1');
+  await flush(() => jest.advanceTimersByTime(350));
+  await flush(() => byLabel(tree, COPY.confirm.action).props.onPress());
+  return tree;
+}
+
 async function startWith(job) {
   previewLink.mockResolvedValue({ windowed: false });
   startImport.mockResolvedValue(job);
@@ -213,6 +231,50 @@ async function startWith(job) {
   await flush(() => byLabel(tree, COPY.confirm.action).props.onPress());
   return tree;
 }
+
+test('the handoff pill appears once the playlist exists, and auto-opens in 3s', async () => {
+  const navObj = nav();
+  const tree = await startWithNav(streamingJob, navObj);
+  // The pill is there, inviting.
+  expect(byLabel(tree, COPY.progress.openNow)).toBeTruthy();
+  expect(navObj.replace).not.toHaveBeenCalled();
+  // A user who just watches is walked in after 3s — string params only.
+  await flush(() => jest.advanceTimersByTime(3000));
+  expect(navObj.replace).toHaveBeenCalledWith('Playlist', {
+    id: 'pl_9',
+    importJobId: 'yti_a',
+  });
+});
+
+test('tapping the pill opens immediately', async () => {
+  const navObj = nav();
+  const tree = await startWithNav(streamingJob, navObj);
+  await flush(() => byLabel(tree, COPY.progress.openNow).props.onPress());
+  expect(navObj.replace).toHaveBeenCalledWith('Playlist', {
+    id: 'pl_9',
+    importJobId: 'yti_a',
+  });
+});
+
+test('any touch cancels the auto-open; the pill stays for a manual tap', async () => {
+  const navObj = nav();
+  const tree = await startWithNav(streamingJob, navObj);
+  // The scroll surface carries the cancel — reaching for the screen means
+  // the screen stops deciding for the user.
+  const toucher = tree.root.findAll(
+    n => typeof n.props?.onTouchStart === 'function',
+  )[0];
+  await flush(() => toucher.props.onTouchStart());
+  await flush(() => jest.advanceTimersByTime(4000));
+  expect(navObj.replace).not.toHaveBeenCalled();
+  expect(byLabel(tree, COPY.progress.openNow)).toBeTruthy();
+});
+
+test('no pill before the playlist exists or below the worth-opening bar', async () => {
+  // midImport: auto=4, no playlistId — the pill would be an empty promise.
+  const tree = await startWith(midImport);
+  expect(texts(tree.toJSON())).not.toContain(COPY.progress.openNow);
+});
 
 test('the queued moment says starting — there are no items yet to show', async () => {
   const tree = await startWith({ id: 'yti_a', status: 'queued', counts: {} });
@@ -233,14 +295,6 @@ test('the last few songs get their own line, driven by the real remaining count'
   expect(texts(tree.toJSON())).toContain(COPY.progress.almostThere(28, 30));
 });
 
-test('the journey scene wears the real counts as its labels', async () => {
-  // "7 to go" / "4 added" under the two masses — the story made legible, and
-  // pinned to the same counts the stage line uses so they can never disagree.
-  const tree = await startWith(midImport);
-  const body = texts(tree.toJSON());
-  expect(body).toContain(COPY.progress.scene.toGo(7));
-  expect(body).toContain(COPY.progress.scene.added(4));
-});
 
 test('the live list names the song being matched and what happened to the rest', async () => {
   const tree = await startWith(midImport);
@@ -373,35 +427,7 @@ test('the elapsed counter ticks, and is gone when the screen is', async () => {
   clearSpy.mockRestore();
 });
 
-test('the journey scene carries the whole import, blank stretch included', async () => {
-  // fetchPhase writes every item row in ONE transaction at the end, so until it
-  // commits there is genuinely nothing to list — the scene (left mass breathing,
-  // traveller wobbling) is what keeps that stretch from being an empty screen.
-  let tree = await startWith({
-    id: 'yti_a', status: 'fetching', counts: { total: 0 }, items: [],
-  });
-  expect(tree.root.findAllByType(ImportJourney)).toHaveLength(1);
 
-  // And it stays as the centrepiece once the rows exist.
-  tree = await startWith(midImport);
-  expect(tree.root.findAllByType(ImportJourney)).toHaveLength(1);
-  expect(texts(tree.toJSON())).toContain('sixth song');
-});
-
-// ── The scene's sizing is pure math, tested as math (Skia is mocked) ─
-
-test('scene masses track the real counts and never vanish', () => {
-  const empty = sceneLayout({});
-  expect(empty.left.r).toBeGreaterThan(0);
-  expect(empty.right.r).toBeGreaterThan(0);
-
-  const mid = sceneLayout({ total: 30, matching: 20, auto: 8, review: 2 });
-  const late = sceneLayout({ total: 30, matching: 2, auto: 26, review: 2 });
-  // The story reads left-to-right: remaining shrinks, the playlist grows.
-  expect(late.left.r).toBeLessThan(mid.left.r);
-  expect(late.right.r).toBeGreaterThan(mid.right.r);
-  expect(mid.review).toBe(2);
-});
 
 // ── The match reveal card: what the last song BECAME ────────────────
 
