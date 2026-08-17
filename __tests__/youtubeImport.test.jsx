@@ -276,6 +276,25 @@ test('no pill before the playlist exists or below the worth-opening bar', async 
   expect(texts(tree.toJSON())).not.toContain(COPY.progress.openNow);
 });
 
+test('a mix preview teaches the save-queue flow; a plain playlist does not', async () => {
+  previewLink.mockResolvedValue({ windowed: true, windowSize: 120 });
+  const tree = await render(<YouTubeImportScreen navigation={nav()} />);
+  await typeUrl(tree, 'https://youtube.com/watch?v=x&list=RDx');
+  await flush(() => jest.advanceTimersByTime(350));
+  // Folded by default; the title invites, the tap unfolds the steps.
+  expect(texts(tree.toJSON())).toContain(COPY.confirm.exactMixTitle);
+  expect(texts(tree.toJSON())).not.toContain(COPY.confirm.exactMixBody);
+  await flush(() => byLabel(tree, COPY.confirm.exactMixTitle).props.onPress());
+  expect(texts(tree.toJSON())).toContain(COPY.confirm.exactMixBody);
+
+  // A finite playlist has nothing to teach — the import IS exact.
+  previewLink.mockResolvedValue({ windowed: false });
+  const tree2 = await render(<YouTubeImportScreen navigation={nav()} />);
+  await typeUrl(tree2, 'https://youtube.com/playlist?list=PL1');
+  await flush(() => jest.advanceTimersByTime(350));
+  expect(texts(tree2.toJSON())).not.toContain(COPY.confirm.exactMixTitle);
+});
+
 test('the queued moment says starting — there are no items yet to show', async () => {
   const tree = await startWith({ id: 'yti_a', status: 'queued', counts: {} });
   const body = texts(tree.toJSON());

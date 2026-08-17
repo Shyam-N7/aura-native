@@ -29,13 +29,14 @@ import { ConfirmSheet } from './src/overlays/ConfirmSheet';
 import { PresenceAgent } from './src/overlays/PresenceAgent';
 import { QuietPanelSheet } from './src/overlays/QuietPanelSheet';
 import { Toast } from './src/components/Toast';
+import { LinkLanding } from './src/components/LinkLanding';
+import { classifyLink, showLanding, hideLanding } from './src/lib/linkLanding';
 import { Dock } from './src/components/nav/Dock';
 import RootTabs from './src/navigation/RootTabs';
 import AuthScreen from './src/screens/AuthScreen';
 import { SensingScreen } from './src/screens/SensingScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import {
-  API_BASE,
   getUser,
   subscribeAuth,
   showSensing,
@@ -83,24 +84,10 @@ onSessionReset(() => {
   joining.clear();
 });
 
-// Only OUR links are actionable. Both hosts the manifest declares an intent
-// filter for — www (autoVerify) and the apex (chooser) — derived from the one
-// origin the app talks to rather than restated.
-const LINK_HOSTS = new Set([
-  new URL(API_BASE).hostname,
-  new URL(API_BASE).hostname.replace(/^www\./, ''),
-]);
-
-// `new URL` parses anything, so pathname/searchParams alone say nothing about
-// WHO sent the link — and both feeds into handleLink are untrusted. MainActivity
-// is exported and singleTask, so any installed app can send an explicit-component
-// ACTION_VIEW carrying an arbitrary URI and bypass the manifest's host filter
-// entirely; and push data.link is free text typed in the admin console. The
-// branch that actually costs something is `join`, which POSTs an invite
-// acceptance under the signed-in user — a link from anywhere could enrol them
-// in a stranger's playlist. Scheme is pinned too: http:// and app:// forms of
-// our own host must not count.
-const isOwnLink = u => u.protocol === 'https:' && LINK_HOSTS.has(u.hostname);
+// Link parsing/classification lives in lib/linkLanding (LINK_HOSTS, isOwnLink,
+// classifyLink) — ONE parser, shared by this router and the landing overlay,
+// because a drifted second parser would show a landing for links the router
+// then drops: a stuck overlay. The security reasoning rode along with the move.
 
 // Post-auth gate order (web parity): a signed-in user sees the ~6s sensing
 // welcome at most once a day, then the first-run onboarding if they haven't set
@@ -133,6 +120,13 @@ function Shell() {
   const playerRef = useRef(player);
   playerRef.current = player;
   const pendingLinkRef = useRef(null);
+  // Same ref discipline as playerRef: handleLink reads CURRENT flow (the
+  // landing must never cover auth/sensing/onboarding) and the dedup record
+  // without either becoming a dependency — new deps would re-trigger the FCM
+  // teardown/re-init keyed on handleLink's identity.
+  const flowRef = useRef(flow);
+  flowRef.current = flow;
+  const lastHandledRef = useRef(null);
   useEffect(
     () =>
       subscribeAuth(() => {
@@ -169,6 +163,26 @@ function Shell() {
     mark('first-render');
   }, []);
 
+  // The early cold read: paint the contextual landing frames into boot, long
+  // before NavigationContainer mounts and its onReady replays the link for
+  // ROUTING. This effect never routes — onReady's `u ?? pendingLinkRef`
+  // coalescing stays the single routing authority — it only classifies and
+  // shows, and the eventual handleLink replay hides on completion. Rejections
+  // are swallowed: a failed read costs the flourish, never the boot.
+  useEffect(() => {
+    Linking.getInitialURL()
+      .then(u => {
+        if (!u || flowRef.current !== 'main') {
+          return;
+        }
+        const cls = classifyLink(u);
+        if (cls) {
+          showLanding(cls);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const finishSensing = useCallback(() => {
     markSensingShown();
     setFlow(hasOnboarded() ? 'main' : 'onboarding');
@@ -180,6 +194,14 @@ function Shell() {
       if (!url) {
         return;
       }
+      const cls = classifyLink(url);
+      // The landing rises BEFORE the hold gate: on a main-flow cold boot the
+      // link is stashed until onReady, and that boot stretch is exactly the
+      // vague gap the landing exists to cover. Never over auth/sensing/
+      // onboarding — a signed-out user must see the sign-in, not a spinner.
+      if (cls && flowRef.current === 'main') {
+        showLanding(cls);
+      }
       // A link that arrives before sign-in/nav is HELD, not dropped — the
       // person who tapped a shared song and then had to sign up must still
       // land on that song. Replayed from NavigationContainer's onReady.
@@ -187,31 +209,32 @@ function Shell() {
         pendingLinkRef.current = url;
         return;
       }
-      let parsed;
-      let params;
-      try {
-        parsed = new URL(url);
-        // RN's URLSearchParams decodes every pair in its constructor, so a
-        // truncated % escape throws URIError here, not in new URL — and this
-        // runs synchronously inside the native 'url' callback and push's
-        // linkHandler (data.link is free text typed in the admin console),
-        // where a throw kills the app. A malformed link is dropped instead.
-        params = parsed.searchParams;
-      } catch {
+      if (!cls) {
         return;
       }
-      if (!isOwnLink(parsed)) {
-        return;
+      // Double arrival is real: a tapped push can land through BOTH the FCM
+      // open handler and the ACTION_VIEW intent, and cold start can replay
+      // getInitialNotification + getInitialURL. Same URL inside 1.5s is one
+      // intent, not two. Invites are exempt — their own guards (joining/
+      // joinedPlaylists) carry retap-recovery semantics this window would
+      // break, pinned by inviteRetry.test.jsx.
+      if (cls.kind !== 'invite') {
+        const last = lastHandledRef.current;
+        if (last && last.url === url && Date.now() - last.ts < 1500) {
+          return;
+        }
+        lastHandledRef.current = { url, ts: Date.now() };
       }
-      const join = params.get('join');
-      if (join) {
+      if (cls.kind === 'invite') {
+        const join = cls.token;
         const already = joinedPlaylists.get(join);
         if (already) {
           navRef.navigate('Playlist', { id: already });
+          hideLanding();
           return;
         }
         if (joining.has(join)) {
-          return; // same link fired twice — one accept, not two
+          return; // same link fired twice — the in-flight accept owns the landing
         }
         joining.add(join);
         acceptPlaylistInvite(join)
@@ -224,42 +247,48 @@ function Shell() {
                 : `Joined ${which}.`,
             );
             navRef.navigate('Playlist', { id: playlistId });
+            hideLanding();
           })
-          .catch(err => showToast(err.message))
+          .catch(err => {
+            hideLanding();
+            showToast(err.message);
+          })
           .finally(() => joining.delete(join));
         return;
       }
-      if (parsed.pathname.startsWith('/p/')) {
-        const publicId = parsed.pathname.slice(3).split('/')[0];
-        if (publicId) {
-          navRef.navigate('Playlist', { publicId });
-        }
+      if (cls.kind === 'playlist') {
+        // The destination mounts synchronously with its own labeled loader,
+        // so the landing's job ends at the navigate.
+        navRef.navigate('Playlist', { publicId: cls.publicId });
+        hideLanding();
         return;
       }
       // Shared song links: /t/<id>, optionally ?at=<sec> for a moment. Fetch,
       // play, seek — the seek rides the player's op queue, so it lands after
-      // the load it belongs to.
-      if (parsed.pathname.startsWith('/t/')) {
-        const trackId = parsed.pathname.slice(3).split('/')[0];
-        if (!trackId) {
-          return;
-        }
-        const at = Number(params.get('at'));
-        getTrack(trackId)
-          .then(track => {
-            const p = playerRef.current;
-            p.playTrack(track, { source: 'shared with you' });
-            if (Number.isFinite(at) && at > 0) {
-              p.seekTo(at);
-              // Starting mid-song should read as intended, not broken.
-              const m = Math.floor(at / 60);
-              const s = String(Math.floor(at % 60)).padStart(2, '0');
-              showToast(`starting from ${m}:${s} — a shared moment.`);
-            }
-            p.ui?.openPlayer?.();
-          })
-          .catch(() => showToast("couldn't open that song."));
-      }
+      // the load it belongs to. The landing holds through the fetch (the
+      // previously-blind window) and dissolves into the opened player.
+      getTrack(cls.trackId)
+        .then(track => {
+          const p = playerRef.current;
+          p.playTrack(track, { source: 'shared with you' });
+          if (cls.kind === 'moment') {
+            p.seekTo(cls.at);
+            // Starting mid-song should read as intended, not broken.
+            const m = Math.floor(cls.at / 60);
+            const sec = String(Math.floor(cls.at % 60)).padStart(2, '0');
+            showToast(`starting from ${m}:${sec} — a shared moment.`);
+          }
+          p.ui?.openPlayer?.();
+          hideLanding();
+        })
+        .catch(() => {
+          hideLanding();
+          // Clearing the dedup record restores instant retap after a failure.
+          if (lastHandledRef.current?.url === url) {
+            lastHandledRef.current = null;
+          }
+          showToast("couldn't open that song.");
+        });
     },
     [navRef],
   );
@@ -368,6 +397,7 @@ function Shell() {
         backgroundColor={t.bg}
       />
       {content}
+      <LinkLanding />
       <Toast />
     </>
   );

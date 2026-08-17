@@ -207,6 +207,14 @@ export const COPY = {
     // the UI must not imply a sync it cannot deliver.
     mix: n =>
       `mixes don't have an end, so we'll take the first ${n} songs. this is a snapshot, not a live sync — the mix will change on youtube, and your playlist won't.`,
+    // The research verdict, turned into guidance: a mix is generated per
+    // request from the seed PLUS the requester's identity, so what we import
+    // can never be the exact list the user's signed-in browser shows. The one
+    // official path to what-you-see fidelity is YT Music's save-the-queue
+    // flow — teach it instead of pretending.
+    exactMixTitle: 'want exactly your mix?',
+    exactMixBody:
+      "youtube builds mixes differently for every viewer, so an import can never match yours song-for-song. to capture exactly what you see: play the mix in the youtube music app, open up next, tap save, make it a new playlist — then paste that playlist's link here.",
     action: 'import',
     cancel: 'cancel',
   },
@@ -315,6 +323,9 @@ export const COPY = {
     settled: n => `all ${n} in`,
     paused: 'paused — tap to keep going',
     review: n => `${n} to check — whenever you like`,
+    // The owned-mix payoff: an imported mix ends, and OUR radio keeps the
+    // vibe going — stable and honest where youtube's tail is weather.
+    radio: 'keep it going — aura radio from this mix',
   },
   done: {
     ready: auto => `${auto} ${auto === 1 ? 'song' : 'songs'} added`,

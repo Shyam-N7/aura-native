@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { NavigationContainerRefContext } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
+import { getSeedRadio } from '../api/autoPlaylists';
 import { useLikes } from '../hooks/useLikes';
 import {
   closeTrackActions,
@@ -57,6 +58,27 @@ export function TrackActionsSheet() {
           player.playTrack(track, { source: 'your pick' });
           player.ui?.openPlayer?.();
         }),
+    });
+  }
+  if (!omit.includes('radio')) {
+    items.push({
+      id: 'radio',
+      icon: 'wave',
+      label: 'start aura radio',
+      // Our radio, not YouTube's weather: seed station + similarity graph,
+      // served as a ready queue (see server/seedMix.js for the verdict).
+      run: () => {
+        getSeedRadio(track.id)
+          .then(mix => {
+            if (!mix?.tracks?.length) {
+              showToast('not enough nearby songs yet — play it a little first.');
+              return;
+            }
+            player.playQueue(mix.tracks, 0, mix.name);
+            player.ui?.openPlayer?.();
+          })
+          .catch(() => showToast("couldn't start the radio."));
+      },
     });
   }
   if (!omit.includes('playNext')) {

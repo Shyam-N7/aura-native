@@ -44,7 +44,10 @@ jest.mock('../src/api/playlists', () => ({
   savePlaylist: jest.fn(),
   unsavePlaylist: jest.fn(),
 }));
-jest.mock('../src/api/autoPlaylists', () => ({ listAutoPlaylists: jest.fn() }));
+jest.mock('../src/api/autoPlaylists', () => ({
+  listAutoPlaylists: jest.fn(),
+  getSeedRadio: jest.fn(),
+}));
 // The streaming tail drives the real useImportJob hook; only the wire is
 // mocked. isLive is the real predicate — the loop's stop condition is under
 // test and must not be stubbed into agreement.
@@ -351,4 +354,64 @@ test('without the handoff param the playlist screen is inert — no footer, no p
   expect(pollImport).not.toHaveBeenCalled();
   expect(texts(tree.toJSON())).not.toContain(YT.streaming.footer(1, 1));
   await ReactTestRenderer.act(() => tree.unmount());
+});
+
+
+test('a finished mix import offers aura radio, seeded by its first song', async () => {
+  jest.useFakeTimers();
+  const { pollImport } = require('../src/api/ytImport');
+  const { getSeedRadio } = require('../src/api/autoPlaylists');
+  const { COPY: YT } = require('../src/lib/ytImportCopy');
+
+  getPlaylist.mockResolvedValue({
+    id: 'p9', name: 'Mix trip', shared: false, canEdit: true, isPublic: false,
+    updatedAt: 1, collaborators: [],
+    tracks: [
+      { id: 'seed1', title: 'First', artist: 'A', language: 'ta' },
+      { id: 't2', title: 'Second', artist: 'B', language: 'ta' },
+    ],
+  });
+  // One live poll, then terminal WINDOWED with nothing to review — the case
+  // whose settle line hands over to the radio CTA.
+  pollImport
+    .mockResolvedValueOnce({
+      id: 'yti_m', status: 'matching', playlistId: 'p9', windowed: true,
+      counts: { total: 2, auto: 2, review: 0, unmatched: 0, matching: 0 }, items: [],
+    })
+    .mockResolvedValue({
+      id: 'yti_m', status: 'complete', playlistId: 'p9', windowed: true,
+      counts: { total: 2, auto: 2, review: 0, unmatched: 0, matching: 0 }, items: [],
+    });
+  getSeedRadio.mockResolvedValue({
+    name: 'radio from First',
+    tracks: [{ id: 'r1', title: 'R1' }, { id: 'r2', title: 'R2' }],
+  });
+
+  const tree = await render(
+    <PlaylistScreen
+      route={{ params: { id: 'p9', importJobId: 'yti_m' } }}
+      navigation={{ goBack: jest.fn(), setParams: jest.fn(), addListener: jest.fn(() => jest.fn()) }}
+    />,
+  );
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(0);
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(2000);
+  });
+  await ReactTestRenderer.act(async () => {});
+  // The settle line shows first, then bows out to the radio CTA.
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(2500);
+  });
+  expect(texts(tree.toJSON())).toContain(YT.streaming.radio);
+
+  // Tapping it fetches OUR radio seeded by the first imported song and plays.
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, YT.streaming.radio).props.onPress();
+  });
+  expect(getSeedRadio).toHaveBeenCalledWith('seed1');
+
+  await ReactTestRenderer.act(() => tree.unmount());
+  jest.useRealTimers();
 });
