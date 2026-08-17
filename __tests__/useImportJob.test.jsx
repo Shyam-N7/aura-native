@@ -51,6 +51,41 @@ test('the first poll waits 2s, and does not fire early', async () => {
   expect(pollImport).toHaveBeenCalledTimes(1);
 });
 
+test('chases at 300ms while the server says its drain ran out of budget', async () => {
+  // workRemaining: true = the drain hit its budget with items pending — the
+  // server is explicitly waiting to be driven again. The courtesy gap is for
+  // the idle case; holding it here would leave 15s of work per 17s of clock.
+  pollImport.mockResolvedValue({ ...LIVE, workRemaining: true });
+  await mount(LIVE);
+  await tickBy(2000);
+  expect(pollImport).toHaveBeenCalledTimes(1);
+  await tickBy(300);
+  expect(pollImport).toHaveBeenCalledTimes(2);
+
+  // Flag drops (slice finished, or an un-upgraded server): idle cadence again.
+  pollImport.mockResolvedValue(LIVE);
+  await tickBy(300);
+  expect(pollImport).toHaveBeenCalledTimes(3);
+  await tickBy(300);
+  expect(pollImport).toHaveBeenCalledTimes(3);
+  await tickBy(1700);
+  expect(pollImport).toHaveBeenCalledTimes(4);
+});
+
+test('a failed poll retries on the idle gap, never a 300ms hammer', async () => {
+  pollImport.mockResolvedValueOnce({ ...LIVE, workRemaining: true });
+  pollImport.mockRejectedValueOnce(Object.assign(new Error('boom'), { name: 'TimeoutError' }));
+  pollImport.mockResolvedValue(LIVE);
+  await mount(LIVE);
+  await tickBy(2000);
+  await tickBy(300);
+  expect(pollImport).toHaveBeenCalledTimes(2);
+  await tickBy(300);
+  expect(pollImport).toHaveBeenCalledTimes(2);
+  await tickBy(1700);
+  expect(pollImport).toHaveBeenCalledTimes(3);
+});
+
 test('after 20 ticks it steps down to 5s — stuck, not slow', async () => {
   pollImport.mockResolvedValue(LIVE);
   await mount(LIVE);
