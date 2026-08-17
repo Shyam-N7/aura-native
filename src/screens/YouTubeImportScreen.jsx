@@ -542,6 +542,11 @@ function PasteState({ url, setUrl, inputRef, checking, linkError }) {
 function ConfirmState({ preview, starting, linkError, onBack, onStart }) {
   const { t } = useTheme();
   const err = linkError && copyForCode(linkError.code, linkError.message);
+  // The teach note, folded until asked for: research-confirmed, a mix is
+  // generated per viewer, so an import can NEVER match song-for-song — but
+  // there is one official path to exactly-what-you-see (YT Music's
+  // save-the-queue), and teaching it beats pretending.
+  const [exactOpen, setExactOpen] = useState(false);
   return (
     <>
       {/* The honest framing has to land HERE. A mix regenerates every time
@@ -554,6 +559,22 @@ function ConfirmState({ preview, starting, linkError, onBack, onStart }) {
             : COPY.confirm.playlist(null)
         }
       />
+      {preview.windowed && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={COPY.confirm.exactMixTitle}
+          onPress={() => setExactOpen(o => !o)}
+          hitSlop={6}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Text style={[label(9.5), { color: t.accent }]}>
+            {COPY.confirm.exactMixTitle}
+          </Text>
+        </Pressable>
+      )}
+      {preview.windowed && exactOpen && (
+        <Note body={COPY.confirm.exactMixBody} />
+      )}
       {err && <Note title={err.title} body={err.body} warn />}
       <View style={styles.actions}>
         <Pressable

@@ -40,6 +40,7 @@ import {
   unsavePlaylist,
 } from '../api/playlists';
 import { getFeatures, getYtLink, refreshPlaylist } from '../api/ytImport';
+import { getSeedRadio } from '../api/autoPlaylists';
 import { useImportJob } from '../hooks/useImportJob';
 import { COPY as YT_COPY, copyForCode } from '../lib/ytImportCopy';
 import { YouTubeReview } from '../overlays/YouTubeReview';
@@ -794,6 +795,37 @@ export default function PlaylistScreen({ route, navigation }) {
       >
         <Text style={[label(9.5), { color: t.accent }]}>
           {YT_COPY.streaming.review(reviewCount)}
+        </Text>
+      </Pressable>
+    )
+    : importOriginRef.current &&
+      !refreshLive &&
+      !!refreshJob?.windowed &&
+      reviewCount === 0 &&
+      tracks.length > 0
+    ? (
+      // The owned-mix payoff: a mix import's snapshot ends, and OUR radio
+      // keeps the vibe going — seeded by the first imported song, stable and
+      // honest where YouTube's tail is per-viewer weather (server/seedMix.js
+      // carries the research verdict).
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={YT_COPY.streaming.radio}
+        onPress={() => {
+          getSeedRadio(tracks[0].id)
+            .then(mix => {
+              if (!mix?.tracks?.length) {
+                return;
+              }
+              player.playQueue(mix.tracks, 0, mix.name);
+              player.ui?.openPlayer?.();
+            })
+            .catch(() => showToast("couldn't start the radio."));
+        }}
+        style={({ pressed }) => [styles.streamFoot, pressed && styles.pressed]}
+      >
+        <Text style={[label(9.5), { color: t.accent }]}>
+          {YT_COPY.streaming.radio}
         </Text>
       </Pressable>
     )

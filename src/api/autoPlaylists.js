@@ -16,3 +16,16 @@ export async function listAutoPlaylists({ signal } = {}) {
   const { playlists } = await res.json();
   return playlists ?? [];
 }
+
+// AURA radio seeded by one track — the owned answer to YouTube mixes. Same
+// descriptor envelope as the suite above, so callers play it identically.
+export async function getSeedRadio(trackId, { signal } = {}) {
+  const res = await fetchAuthed(
+    `/api/radio/seed/${encodeURIComponent(trackId)}?tz=${new Date().getTimezoneOffset()}`,
+    { signal },
+  );
+  if (!res.ok) {
+    throw new Error(`radio failed (${res.status})`);
+  }
+  return res.json();
+}
