@@ -18,6 +18,15 @@ import { pollImport, isLive, invalidateYtLinks } from '../api/ytImport';
 
 const FAST_MS = 2000;
 const SLOW_MS = 5000;
+// When the last poll answered workRemaining: true, the server's drain ran out
+// of budget with items still pending — it is explicitly waiting to be driven
+// again. Chasing at 300ms turns "15s of work, 2s of silence" into a nearly
+// continuous drain; the courtesy gaps below are for the idle case only. An
+// un-upgraded server simply never sets the field, and the cadence is exactly
+// what it was. Chase ticks still count toward MAX_TICKS — the stall guard's
+// budget is ticks, not minutes, and a server that keeps asking to be chased
+// while making no progress is precisely what the guard exists to catch.
+const CHASE_MS = 300;
 // After this many polls we assume something is wrong rather than slow. A 30-track
 // import finishes in one or two ticks; 20 is far past "slow" and into "stuck",
 // and a screen left open on a stuck job should not spin at 2s forever.
@@ -44,6 +53,9 @@ export function useImportJob(initialJob) {
   const abortRef = useRef(null);
   const tickRef = useRef(0);
   const stoppedRef = useRef(false);
+  // Whether the LAST response asked to be chased (see CHASE_MS). A ref for the
+  // same reason as the others: the loop reads it, renders must not.
+  const chaseRef = useRef(false);
 
   const stop = useCallback(() => {
     stoppedRef.current = true;
@@ -95,6 +107,7 @@ export function useImportJob(initialJob) {
           done = true;
           return;
         }
+        chaseRef.current = next.workRemaining === true;
         setJob(next);
         setError(null);
         // Terminal: let the effect tear itself down rather than scheduling
@@ -117,7 +130,9 @@ export function useImportJob(initialJob) {
         // and the cron will finish it. Surface it, keep polling; the next tick
         // is also the next attempt at the work itself. A client-side timeout
         // arrives here as TimeoutError (api/ytImport.js) precisely so that it
-        // lands on this path instead of reading as a deliberate abort.
+        // lands on this path instead of reading as a deliberate abort. Idle
+        // cadence from here: a chase gap must not survive into an error loop.
+        chaseRef.current = false;
         setError(err);
       } finally {
         if (!done && !stoppedRef.current) {
@@ -128,7 +143,11 @@ export function useImportJob(initialJob) {
           } else {
             timerRef.current = setTimeout(
               tick,
-              tickRef.current >= SLOW_AFTER ? SLOW_MS : FAST_MS,
+              chaseRef.current
+                ? CHASE_MS
+                : tickRef.current >= SLOW_AFTER
+                ? SLOW_MS
+                : FAST_MS,
             );
           }
         }
