@@ -233,6 +233,15 @@ test('the last few songs get their own line, driven by the real remaining count'
   expect(texts(tree.toJSON())).toContain(COPY.progress.almostThere(28, 30));
 });
 
+test('the journey scene wears the real counts as its labels', async () => {
+  // "7 to go" / "4 added" under the two masses — the story made legible, and
+  // pinned to the same counts the stage line uses so they can never disagree.
+  const tree = await startWith(midImport);
+  const body = texts(tree.toJSON());
+  expect(body).toContain(COPY.progress.scene.toGo(7));
+  expect(body).toContain(COPY.progress.scene.added(4));
+});
+
 test('the live list names the song being matched and what happened to the rest', async () => {
   const tree = await startWith(midImport);
   const body = texts(tree.toJSON());

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +18,7 @@ import {
   listPlaylists,
   createPlaylist,
   deletePlaylist,
+  getPlaylist,
   removePlaylistCollaborator,
   listSavedPlaylists,
 } from '../api/playlists';
@@ -26,19 +28,24 @@ import { COPY as YT_COPY } from '../lib/ytImportCopy';
 import { getUser } from '../lib/auth';
 import { relTime } from '../lib/time';
 import { showToast } from '../lib/toast';
-import { confirm } from '../lib/confirm';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { CrumbBack } from '../components/detail/DetailChassis';
-import { Sheet } from '../components/ui/Sheet';
-import { SheetRow } from '../components/ui/SheetRow';
+import { ConfirmPopup } from '../components/ui/ConfirmPopup';
+import { SHEET_DANGER } from '../components/ui/SheetRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, type } from '../theme/tokens';
 
 // The playlists library, ported from web PlaylistsScreen: made-for-you mixes
 // (read-only, full suite), made by you (+ create), shared with you, and
-// saved-from-others — each group hidden when empty. The web's per-row
-// anchored menu becomes a bottom sheet; it holds exactly one action (delete
-// or leave), and it exists anyway — see the note on menuFor.
+// saved-from-others — each group hidden when empty.
+//
+// The ⋯ menu is a POPUP, not a sheet. The first cut shipped it as a bottom
+// sheet per the older anchored-menu-becomes-a-sheet convention, and the user
+// pushed back — pointing at the direction they had already set once before:
+// ConfirmPopup exists because they specified "popup, not sheet" for the
+// background-play switch, and PickerPopup is its sibling. This menu joins that
+// family, and carries the row's details (cover, name, counts) as its header —
+// the popup IS the playlist details card, with actions under it.
 
 // Why home sometimes shows fewer mixes than this screen: home windows the
 // daypart mixes to their own local hours; here the full suite always shows,
@@ -188,15 +195,13 @@ export default function PlaylistsScreen({ navigation }) {
     }
   };
 
+  // The destructive question, asked by ConfirmPopup rather than the global
+  // confirm sheet: the menu that leads here is a popup, and a question that
+  // rises as a sheet after a popup reads as two different apps. `confirmFor`
+  // holds { playlist, kind: 'delete' | 'leave' } while the question is open.
+  const [confirmFor, setConfirmFor] = useState(null);
+
   const remove = async playlist => {
-    const ok = await confirm({
-      title: `delete "${playlist.name}"?`,
-      body: "the playlist will be removed. songs you've liked stay in your library.",
-      action: 'delete',
-    });
-    if (!ok) {
-      return;
-    }
     try {
       await deletePlaylist(playlist.id);
       setHit(h => ({
@@ -215,14 +220,6 @@ export default function PlaylistsScreen({ navigation }) {
     if (!me?.id) {
       return;
     }
-    const ok = await confirm({
-      title: `leave "${playlist.name}"?`,
-      body: "you'll lose access until you're invited again.",
-      action: 'leave',
-    });
-    if (!ok) {
-      return;
-    }
     try {
       await removePlaylistCollaborator(playlist.id, me.id);
       setHit(h => ({
@@ -232,6 +229,31 @@ export default function PlaylistsScreen({ navigation }) {
       showToast('left the playlist.');
     } catch (err) {
       showToast(`Couldn't leave — ${err.message}`);
+    }
+  };
+
+  // "play" from the ⋯ popup: the list row carries no tracks, so fetch the
+  // playlist first — the detail screen's own play-all path, one tap earlier.
+  const [playBusy, setPlayBusy] = useState(false);
+  const playFromMenu = async playlist => {
+    if (playBusy) {
+      return;
+    }
+    setPlayBusy(true);
+    try {
+      const full = await getPlaylist(playlist.id);
+      const tracks = full?.tracks ?? [];
+      if (!tracks.length) {
+        showToast('nothing to play yet.');
+        return;
+      }
+      setMenuFor(null);
+      player.playQueue(tracks, 0, playlist.name);
+      player.ui?.openPlayer?.();
+    } catch (err) {
+      showToast(`couldn't play — ${err.message}`);
+    } finally {
+      setPlayBusy(false);
     }
   };
 
@@ -555,34 +577,152 @@ export default function PlaylistsScreen({ navigation }) {
         )}
       </BounceScrollView>
 
-      {/* The ⋯ menu. One row today, and that is fine — the point is the
-          structure, not the count: the destructive question must be a SECOND
-          step, asked by the confirm sheet that remove()/leave() already run. */}
+      {/* The ⋯ menu: a popup carrying the playlist's details as its header,
+          with the actions under it. The destructive row still only ASKS — the
+          question is a second step, in the same popup family. */}
       {menuFor && (
-        <Sheet onClose={() => setMenuFor(null)} closeLabel="close options">
-          <SheetRow
-            danger
-            label={
-              // Same ownership predicate as the owned/joined partition above —
-              // a row without a role field is yours, not one you can leave.
-              !menuFor.shared || menuFor.role === 'owner'
-                ? 'delete playlist'
-                : 'leave playlist'
-            }
-            onPress={() => {
-              const p = menuFor;
-              // Close before asking, so the question is not stacked on the menu.
-              setMenuFor(null);
-              if (!p.shared || p.role === 'owner') {
-                remove(p);
-              } else {
-                leave(p);
-              }
-            }}
-          />
-        </Sheet>
+        <MenuPopup
+          playlist={menuFor}
+          playBusy={playBusy}
+          onClose={() => setMenuFor(null)}
+          onOpen={() => {
+            const p = menuFor;
+            setMenuFor(null);
+            openPlaylist(p.id);
+          }}
+          onPlay={() => playFromMenu(menuFor)}
+          onShare={
+            !menuFor.shared || menuFor.role === 'owner'
+              ? () => {
+                  const p = menuFor;
+                  setMenuFor(null);
+                  // The visibility controls live on the detail screen; the
+                  // `share` param asks it to open them on arrival.
+                  navigation.navigate('Playlist', { id: p.id, share: true });
+                }
+              : null
+          }
+          onDanger={() => {
+            const p = menuFor;
+            const kind = !p.shared || p.role === 'owner' ? 'delete' : 'leave';
+            // Close before asking, so the question is not stacked on the menu.
+            setMenuFor(null);
+            setConfirmFor({ playlist: p, kind });
+          }}
+        />
       )}
+
+      <ConfirmPopup
+        visible={!!confirmFor}
+        danger
+        title={
+          confirmFor?.kind === 'leave'
+            ? `leave "${confirmFor?.playlist.name}"?`
+            : `delete "${confirmFor?.playlist.name}"?`
+        }
+        body={
+          confirmFor?.kind === 'leave'
+            ? "you'll lose access until you're invited again."
+            : "the playlist will be removed. songs you've liked stay in your library."
+        }
+        action={confirmFor?.kind === 'leave' ? 'leave' : 'delete'}
+        onCancel={() => setConfirmFor(null)}
+        onConfirm={() => {
+          const target = confirmFor;
+          setConfirmFor(null);
+          if (!target) {
+            return;
+          }
+          if (target.kind === 'leave') {
+            leave(target.playlist);
+          } else {
+            remove(target.playlist);
+          }
+        }}
+      />
     </View>
+  );
+}
+
+// The ⋯ popup: the playlist's identity as the header — cover, name, the same
+// meta line the list row wears — then the actions. ConfirmPopup's sibling in
+// every way that matters: plain RN Modal fade (no reanimated entering; the
+// documented 4.2.3/Fabric abort class), scrim cancels, card swallows taps.
+function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, onDanger }) {
+  const { t } = useTheme();
+  const owned = !p.shared || p.role === 'owner';
+  return (
+    <Modal
+      transparent
+      statusBarTranslucent
+      visible
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={styles.menuScrim}
+        onPress={onClose}
+        accessibilityLabel="dismiss"
+      >
+        <Pressable
+          style={[styles.menuCard, { backgroundColor: t.surface, borderColor: t.line }]}
+          onPress={() => {}}
+        >
+          <View style={styles.menuHead}>
+            <Cover name={p.name} imageUrl={p.coverImageUrl} />
+            <View style={styles.rowMeta}>
+              <Text numberOfLines={1} style={[styles.rowName, { color: t.ink }]}>
+                {p.name}
+              </Text>
+              <Text numberOfLines={2} style={[label(8.5), { color: t.inkSoft }]}>
+                {p.trackCount} {p.trackCount === 1 ? 'track' : 'tracks'}
+                {p.shared && ` · ${owned ? 'shared' : 'shared with you'}`}
+                {p.updatedAt ? ` · updated ${relTime(p.updatedAt)}` : ''}
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.menuRule, { backgroundColor: t.line }]} />
+
+          <MenuRow icon="play" label={playBusy ? 'starting…' : 'play'} disabled={playBusy} onPress={onPlay} />
+          <MenuRow label="open playlist" onPress={onOpen} />
+          {onShare && <MenuRow icon="people" label="who can see this" onPress={onShare} />}
+          <MenuRow
+            danger
+            label={owned ? 'delete playlist' : 'leave playlist'}
+            onPress={onDanger}
+          />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function MenuRow({ icon, label: text, danger, disabled, onPress }) {
+  const { t } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={text}
+      accessibilityState={disabled ? { disabled: true } : {}}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}
+    >
+      {icon ? (
+        <Icon name={icon} size={18} color={danger ? SHEET_DANGER : t.inkSoft} />
+      ) : (
+        <View style={styles.menuIconGap} />
+      )}
+      <Text
+        style={[
+          styles.menuRowText,
+          { color: disabled ? t.inkFaint : danger ? SHEET_DANGER : t.ink },
+        ]}
+      >
+        {text}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -611,6 +751,25 @@ const styles = StyleSheet.create({
   empty: { paddingVertical: 14, gap: 4 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  menuScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 28,
+  },
+  menuCard: {
+    alignSelf: 'stretch',
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    gap: 2,
+  },
+  menuHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12 },
+  menuRule: { height: 1, marginBottom: 6 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
+  menuIconGap: { width: 18 },
+  menuRowText: { fontFamily: fonts.medium, fontSize: 15 },
   create: { borderRadius: 12, padding: 14, gap: 9 },
   input: {
     borderWidth: 1,

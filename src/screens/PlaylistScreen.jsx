@@ -173,7 +173,7 @@ export default function PlaylistScreen({ route, navigation }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  const { id = null, publicId = null } = route.params ?? {};
+  const { id = null, publicId = null, share = false } = route.params ?? {};
   const [hit, setHit] = useState({ data: null, error: null });
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -216,6 +216,17 @@ export default function PlaylistScreen({ route, navigation }) {
     load(ctl.signal);
     return () => ctl.abort();
   }, [load]);
+
+  // Arrived via "who can see this" in the playlists-list popup: open the
+  // share controls once the data is here. One-shot — the param must not
+  // reopen the sheet every time the data refreshes.
+  const sharedOnArrival = useRef(false);
+  useEffect(() => {
+    if (share && !sharedOnArrival.current && hit.data && !publicId) {
+      sharedOnArrival.current = true;
+      setShareOpen(true);
+    }
+  }, [share, hit.data, publicId]);
 
   // ── Check YouTube for new songs ───────────────────────────────────
   //

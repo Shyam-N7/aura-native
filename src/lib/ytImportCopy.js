@@ -137,6 +137,14 @@ export const IMPORT_ERRORS = {
     body: 'it will be back shortly.',
     retryable: false,
   },
+  YT_MIGRATION: {
+    // The deployed code is ahead of the database schema — a migration hasn't
+    // run since a deploy. Distinct from YT_INTERNAL because retrying cannot
+    // help, and each retry used to burn the daily import cap.
+    title: 'the server needs a database update',
+    body: "an update shipped but its database step hasn't run yet. nothing was lost — imports resume the moment it does.",
+    retryable: false,
+  },
   YT_INTERNAL: {
     title: 'something went wrong on our side',
     body: 'nothing was lost — try again.',
@@ -276,6 +284,12 @@ export const COPY = {
     // being worked on" is the first item with no tier yet — a fact about the
     // server's cursor, not a guess dressed up as one. That is what makes it
     // honest to name the song on screen.
+    // Labels under the journey scene's two masses — the story made legible:
+    // songs still to match on the left, the playlist growing on the right.
+    scene: {
+      toGo: n => `${n} to go`,
+      added: n => `${n} added`,
+    },
     row: {
       working: 'matching…',
       matched: 'added',
