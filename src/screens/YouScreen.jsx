@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   Pressable,
   StyleSheet,
   Text,
@@ -32,7 +33,7 @@ import {
 import { uploadImage } from '../api/uploads';
 import { pickImage } from '../lib/imagePicker';
 import { showToast } from '../lib/toast';
-import { getPushPrefs, setPushPrefs } from '../lib/push';
+import { getPushPrefs, setPushPrefs, osPermissionGranted, repairNotifications } from '../lib/push';
 import { confirm } from '../lib/confirm';
 import { QUALITIES } from '../lib/audioQuality';
 import { LEVELING_MODES } from '../lib/leveling';
@@ -301,6 +302,33 @@ export default function YouScreen({ navigation }) {
   // fetched, ignoring every tap. Rows now wait for the real answer; clearing
   // pushError re-runs the fetch.
   const [pushError, setPushError] = useState(false);
+  // Whether Android itself is blocking delivery. Re-checked every time the
+  // settings shelf opens AND when the app returns to the foreground — the
+  // repair path can end in system settings, and the row must reflect what the
+  // user did there the moment they come back.
+  const [osBlocked, setOsBlocked] = useState(false);
+  useEffect(() => {
+    if (openShelf !== 'settings') {
+      return undefined;
+    }
+    let live = true;
+    const check = () =>
+      osPermissionGranted().then(g => {
+        if (live) {
+          setOsBlocked(!g);
+        }
+      });
+    check();
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active') {
+        check();
+      }
+    });
+    return () => {
+      live = false;
+      sub.remove();
+    };
+  }, [openShelf]);
   useEffect(() => {
     if (openShelf !== 'settings' || pushPrefs || pushError) {
       return undefined;
@@ -1020,6 +1048,39 @@ export default function YouScreen({ navigation }) {
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
                   notifications
                 </Text>
+                {/* The OS's answer, not the server's. Without this row the
+                    switches below render "on" while Android blocks every
+                    delivery — and the one in-app ask is spent after first
+                    play, so a denial used to be terminal and invisible. */}
+                {osBlocked && (
+                  <View style={styles.hiddenRow}>
+                    <View style={styles.rowMeta}>
+                      <Text
+                        style={[styles.qualityCaption, { color: t.inkSoft }]}
+                      >
+                        notifications are off for aura in your phone's
+                        settings — nothing below can arrive until that changes.
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="turn notifications on"
+                      onPress={async () => {
+                        const ok = await repairNotifications();
+                        if (ok) {
+                          setOsBlocked(false);
+                          showToast('notifications are on.');
+                        }
+                      }}
+                      hitSlop={8}
+                      style={({ pressed }) => pressed && styles.pressed}
+                    >
+                      <Text style={[label(9.5), { color: t.accent }]}>
+                        turn on
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
                 {!pushPrefs && !pushError && (
                   <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
                     loading…

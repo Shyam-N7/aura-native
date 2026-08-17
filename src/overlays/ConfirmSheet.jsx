@@ -36,7 +36,7 @@ export function ConfirmSheet() {
           accessibilityLabel="cancel"
           onPress={() => resolveConfirm(false)}
           hitSlop={8}
-          style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.cancel, { borderColor: t.line }, pressed && styles.pressed]}
         >
           <Text style={[styles.cancelText, { color: t.inkSoft }]}>cancel</Text>
         </Pressable>
@@ -78,8 +78,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   cancel: {
+    // An outlined pill matching the action's geometry — field feedback was
+    // that a bare text cancel beside a filled pill read as fine print, not as
+    // an equal choice. Border only, so the filled action still leads.
+    borderWidth: 1,
+    borderRadius: 999,
     paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 20,
   },
   cancelText: {
     fontFamily: fonts.medium,

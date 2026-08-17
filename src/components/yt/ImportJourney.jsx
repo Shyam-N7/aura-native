@@ -17,6 +17,7 @@ import { useNavFocused } from '../../hooks/useNavFocused';
 import { Goo } from '../ui/Goo';
 import { DUR, EASE } from '../../theme/motion';
 import { label } from '../../theme/tokens';
+import { COPY } from '../../lib/ytImportCopy';
 
 // The import, told as a pour.
 //
@@ -44,10 +45,10 @@ import { label } from '../../theme/tokens';
 
 // Scene geometry. Exported pure so the sizing logic is testable — jest mocks
 // Skia, so nothing inside the canvas can be asserted on.
-export const SCENE = { w: 300, h: 72, pad: 14 };
-const R_MIN = 5;
-const R_MAX = 17;
-const R_TRAVELLER = 6.5;
+export const SCENE = { w: 320, h: 96, pad: 18 };
+const R_MIN = 7;
+const R_MAX = 26;
+const R_TRAVELLER = 8;
 
 /**
  * Radii and anchors for the three actors, from real counts.
@@ -136,31 +137,56 @@ export function ImportJourney({ counts, live }) {
   const focused = useNavFocused();
   const layout = sceneLayout(counts);
 
-  // The one loop: the traveller's wobble, meaning only "the client is alive".
+  // ONE clock drives every idle motion — masses breathing out of phase, the
+  // traveller drifting its slow ellipse, the satellites orbiting. One shared
+  // value, several derived styles: the SensingScreen idiom, at scene scale.
+  // The user's direction for this round was "always moving": the scene must
+  // never freeze between polls. The decoration keeps breathing; the WORDS and
+  // COUNTS still move only on real state — that line does not move.
+  //
   // Gated on BOTH visibility hooks — this screen's poll keeps running while
   // parked by design (it is the server's worker), so an ungated loop here runs
   // for the whole import invisibly: the reports/10 class, ~40 MB/min.
-  const wobble = useSharedValue(0.5);
+  const clock = useSharedValue(0.5);
   const breathing = live && appActive && focused && !reduced;
   useEffect(() => {
     if (!breathing) {
-      cancelAnimation(wobble);
-      wobble.value = 0.5;
+      cancelAnimation(clock);
+      clock.value = 0.5;
       return undefined;
     }
-    wobble.value = withRepeat(
+    clock.value = withRepeat(
       withTiming(1, {
-        duration: DUR.breathe / 2,
+        duration: DUR.breathe,
         easing: Easing.inOut(Easing.sin),
       }),
       -1,
       true,
     );
-    return () => cancelAnimation(wobble);
-  }, [breathing, wobble]);
-  const travellerStyle = useAnimatedStyle(() => ({
-    opacity: 0.45 + wobble.value * 0.55,
-    transform: [{ scale: 0.82 + wobble.value * 0.36 }],
+    return () => cancelAnimation(clock);
+  }, [breathing, clock]);
+
+  const travellerStyle = useAnimatedStyle(() => {
+    const a = clock.value * Math.PI * 2;
+    return {
+      opacity: 0.55 + clock.value * 0.45,
+      transform: [
+        { translateX: Math.sin(a) * 10 },
+        { translateY: Math.cos(a) * 4 },
+        { scale: 0.88 + clock.value * 0.24 },
+      ],
+    };
+  });
+  // The two masses breathe against each other — one swells as the other
+  // settles — so the scene reads as alive even when nothing has landed yet.
+  const leftBreath = useAnimatedStyle(() => ({
+    transform: [{ scale: 0.94 + clock.value * 0.12 }],
+  }));
+  const rightBreath = useAnimatedStyle(() => ({
+    transform: [{ scale: 1.06 - clock.value * 0.12 }],
+  }));
+  const orbit = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${clock.value * 40 - 20}deg` }],
   }));
 
   // A landing: the auto count grew. Mount the goo canvas for FUSE_MS, hide the
@@ -189,6 +215,7 @@ export function ImportJourney({ counts, live }) {
         y={layout.left.y}
         size={layout.left.r * 2}
         color={t.accent}
+        style={leftBreath}
       />
       {!fusing && (
         <Mass
@@ -205,15 +232,46 @@ export function ImportJourney({ counts, live }) {
           y={layout.right.y}
           size={layout.right.r * 2}
           color={t.accent}
+          style={rightBreath}
         />
       )}
       {fusing && <FuseBurst layout={layout} accent={t.accent} />}
+
+      {/* The story, legible: live counts under each mass, so the scene is
+          information wearing motion rather than motion wearing a screen. */}
+      {(counts?.total ?? 0) > 0 && (
+        <>
+          <Text
+            style={[
+              label(7.5),
+              styles.massLabel,
+              styles.massLabelLeft,
+              { width: layout.left.x * 2, color: t.inkFaint },
+            ]}
+          >
+            {COPY.progress.scene.toGo(Math.max(0, counts.matching ?? 0))}
+          </Text>
+          <Text
+            style={[
+              label(7.5),
+              styles.massLabel,
+              {
+                left: layout.right.x - (SCENE.w - layout.right.x),
+                width: (SCENE.w - layout.right.x) * 2,
+                color: t.inkFaint,
+              },
+            ]}
+          >
+            {COPY.progress.scene.added(Math.max(0, counts.auto ?? 0))}
+          </Text>
+        </>
+      )}
 
       {/* The "to check" satellites: real count, worn as a small cluster above
           the playlist mass rather than animated per item — the job view sends
           aggregate deltas, and choreography must not claim more than it knows. */}
       {layout.review > 0 && (
-        <View style={[styles.satellites, { right: SCENE.pad }]}>
+        <Animated.View style={[styles.satellites, { right: SCENE.pad }, orbit]}>
           {Array.from({ length: Math.min(3, layout.review) }, (_, i) => (
             <View
               key={i}
@@ -223,7 +281,7 @@ export function ImportJourney({ counts, live }) {
           <Text style={[label(7.5), { color: t.inkFaint }]}>
             {layout.review}
           </Text>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -254,4 +312,6 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   satellite: { width: 5, height: 5, borderRadius: 999 },
+  massLabel: { position: 'absolute', bottom: 0, textAlign: 'center' },
+  massLabelLeft: { left: 0 },
 });

@@ -29,7 +29,7 @@ import {
   onTokenRefresh,
   requestPermission,
 } from '@react-native-firebase/messaging';
-import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import { Linking, NativeModules, TurboModuleRegistry, PermissionsAndroid, Platform } from 'react-native';
 import { storage } from '../storage/mmkv';
 import { fetchAuthed, getUser } from './auth';
 import { report } from './crumbs';
@@ -103,6 +103,36 @@ async function askOsPermission() {
   return res === PermissionsAndroid.RESULTS.GRANTED;
 }
 
+// The settings screen's view of the OS permission, and its repair path.
+//
+// Before these existed the funnel had no second door: the one ask lived
+// behind 2.5s of playback, a denial was terminal and invisible, and the
+// settings screen rendered server-side prefs as "on" while the OS blocked
+// every delivery — with no state saying so and no way to fix it.
+export async function osPermissionGranted() {
+  try {
+    return granted(await hasPermission(getMessaging()));
+  } catch {
+    // Unknown must read as fine — a row that cries wolf on a transient
+    // failure teaches people to ignore it.
+    return true;
+  }
+}
+
+export async function repairNotifications() {
+  // Ask in-app first — on a device that has not exhausted its prompts this is
+  // one tap. Android returns immediately (no dialog) once the user has said
+  // no twice; then the only remaining door is system settings.
+  const ok = await askOsPermission().catch(() => false);
+  storage.setItem(ASKED_KEY, '1');
+  if (ok) {
+    await registerToken();
+    return true;
+  }
+  Linking.openSettings();
+  return false;
+}
+
 // Called a beat into the first play — a humane moment, once ever.
 export async function ensurePushPermission() {
   if (storage.getItem(ASKED_KEY) === '1') {
@@ -152,11 +182,15 @@ export async function displayPush(msg, { fallbackToast = true } = {}) {
   }
   try {
     const link = data.link ? String(data.link) : null;
-    const shown = await NativeModules.AuraNotifier?.display?.(
-      title,
-      body,
-      link,
-    );
+    // TurboModuleRegistry first, NativeModules as the fallback — the house
+    // pattern (equalizer.js:26). AuraNotifier is a legacy module resolved
+    // through bridgeless interop on new arch, and a bare NativeModules read
+    // that comes back undefined fails SILENTLY here: optional chaining turns
+    // every push into a toast (or, for data-only background pushes, nothing),
+    // while the test suite stays green because it injects the module by hand.
+    const notifier =
+      TurboModuleRegistry.get?.('AuraNotifier') ?? NativeModules.AuraNotifier;
+    const shown = await notifier?.display?.(title, body, link);
     if (shown) {
       return true;
     }

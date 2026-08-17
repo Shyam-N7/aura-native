@@ -9,7 +9,6 @@ import {
   getPlaylist,
   deletePlaylist,
 } from '../src/api/playlists';
-import { confirm } from '../src/lib/confirm';
 import { listAutoPlaylists } from '../src/api/autoPlaylists';
 
 // The rev-poll's focus gate — these tests render bare (no NavigationContainer),
@@ -152,31 +151,35 @@ test('deleting a playlist is two steps: a menu, then a question', async () => {
     />,
   );
 
-  // Step one: the dots open a menu — nothing is asked, nothing is deleted.
+  // Step one: the dots open the popup — the playlist's details as the
+  // header, actions under it. Nothing is asked, nothing is deleted.
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'Drive options').props.onPress();
   });
-  expect(confirm).not.toHaveBeenCalled();
+  expect(texts(tree.toJSON())).toContain('open playlist');
   expect(deletePlaylist).not.toHaveBeenCalled();
 
-  // Step two: the menu row raises the confirm. Declining deletes nothing.
-  confirm.mockResolvedValueOnce(false);
+  // Step two: the danger row raises the ConfirmPopup question — same popup
+  // family as the menu, not the global sheet. Cancelling deletes nothing.
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'delete playlist').props.onPress();
   });
-  expect(confirm).toHaveBeenCalledWith(
-    expect.objectContaining({ title: 'delete "Drive"?' }),
-  );
+  expect(texts(tree.toJSON())).toContain('delete "Drive"?');
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'cancel').props.onPress();
+  });
   expect(deletePlaylist).not.toHaveBeenCalled();
 
   // Accepting deletes.
-  confirm.mockResolvedValueOnce(true);
   deletePlaylist.mockResolvedValueOnce({});
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'Drive options').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'delete playlist').props.onPress();
+  });
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'delete').props.onPress();
   });
   expect(deletePlaylist).toHaveBeenCalledWith('p1');
 

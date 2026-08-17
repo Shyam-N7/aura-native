@@ -19,6 +19,7 @@ import Animated, {
   useSharedValue,
   withDelay,
   withRepeat,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +32,7 @@ import { useAppActive } from '../hooks/useAppActive';
 import { useNavFocused } from '../hooks/useNavFocused';
 import { fmtTime } from '../utils/fmtTime';
 import { artUrl } from '../utils/artUrl';
-import { DUR, EASE } from '../theme/motion';
+import { DUR, EASE, SPRING } from '../theme/motion';
 import { useTheme } from '../theme/ThemeContext';
 import { previewLink, startImport, cancelImport } from '../api/ytImport';
 import { useImportJob, progressOf } from '../hooks/useImportJob';
@@ -326,12 +327,12 @@ function PhaseBody({ phase, render }) {
       return undefined;
     }
     v.value = 0;
-    v.value = withTiming(1, { duration: 240, easing: EASE.enter });
+    v.value = withTiming(1, { duration: 320, easing: EASE.settle });
     return () => cancelAnimation(v);
   }, [phase, reduced, v]);
   const style = useAnimatedStyle(() => ({
     opacity: v.value,
-    transform: [{ translateY: (1 - v.value) * 6 }],
+    transform: [{ translateY: (1 - v.value) * 10 }],
   }));
   return (
     <Animated.View style={[styles.phaseBody, style]}>
@@ -642,9 +643,15 @@ function RevealCard({ item }) {
   const { t } = useTheme();
   const reduced = useReducedMotion();
   const v = useSharedValue(1);
+  const artPop = useSharedValue(1);
   const shownId = useRef(item.id);
   // Manual swap, not entering=/exiting= (the reanimated/Fabric abort class
   // documented on Shelf.jsx — this screen is torn down mid-flight by design).
+  // Each new match is a small WIN, and the card says so: the content rises,
+  // the art lands with a snapback overshoot, an accent ring blooms out behind
+  // it, and a soft accent wash fades off the card. All one-shots driven by
+  // real arrivals — the celebration is event-driven even though the idle
+  // scene above breathes on a clock.
   useEffect(() => {
     if (shownId.current === item.id) {
       return undefined;
@@ -652,15 +659,31 @@ function RevealCard({ item }) {
     shownId.current = item.id;
     if (reduced) {
       v.value = 1;
+      artPop.value = 1;
       return undefined;
     }
     v.value = 0;
     v.value = withTiming(1, { duration: DUR.upNext, easing: EASE.enter });
-    return () => cancelAnimation(v);
-  }, [item.id, reduced, v]);
+    artPop.value = 0.82;
+    artPop.value = withSpring(1, SPRING.snapback);
+    return () => {
+      cancelAnimation(v);
+      cancelAnimation(artPop);
+    };
+  }, [item.id, reduced, v, artPop]);
   const style = useAnimatedStyle(() => ({
     opacity: v.value,
     transform: [{ translateY: (1 - v.value) * 6 }],
+  }));
+  const artStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: artPop.value }],
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: (1 - v.value) * 0.9,
+    transform: [{ scale: 0.7 + v.value * 0.8 }],
+  }));
+  const washStyle = useAnimatedStyle(() => ({
+    opacity: (1 - v.value) * 0.6,
   }));
   const c = item.candidates[0];
   const review = item.tier === 'review';
@@ -668,21 +691,31 @@ function RevealCard({ item }) {
     <Animated.View
       style={[styles.reveal, { backgroundColor: t.surface }, style]}
     >
-      {c.imageUrl ? (
-        <Image source={{ uri: artUrl(c, 150) }} style={styles.revealArt} />
-      ) : (
-        <View
-          style={[
-            styles.revealArt,
-            styles.revealArtFallback,
-            { backgroundColor: t.accentSoft },
-          ]}
-        >
-          <Text style={[styles.revealLetter, { color: t.accent }]}>
-            {c.title?.[0]?.toUpperCase() ?? '·'}
-          </Text>
-        </View>
-      )}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.revealWash, { backgroundColor: t.accentSoft }, washStyle]}
+      />
+      <Animated.View style={artStyle}>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.revealRing, { borderColor: t.accent }, ringStyle]}
+        />
+        {c.imageUrl ? (
+          <Image source={{ uri: artUrl(c, 150) }} style={styles.revealArt} />
+        ) : (
+          <View
+            style={[
+              styles.revealArt,
+              styles.revealArtFallback,
+              { backgroundColor: t.accentSoft },
+            ]}
+          >
+            <Text style={[styles.revealLetter, { color: t.accent }]}>
+              {c.title?.[0]?.toUpperCase() ?? '·'}
+            </Text>
+          </View>
+        )}
+      </Animated.View>
       <View style={styles.revealMeta}>
         <Text style={[label(7.5), { color: review ? t.accent : t.inkFaint }]}>
           {review ? COPY.progress.row.review : COPY.progress.found}
@@ -781,7 +814,7 @@ function ProgressState({ job, pollError, stalled, onResume }) {
     }
     fill.value = withTiming(to, {
       duration: DUR.crossfade,
-      easing: EASE.settle,
+      easing: EASE.enter,
     });
     return () => cancelAnimation(fill);
   }, [pct, reduced, fill]);
@@ -944,12 +977,15 @@ function DoneState({ job, onReview, onOpen, onLater }) {
     .slice(0, 5);
   return (
     <>
+      {/* The scene, resolved: everything on the right, nothing left to do.
+          live={false}, so it holds still — the payoff is a settled picture. */}
+      <ImportJourney counts={job.counts} live={false} />
+
       {fanArts.length > 0 && (
-        <StaggerIn delay={0}>
-          <View style={styles.fan}>
-            {fanArts.map((i, idx) => (
+        <View style={styles.fan}>
+          {fanArts.map((i, idx) => (
+            <StaggerIn key={i.id} delay={idx * 90}>
               <Image
-                key={i.id}
                 source={{ uri: artUrl(i.candidates[0], 150) }}
                 style={[
                   styles.fanArt,
@@ -960,9 +996,9 @@ function DoneState({ job, onReview, onOpen, onLater }) {
                   },
                 ]}
               />
-            ))}
-          </View>
-        </StaggerIn>
+            </StaggerIn>
+          ))}
+        </View>
       )}
 
       <View style={[styles.note, { backgroundColor: t.surface }]}>
@@ -1116,6 +1152,19 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   revealArt: { width: 48, height: 48, borderRadius: 8 },
+  revealRing: {
+    position: 'absolute',
+    left: -6,
+    top: -6,
+    width: 60,
+    height: 60,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  revealWash: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 12,
+  },
   revealArtFallback: { alignItems: 'center', justifyContent: 'center' },
   revealLetter: { fontFamily: fonts.semibold, fontSize: 19 },
   revealMeta: { flex: 1, minWidth: 0, gap: 1 },

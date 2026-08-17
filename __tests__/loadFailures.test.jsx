@@ -38,6 +38,10 @@ jest.mock('../src/lib/auth', () => ({
 jest.mock('../src/lib/push', () => ({
   getPushPrefs: jest.fn(),
   setPushPrefs: jest.fn(),
+  // The OS-permission row: granted by default so these failure-path tests
+  // stay about the PREFS fetch, not the permission state.
+  osPermissionGranted: jest.fn(() => Promise.resolve(true)),
+  repairNotifications: jest.fn(),
 }));
 jest.mock('../src/api/stats', () => ({
   getHistory: jest.fn(),
