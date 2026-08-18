@@ -151,10 +151,10 @@ export default function DnaScreen({ navigation }) {
           </PressScale>
 
           <Text style={[label(10), { color: t.inkFaint }]}>
-            sonic dna · a fingerprint of you
+            Sonic DNA · a fingerprint of you
           </Text>
           <Text style={[styles.hero, { color: t.ink }]}>
-            you, as a{'\n'}fingerprint.
+            You, as a{'\n'}fingerprint.
           </Text>
           {!!dna?.signature && (
             <Text style={[label(10), styles.signature, { color: t.inkFaint }]}>
@@ -165,25 +165,25 @@ export default function DnaScreen({ navigation }) {
 
           {status === 'loading' && (
             <View style={styles.center}>
-              <AuraLoader label="building your sonic dna" />
+              <AuraLoader label="Building your sonic DNA" />
             </View>
           )}
 
           {status === 'error' && (
             <Text style={[styles.errorText, { color: t.inkSoft }]}>
-              couldn't load — {hit.error}
+              Couldn't load — {hit.error}
             </Text>
           )}
 
           {status === 'ok' && !dna.available && (
             <View style={styles.empty}>
               <Text style={[styles.emptyTitle, { color: t.ink }]}>
-                not enough listening yet.
+                Not enough listening yet.
               </Text>
               <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
-                play a few sessions before the fingerprint surfaces.
+                Play a few sessions before the fingerprint surfaces.
                 {dna.threshold && dna.eventsSeen != null
-                  ? ` you're at ${dna.eventsSeen}/${dna.threshold} plays so far.`
+                  ? ` You're at ${dna.eventsSeen}/${dna.threshold} plays so far.`
                   : ''}
               </Text>
             </View>
@@ -233,13 +233,13 @@ export default function DnaScreen({ navigation }) {
               {!!dna.thisMonth && (
                 <View style={styles.block}>
                   <Text style={[label(10), { color: t.inkFaint }]}>
-                    this month · in numbers
+                    This month · in numbers
                   </Text>
                   <View style={styles.stats}>
-                    <StatCard k="hours" v={dna.thisMonth.hours ?? '—'} sub="listened" t={t} />
-                    <StatCard k="artists" v={dna.thisMonth.artists ?? '—'} sub="unique artists" t={t} />
-                    <StatCard k="new" v={dna.thisMonth.newTracks ?? '—'} sub="new tracks" t={t} />
-                    <StatCard k="returns" v={dna.thisMonth.returns ?? '—'} sub="returning" t={t} />
+                    <StatCard k="Hours" v={dna.thisMonth.hours ?? '—'} sub="Listened" t={t} />
+                    <StatCard k="Artists" v={dna.thisMonth.artists ?? '—'} sub="Unique artists" t={t} />
+                    <StatCard k="New" v={dna.thisMonth.newTracks ?? '—'} sub="New tracks" t={t} />
+                    <StatCard k="Returns" v={dna.thisMonth.returns ?? '—'} sub="Returning" t={t} />
                   </View>
                 </View>
               )}
@@ -247,7 +247,7 @@ export default function DnaScreen({ navigation }) {
               {(dna.topMoods?.length ?? 0) > 0 && (
                 <View style={styles.block}>
                   <Text style={[label(10), { color: t.inkFaint }]}>
-                    top moods · this month
+                    Top moods · this month
                   </Text>
                   <View style={styles.moods}>
                     {dna.topMoods.map((m, i) => (

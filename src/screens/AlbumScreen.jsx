@@ -108,10 +108,10 @@ export default function AlbumScreen({ route, navigation }) {
           <View style={styles.head}>
             <CrumbBack onPress={() => navigation.goBack()} />
 
-            {status === 'loading' && <AuraLoader label={`loading ${kind}`} />}
+            {status === 'loading' && <AuraLoader label={`Loading ${kind}`} />}
             {status === 'error' && (
               <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-                couldn't load — {hit.error}
+                Couldn't load — {hit.error}
               </Text>
             )}
 
@@ -123,7 +123,7 @@ export default function AlbumScreen({ route, navigation }) {
                 </Text>
                 {!!mainArtist && (
                   <Text style={[label(9.5), { color: t.inkSoft }]}>
-                    by {mainArtist}
+                    By {mainArtist}
                   </Text>
                 )}
                 {tracks.length > 0 && (

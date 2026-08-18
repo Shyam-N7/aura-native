@@ -5,18 +5,18 @@ import { storage } from '../storage/mmkv';
 // the selected chip and the bridge arc.
 
 export const FROM_MOODS = [
-  { key: 'sad', hint: 'low, heavy', color: '#5a6b9a' },
-  { key: 'stressed', hint: 'wound up', color: '#a85a5a' },
-  { key: 'restless', hint: 'antsy, wired', color: '#c2603a' },
-  { key: 'tired', hint: 'drained', color: '#7a6f8a' },
-  { key: 'lonely', hint: 'on your own', color: '#5a7a8a' },
+  { key: 'sad', hint: 'Low, heavy', color: '#5a6b9a' },
+  { key: 'stressed', hint: 'Wound up', color: '#a85a5a' },
+  { key: 'restless', hint: 'Antsy, wired', color: '#c2603a' },
+  { key: 'tired', hint: 'Drained', color: '#7a6f8a' },
+  { key: 'lonely', hint: 'On your own', color: '#5a7a8a' },
 ];
 export const TO_MOODS = [
-  { key: 'happy', hint: 'lifted', color: '#d8956a' },
-  { key: 'calm', hint: 'at ease', color: '#5a8a72' },
-  { key: 'focused', hint: 'locked in', color: '#6e85a3' },
-  { key: 'energized', hint: 'fired up', color: '#c47554' },
-  { key: 'social', hint: 'out, lively', color: '#a8556a' },
+  { key: 'happy', hint: 'Lifted', color: '#d8956a' },
+  { key: 'calm', hint: 'At ease', color: '#5a8a72' },
+  { key: 'focused', hint: 'Locked in', color: '#6e85a3' },
+  { key: 'energized', hint: 'Fired up', color: '#c47554' },
+  { key: 'social', hint: 'Out, lively', color: '#a8556a' },
 ];
 
 export const MOOD_COLOR = Object.fromEntries(

@@ -166,20 +166,20 @@ export default function LikedScreen({ navigation }) {
   const header = (
     <View style={styles.header}>
       <CrumbBack onPress={() => navigation.goBack()} />
-      {status === 'loading' && <AuraLoader label="loading liked songs" />}
+      {status === 'loading' && <AuraLoader label="Loading liked songs" />}
       {status === 'error' && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-          couldn't load — {hit.error}
+          Couldn't load — {hit.error}
         </Text>
       )}
       {status === 'ok' && (
         <>
           <Text style={[label(9.5), { color: t.inkFaint }]}>
-            your collection
+            Your collection
           </Text>
-          <Text style={[type.queueHero, { color: t.ink }]}>liked</Text>
+          <Text style={[type.queueHero, { color: t.ink }]}>Liked</Text>
           {liked.length > 0 && (
-            <Text style={[label(9.5), { color: t.inkSoft }]}>by you</Text>
+            <Text style={[label(9.5), { color: t.inkSoft }]}>By you</Text>
           )}
           {liked.length > 0 && (
             <PlayAllPill text="Play all" onPress={() => playFrom(0)} />

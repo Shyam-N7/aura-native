@@ -47,14 +47,14 @@ const CONTROL_EVENT = 'aura-audio-eq-control';
 const WEB_FREQS = [60, 150, 400, 1000, 2400, 6000, 12000, 16000];
 
 export const PRESETS = [
-  { id: 'flat', name: 'flat', gains: [0, 0, 0, 0, 0, 0, 0, 0] },
-  { id: 'loud', name: 'loud', gains: [4, 3, 0.5, 1, 2, 2, 3, 4] },
-  { id: 'clarity', name: 'vocal clarity', gains: [0, 0, 1, 2.5, 4, 2, 0, 0] },
-  { id: 'focused', name: 'focused', gains: [-1, 0, 0, 2, 3, 1.5, 0, -0.5] },
-  { id: 'upbeat', name: 'upbeat', gains: [4, 2, 0, -0.5, 1, 2.5, 3.5, 4] },
-  { id: 'social', name: 'social', gains: [1.5, 1.5, 2, 3, 2.5, 1.5, 1, 1] },
-  { id: 'warm', name: 'warm', gains: [3, 3, 1.5, 0.5, 0, -1, -1.5, -2] },
-  { id: 'calm', name: 'calm', gains: [1.5, 2, 1, 0, -0.5, -1, -1.5, -1.5] },
+  { id: 'flat', name: 'Flat', gains: [0, 0, 0, 0, 0, 0, 0, 0] },
+  { id: 'loud', name: 'Loud', gains: [4, 3, 0.5, 1, 2, 2, 3, 4] },
+  { id: 'clarity', name: 'Vocal clarity', gains: [0, 0, 1, 2.5, 4, 2, 0, 0] },
+  { id: 'focused', name: 'Focused', gains: [-1, 0, 0, 2, 3, 1.5, 0, -0.5] },
+  { id: 'upbeat', name: 'Upbeat', gains: [4, 2, 0, -0.5, 1, 2.5, 3.5, 4] },
+  { id: 'social', name: 'Social', gains: [1.5, 1.5, 2, 3, 2.5, 1.5, 1, 1] },
+  { id: 'warm', name: 'Warm', gains: [3, 3, 1.5, 0.5, 0, -1, -1.5, -2] },
+  { id: 'calm', name: 'Calm', gains: [1.5, 2, 1, 0, -0.5, -1, -1.5, -1.5] },
 ];
 
 // Read a web curve at an arbitrary frequency. Interpolation is LOG-frequency

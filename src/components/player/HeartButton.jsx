@@ -120,9 +120,9 @@ export function HeartButton({ trackId, size = 20, color, accent }) {
             withSpring(1, LIKE_SPRING),
           );
     }
-    showToast(liked ? 'removed from likes.' : 'liked.');
+    showToast(liked ? 'Removed from likes.' : 'Liked.');
     (liked ? unlike(trackId) : like(trackId)).catch(() => {
-      showToast("couldn't like — try again.");
+      showToast("Couldn't like — try again.");
     });
   };
 

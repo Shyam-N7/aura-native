@@ -110,31 +110,31 @@ export default function JournalScreen({ navigation }) {
           </PressScale>
 
           <Text style={[label(10), { color: t.inkFaint }]}>
-            your private listening journal
+            Your private listening journal
           </Text>
           <Text style={[styles.hero, { color: t.ink }]}>
-            what you listened{'\n'}to, and why.
+            What you listened{'\n'}to, and why.
           </Text>
 
           {status === 'loading' && (
             <View style={styles.center}>
-              <AuraLoader label="reading your journal" />
+              <AuraLoader label="Reading your journal" />
             </View>
           )}
 
           {status === 'error' && (
             <Text style={[styles.errorText, { color: t.inkSoft }]}>
-              couldn't load the journal — {hit.error}
+              Couldn't load the journal — {hit.error}
             </Text>
           )}
 
           {status === 'ok' && entries.length === 0 && (
             <View style={styles.empty}>
               <Text style={[styles.emptyTitle, { color: t.ink }]}>
-                your journal is waiting on you.
+                Your journal is waiting on you.
               </Text>
               <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
-                listen for a while — entries appear once you've played a
+                Listen for a while — entries appear once you've played a
                 handful of songs.
               </Text>
             </View>
@@ -169,7 +169,7 @@ export default function JournalScreen({ navigation }) {
                 {(e.tracks ?? []).some(item => trackFor(item)) && (
                   <View style={styles.thumbBlock}>
                     <Text style={[label(9), { color: t.inkFaint }]}>
-                      tracks heard
+                      Tracks heard
                     </Text>
                     <View style={styles.thumbRow}>
                       {(e.tracks ?? [])

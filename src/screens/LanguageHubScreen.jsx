@@ -94,15 +94,15 @@ export default function LanguageHubScreen({ route, navigation }) {
         <View style={styles.crumbRow}>
           <CrumbBack onPress={() => navigation.goBack()} />
           <Text style={[label(10), { color: t.inkFaint }]}>
-            browse · {lang}
+            Browse · {lang}
           </Text>
         </View>
         <Text style={[type.queueHero, { color: t.ink }]}>{lang}.</Text>
 
-        {status === 'loading' && <AuraLoader label={`loading ${lang}`} />}
+        {status === 'loading' && <AuraLoader label={`Loading ${lang}`} />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            couldn't load — {hit.error}
+            Couldn't load — {hit.error}
           </Text>
         )}
         {status === 'ok' && !anyContent && (
@@ -147,7 +147,7 @@ export default function LanguageHubScreen({ route, navigation }) {
             )}
             {!!anyContent && (
               <Text style={[label(9), styles.footer, { color: t.inkFaint }]}>
-                — end of {lang} —
+                — End of {lang} —
               </Text>
             )}
           </>

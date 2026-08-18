@@ -13,10 +13,10 @@
 export const PLAYLIST_SORT_KEY = 'aura.sortPlaylist';
 
 export const PLAYLIST_SORTS = [
-  { id: 'default', label: 'in order' },
-  { id: 'title', label: 'title' },
-  { id: 'artist', label: 'artist' },
-  { id: 'longest', label: 'longest' },
+  { id: 'default', label: 'In order' },
+  { id: 'title', label: 'Title' },
+  { id: 'artist', label: 'Artist' },
+  { id: 'longest', label: 'Longest' },
 ];
 
 // Liked songs keeps its own key and its own list on purpose: its natural order
@@ -25,8 +25,8 @@ export const PLAYLIST_SORTS = [
 export const LIKED_SORT_KEY = 'aura.sortLiked';
 
 export const LIKED_SORTS = [
-  { id: 'default', label: 'recent' },
-  { id: 'title', label: 'title' },
-  { id: 'artist', label: 'artist' },
-  { id: 'longest', label: 'longest' },
+  { id: 'default', label: 'Recent' },
+  { id: 'title', label: 'Title' },
+  { id: 'artist', label: 'Artist' },
+  { id: 'longest', label: 'Longest' },
 ];

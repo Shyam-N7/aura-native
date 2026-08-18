@@ -39,12 +39,12 @@ export function SleepTimerSheet() {
   };
   const armEndOfSet = () => {
     startSleepTimer('end-of-set');
-    showToast('sleep at end of set.');
+    showToast('Sleep at end of set.');
     close();
   };
   const disarm = () => {
     cancelSleepTimer();
-    showToast('sleep timer cancelled.');
+    showToast('Sleep timer cancelled.');
     close();
   };
 
@@ -59,7 +59,7 @@ export function SleepTimerSheet() {
     <Sheet onClose={close} closeLabel="close sleep timer">
       <View style={styles.head}>
         <Icon name="moon" size={19} color={t.accent} />
-        <Text style={[styles.title, { color: t.ink }]}>sleep timer</Text>
+        <Text style={[styles.title, { color: t.ink }]}>Sleep timer</Text>
       </View>
       {!!countdown && (
         <Text style={[label(10), styles.countdown, { color: t.accent }]}>
@@ -84,7 +84,7 @@ export function SleepTimerSheet() {
         onPress={armEndOfSet}
         style={({ pressed }) => [styles.item, pressed && styles.pressed]}
       >
-        <Text style={[styles.itemLabel, { color: t.ink }]}>end of set</Text>
+        <Text style={[styles.itemLabel, { color: t.ink }]}>End of set</Text>
       </Pressable>
       {!!sleep && (
         <Pressable
@@ -94,7 +94,7 @@ export function SleepTimerSheet() {
           style={({ pressed }) => [styles.item, pressed && styles.pressed]}
         >
           <Text style={[styles.itemLabel, { color: t.accent }]}>
-            cancel timer
+            Cancel timer
           </Text>
         </Pressable>
       )}

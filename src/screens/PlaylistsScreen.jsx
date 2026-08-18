@@ -187,7 +187,7 @@ export default function PlaylistsScreen({ navigation }) {
     try {
       const playlist = await createPlaylist({ name });
       setHit(h => ({ ...h, data: [playlist, ...(h.data ?? [])] }));
-      showToast('playlist created.');
+      showToast('Playlist created.');
       setNewName('');
       setCreating(false);
     } catch (err) {
@@ -208,7 +208,7 @@ export default function PlaylistsScreen({ navigation }) {
         ...h,
         data: (h.data ?? []).filter(p => p.id !== playlist.id),
       }));
-      showToast('playlist deleted.');
+      showToast('Playlist deleted.');
     } catch (err) {
       showToast(`Couldn't delete — ${err.message}`);
     }
@@ -226,7 +226,7 @@ export default function PlaylistsScreen({ navigation }) {
         ...h,
         data: (h.data ?? []).filter(p => p.id !== playlist.id),
       }));
-      showToast('left the playlist.');
+      showToast('Left the playlist.');
     } catch (err) {
       showToast(`Couldn't leave — ${err.message}`);
     }
@@ -244,14 +244,14 @@ export default function PlaylistsScreen({ navigation }) {
       const full = await getPlaylist(playlist.id);
       const tracks = full?.tracks ?? [];
       if (!tracks.length) {
-        showToast('nothing to play yet.');
+        showToast('Nothing to play yet.');
         return;
       }
       setMenuFor(null);
       player.playQueue(tracks, 0, playlist.name);
       player.ui?.openPlayer?.();
     } catch (err) {
-      showToast(`couldn't play — ${err.message}`);
+      showToast(`Couldn't play — ${err.message}`);
     } finally {
       setPlayBusy(false);
     }
@@ -317,7 +317,7 @@ export default function PlaylistsScreen({ navigation }) {
 
         {auto.length > 0 && (
           <>
-            <GroupHead text="made for you" />
+            <GroupHead text="Made for you" />
             {auto.map(a =>
               a.kind === 'auto-gate' ? (
                 <View key={a.id} style={[styles.rowWrap, styles.gated]}>
@@ -401,7 +401,7 @@ export default function PlaylistsScreen({ navigation }) {
           </>
         )}
 
-        <GroupHead text="made by you" />
+        <GroupHead text="Made by you" />
         {creating ? (
           <View style={[styles.create, { backgroundColor: t.surface }]}>
             <Text style={[label(9.5), { color: t.inkFaint }]}>
@@ -472,7 +472,7 @@ export default function PlaylistsScreen({ navigation }) {
             </Pressable>
             {hintOn && status === 'ok' && owned.length === 0 && (
               <Text style={[label(8), styles.hint, { color: t.accent }]}>
-                start your first playlist
+                Start your first playlist
               </Text>
             )}
             {/* The one gate that decides whether this feature exists for a
@@ -505,19 +505,19 @@ export default function PlaylistsScreen({ navigation }) {
           </>
         )}
 
-        {status === 'loading' && <AuraLoader label="loading playlists" />}
+        {status === 'loading' && <AuraLoader label="Loading playlists" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            couldn't load — {hit.error}
+            Couldn't load — {hit.error}
           </Text>
         )}
         {status === 'ok' && owned.length === 0 && !creating && (
           <View style={styles.empty}>
             <Text style={[styles.emptyTitle, { color: t.ink }]}>
-              nothing here yet.
+              Nothing here yet.
             </Text>
             <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
-              tap "new playlist" above to start one.
+              Tap "new playlist" above to start one.
             </Text>
           </View>
         )}
@@ -525,14 +525,14 @@ export default function PlaylistsScreen({ navigation }) {
 
         {joined.length > 0 && (
           <>
-            <GroupHead text="shared with you" />
+            <GroupHead text="Shared with you" />
             {joined.map(renderRow)}
           </>
         )}
 
         {savedLists.length > 0 && (
           <>
-            <GroupHead text="saved" />
+            <GroupHead text="Saved" />
             {savedLists.map(p => (
               <View
                 key={p.id}
@@ -557,7 +557,7 @@ export default function PlaylistsScreen({ navigation }) {
                       numberOfLines={1}
                       style={[styles.rowName, { color: t.ink }]}
                     >
-                      {p.accessible ? p.name : 'no longer shared'}
+                      {p.accessible ? p.name : 'No longer shared'}
                     </Text>
                     <Text
                       numberOfLines={1}
@@ -567,7 +567,7 @@ export default function PlaylistsScreen({ navigation }) {
                         ? `${p.trackCount} ${
                             p.trackCount === 1 ? 'track' : 'tracks'
                           }${p.ownerName ? ` · by ${p.ownerName}` : ''}`
-                        : 'the owner stopped sharing this'}
+                        : 'The owner stopped sharing this'}
                     </Text>
                   </View>
                 </Pressable>
@@ -617,15 +617,15 @@ export default function PlaylistsScreen({ navigation }) {
         danger
         title={
           confirmFor?.kind === 'leave'
-            ? `leave "${confirmFor?.playlist.name}"?`
-            : `delete "${confirmFor?.playlist.name}"?`
+            ? `Leave "${confirmFor?.playlist.name}"?`
+            : `Delete "${confirmFor?.playlist.name}"?`
         }
         body={
           confirmFor?.kind === 'leave'
-            ? "you'll lose access until you're invited again."
-            : "the playlist will be removed. songs you've liked stay in your library."
+            ? "You'll lose access until you're invited again."
+            : "The playlist will be removed. Songs you've liked stay in your library."
         }
-        action={confirmFor?.kind === 'leave' ? 'leave' : 'delete'}
+        action={confirmFor?.kind === 'leave' ? 'Leave' : 'Delete'}
         onCancel={() => setConfirmFor(null)}
         onConfirm={() => {
           const target = confirmFor;
@@ -684,13 +684,13 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
 
           <View style={[styles.menuRule, { backgroundColor: t.line }]} />
 
-          <MenuRow icon="play" label={playBusy ? 'starting…' : 'play'} disabled={playBusy} onPress={onPlay} />
-          <MenuRow icon="arrow-right" label="open playlist" onPress={onOpen} />
-          {onShare && <MenuRow icon="people" label="who can see this" onPress={onShare} />}
+          <MenuRow icon="play" label={playBusy ? 'Starting…' : 'Play'} disabled={playBusy} onPress={onPlay} />
+          <MenuRow icon="arrow-right" label="Open playlist" onPress={onOpen} />
+          {onShare && <MenuRow icon="people" label="Who can see this" onPress={onShare} />}
           <MenuRow
             icon="close"
             danger
-            label={owned ? 'delete playlist' : 'leave playlist'}
+            label={owned ? 'Delete playlist' : 'Leave playlist'}
             onPress={onDanger}
           />
         </Pressable>

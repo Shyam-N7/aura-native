@@ -20,11 +20,11 @@ export function subscribeModeSheet(fn) {
 
 // One-line hints per mode key (the server sends labels, not descriptions).
 export const MODE_HINT = {
-  everyday: 'your usual mix',
-  family: 'clean, all-ages',
-  kids: 'made for little ones',
-  bhakti: 'devotional',
-  trip: 'on the road',
-  focus: 'calm, low-distraction',
-  car: 'drive-safe',
+  everyday: 'Your usual mix',
+  family: 'Clean, all-ages',
+  kids: 'Made for little ones',
+  bhakti: 'Devotional',
+  trip: 'On the road',
+  focus: 'Calm, low-distraction',
+  car: 'Drive-safe',
 };

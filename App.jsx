@@ -287,7 +287,7 @@ function Shell() {
           if (lastHandledRef.current?.url === url) {
             lastHandledRef.current = null;
           }
-          showToast("couldn't open that song.");
+          showToast("Couldn't open that song.");
         });
     },
     [navRef],

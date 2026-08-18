@@ -139,7 +139,7 @@ function MusicClock({ clock }) {
   const { t } = useTheme();
   return (
     <View style={[styles.clock, { backgroundColor: t.surface }]}>
-      <Text style={[label(10), { color: t.inkFaint }]}>your music clock</Text>
+      <Text style={[label(10), { color: t.inkFaint }]}>Your music clock</Text>
       <Text style={[styles.clockSub, { color: t.inkSoft }]}>
         What you play most at each time of day.
       </Text>
@@ -269,8 +269,8 @@ export default function HistoryScreen({ navigation }) {
   const header = (
     <View style={styles.header}>
       <CrumbBack onPress={() => navigation.goBack()} />
-      <Text style={[type.queueHero, { color: t.ink }]}>your history.</Text>
-      {status === 'loading' && <AuraLoader label="loading history" />}
+      <Text style={[type.queueHero, { color: t.ink }]}>Your history.</Text>
+      {status === 'loading' && <AuraLoader label="Loading history" />}
       {status === 'error' && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
           Couldn't load your history.

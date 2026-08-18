@@ -369,7 +369,7 @@ function PlainView({ lines, view, inkSoft, inkFaint, onShareLine, onWakeScroll }
           </Pressable>
         ))}
       <Text style={[styles.plainCaption, { color: inkFaint }]}>
-        these lyrics aren't synced to the music.
+        These lyrics aren't synced to the music.
       </Text>
     </ScrollView>
   );
@@ -652,7 +652,7 @@ function KaraokeView({
         <View style={styles.karaokeCue}>
           {!playing && (
             <Text style={[styles.karaokeCueText, { color: sideColor }]}>
-              paused — tap the words to continue
+              Paused — tap the words to continue
             </Text>
           )}
         </View>
@@ -680,7 +680,7 @@ function KaraokeView({
               <View style={styles.stageHintRow}>
                 <Icon name="pause" size={12} color={accent} />
                 <Text style={[styles.stageHintText, { color: mainColor }]}>
-                  tap the words to pause
+                  Tap the words to pause
                 </Text>
               </View>
             </Glass>
@@ -729,7 +729,7 @@ function ViewToggle({ view, language, onChange, t }) {
             { color: view === 'en' ? t.bg : t.inkSoft },
           ]}
         >
-          english
+          English
         </Text>
       </Pressable>
       <Pressable
@@ -1039,7 +1039,7 @@ export function LyricsOverlay() {
     }
     if (preparingStems) {
       setPreparingId(null); // tapping again cancels the wait
-      showToast('stopped preparing.');
+      showToast('Stopped preparing.');
       return;
     }
     if (musicOnly) {
@@ -1066,13 +1066,13 @@ export function LyricsOverlay() {
       if (res.status === 'done' && res.url) {
         setPreparingId(null);
         setMusicOnlySrc?.(res.url);
-        showToast('music only — voice removed.');
+        showToast('Music only — voice removed.');
       } else if (res.status === 'failed') {
         setPreparingId(null);
-        showToast("couldn't make a music-only version — try again later.");
+        showToast("Couldn't make a music-only version — try again later.");
       } else if (res.status === 'unavailable') {
         setPreparingId(null);
-        showToast("music only isn't set up yet.");
+        showToast("Music only isn't set up yet.");
       } else if (res.status === 'error') {
         // One dropped poll doesn't mean the server-side job failed — the
         // separation is still running. Keep riding it; only give up if the
@@ -1080,7 +1080,7 @@ export function LyricsOverlay() {
         errs += 1;
         if (errs >= 4) {
           setPreparingId(null);
-          showToast("couldn't reach the server — try again later.");
+          showToast("Couldn't reach the server — try again later.");
         }
       } else if (res.status === 'waiting' || res.status === 'preparing') {
         errs = 0; // genuine in-progress — reset the error streak, keep polling
@@ -1090,7 +1090,7 @@ export function LyricsOverlay() {
         errs += 1;
         if (errs >= 4) {
           setPreparingId(null);
-          showToast("couldn't make a music-only version — try again later.");
+          showToast("Couldn't make a music-only version — try again later.");
         }
       }
     };
@@ -1310,7 +1310,7 @@ export function LyricsOverlay() {
                           { color: karaoke ? t.accent : t.inkSoft },
                         ]}
                       >
-                        karaoke
+                        Karaoke
                       </Text>
                     </Pressable>
                   </HintPulse>
@@ -1327,7 +1327,7 @@ export function LyricsOverlay() {
               {/* One-line in-place hint — gone forever after first entry. */}
               {!!data?.synced && karaokeHintOn && !karaoke && (
                 <Text style={[styles.hintLine, { color: t.inkFaint }]}>
-                  new — tap karaoke to sing along, line by line.
+                  New — tap karaoke to sing along, line by line.
                 </Text>
               )}
             </View>
@@ -1357,7 +1357,7 @@ export function LyricsOverlay() {
                   { color: t.inkSoft },
                 ]}
               >
-                syncing the lyrics…{'\n'}lining the words up to the music —
+                Syncing the lyrics…{'\n'}Lining the words up to the music —
                 check back in a moment.
               </Text>
             </View>

@@ -59,7 +59,7 @@ function PickerBody({ tracks, onPicked }) {
       })
       .catch(err => {
         if (err.name !== 'AbortError') {
-          showToast(`couldn't load playlists — ${err.message}`);
+          showToast(`Couldn't load playlists — ${err.message}`);
           setPlaylists([]);
         }
       });
@@ -84,16 +84,16 @@ function PickerBody({ tracks, onPicked }) {
   const successToast = (playlistName, added) => {
     if (tracks.length === 1) {
       if (added === 1) {
-        showToast(`added to ${playlistName}.`, { tick: true });
+        showToast(`Added to ${playlistName}.`, { tick: true });
       } else {
-        showToast(`already in ${playlistName}.`);
+        showToast(`Already in ${playlistName}.`);
       }
     } else if (added === 0) {
-      showToast(`all tracks already in ${playlistName}.`);
+      showToast(`All tracks already in ${playlistName}.`);
     } else if (added === tracks.length) {
-      showToast(`added ${added} tracks to ${playlistName}.`, { tick: true });
+      showToast(`Added ${added} tracks to ${playlistName}.`, { tick: true });
     } else {
-      showToast(`added ${added} of ${tracks.length} to ${playlistName}.`, {
+      showToast(`Added ${added} of ${tracks.length} to ${playlistName}.`, {
         tick: true,
       });
     }
@@ -110,7 +110,7 @@ function PickerBody({ tracks, onPicked }) {
       successToast(playlist.name, added);
       onPicked();
     } catch (err) {
-      showToast(`couldn't add — ${err.message}`);
+      showToast(`Couldn't add — ${err.message}`);
       setBusyName(null);
     }
   };
@@ -129,7 +129,7 @@ function PickerBody({ tracks, onPicked }) {
       successToast(playlist.name, added);
       onPicked();
     } catch (err) {
-      showToast(`couldn't create — ${err.message}`);
+      showToast(`Couldn't create — ${err.message}`);
       setBusyName(null);
     }
   };
@@ -137,7 +137,7 @@ function PickerBody({ tracks, onPicked }) {
   if (busyName) {
     return (
       <Text style={[styles.stateLine, { color: t.inkFaint }]}>
-        adding to {busyName}
+        Adding to {busyName}
       </Text>
     );
   }
@@ -146,13 +146,13 @@ function PickerBody({ tracks, onPicked }) {
     <>
       {creating ? (
         <View style={styles.create}>
-          <Text style={[label(9.5), { color: t.inkFaint }]}>new playlist</Text>
+          <Text style={[label(9.5), { color: t.inkFaint }]}>New playlist</Text>
           <TextInput
             autoFocus
             value={newName}
             onChangeText={setNewName}
             onSubmitEditing={submitNew}
-            placeholder="name your playlist"
+            placeholder="Name your playlist"
             placeholderTextColor={t.inkFaint}
             cursorColor={t.accent}
             selectionColor={t.accent}
@@ -203,11 +203,11 @@ function PickerBody({ tracks, onPicked }) {
           <View style={[styles.coverFallback, { backgroundColor: t.accentSoft }]}>
             <Text style={[styles.coverPlus, { color: t.accent }]}>+</Text>
           </View>
-          <Text style={[styles.rowName, { color: t.ink }]}>new playlist</Text>
+          <Text style={[styles.rowName, { color: t.ink }]}>New playlist</Text>
         </Pressable>
       )}
 
-      {playlists === null && <AuraLoader label="loading playlists" />}
+      {playlists === null && <AuraLoader label="Loading playlists" />}
       {playlists !== null && playlists.length === 0 && !creating && (
         <Text style={[styles.stateLine, { color: t.inkSoft }]}>
           no playlists yet — tap "new playlist" above.

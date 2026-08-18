@@ -27,6 +27,10 @@ import { fonts, label, radii } from '../theme/tokens';
 // threads any from→to path (curate → begin), and four classic presets round
 // it out. The server (LLM plan + 3-tier catalog assembly) is already live.
 
+// The mood key is both the logic value (compared, sent to the server) and
+// the chip's visible name — capitalize at render, never in the data.
+const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 function MoodPicker({ heading, moods, value, badgeKey, onPick, t }) {
   return (
     <View style={styles.moodcol}>
@@ -54,11 +58,11 @@ function MoodPicker({ heading, moods, value, badgeKey, onPick, t }) {
                     { color: on ? m.color : t.ink },
                   ]}
                 >
-                  {m.key}
+                  {cap(m.key)}
                 </Text>
                 {badgeKey === m.key && (
                   <View style={[styles.badge, { backgroundColor: t.accent }]}>
-                    <Text style={[styles.badgeText, { color: t.bg }]}>you</Text>
+                    <Text style={[styles.badgeText, { color: t.bg }]}>You</Text>
                   </View>
                 )}
               </View>
@@ -165,12 +169,12 @@ export default function BridgesScreen({ navigation }) {
         return; // config moved on — drop this result
       }
       if (!b.tracks?.length) {
-        showToast("couldn't curate that bridge.");
+        showToast("Couldn't curate that bridge.");
         return;
       }
       setBuilt(b);
     } catch (err) {
-      showToast(`couldn't curate — ${err.message}`);
+      showToast(`Couldn't curate — ${err.message}`);
     } finally {
       buildingRef.current = false;
       setBuilding(false);
@@ -214,12 +218,12 @@ export default function BridgesScreen({ navigation }) {
         langs: cfg.langs,
       });
       if (!tracks?.length) {
-        showToast("couldn't curate that bridge.");
+        showToast("Couldn't curate that bridge.");
         return;
       }
       play(tracks, bridge.from, bridge.to);
     } catch (err) {
-      showToast(`couldn't load bridge — ${err.message}`);
+      showToast(`Couldn't load bridge — ${err.message}`);
     } finally {
       setLoadingId(null);
     }
@@ -249,13 +253,13 @@ export default function BridgesScreen({ navigation }) {
           </PressScale>
 
           <Text style={[label(11), { color: t.inkFaint }]}>
-            gradual paths between feelings
+            Gradual paths between feelings
           </Text>
           <Text style={[styles.hero, { color: t.ink }]}>
-            from here{'\n'}to there.
+            From here{'\n'}to there.
           </Text>
           <Text style={[styles.sub, { color: t.inkSoft }]}>
-            songs threaded so the mood shifts gradually. build your own path, or
+            Songs threaded so the mood shifts gradually. Build your own path, or
             let the bridge read you.
           </Text>
 
@@ -268,7 +272,7 @@ export default function BridgesScreen({ navigation }) {
               ]}
             >
               <Text style={[label(10), { color: t.accent }]}>
-                the bridge already knows
+                The bridge already knows
               </Text>
               {suggestion ? (
                 <>
@@ -289,7 +293,7 @@ export default function BridgesScreen({ navigation }) {
                     loading={!heroBridge}
                     cta={
                       heroBridge?.tracks?.length
-                        ? { label: 'begin →', onPress: beginHero }
+                        ? { label: 'Begin →', onPress: beginHero }
                         : null
                     }
                     t={t}
@@ -297,7 +301,7 @@ export default function BridgesScreen({ navigation }) {
                 </>
               ) : (
                 <Text style={[styles.heroReason, { color: t.inkFaint }]}>
-                  reading the moment…
+                  Reading the moment…
                 </Text>
               )}
             </View>
@@ -305,10 +309,10 @@ export default function BridgesScreen({ navigation }) {
 
           {/* Build your own */}
           <Text style={[label(11), styles.blockLabel, { color: t.inkFaint }]}>
-            build your own
+            Build your own
           </Text>
           <MoodPicker
-            heading="where you are"
+            heading="Where you are"
             moods={FROM_MOODS}
             value={cfg.from}
             badgeKey={suggestion?.mood ? suggestion.from : null}
@@ -316,7 +320,7 @@ export default function BridgesScreen({ navigation }) {
             t={t}
           />
           <MoodPicker
-            heading="where you want to be"
+            heading="Where you want to be"
             moods={TO_MOODS}
             value={cfg.to}
             badgeKey={null}
@@ -325,7 +329,7 @@ export default function BridgesScreen({ navigation }) {
           />
 
           <Text style={[label(9), styles.langLabel, { color: t.inkFaint }]}>
-            languages
+            Languages
           </Text>
           <View style={styles.langrow}>
             <Pressable
@@ -344,7 +348,7 @@ export default function BridgesScreen({ navigation }) {
                   { color: cfg.langs.length === 0 ? t.accent : t.inkSoft },
                 ]}
               >
-                your mix
+                Your mix
               </Text>
             </Pressable>
             {BRIDGE_LANGS.map(l => {
@@ -373,7 +377,7 @@ export default function BridgesScreen({ navigation }) {
           </View>
 
           <View style={styles.steps}>
-            <Text style={[label(10), { color: t.inkFaint }]}>length</Text>
+            <Text style={[label(10), { color: t.inkFaint }]}>Length</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="fewer tracks"
@@ -411,7 +415,7 @@ export default function BridgesScreen({ navigation }) {
 
           {sameMood ? (
             <Text style={[styles.hint, { color: t.inkSoft }]}>
-              pick two different moods and aura threads a path between them.
+              Pick two different moods and AURA threads a path between them.
             </Text>
           ) : (
             <View
@@ -429,8 +433,8 @@ export default function BridgesScreen({ navigation }) {
                   building
                     ? null
                     : built?.tracks?.length
-                      ? { label: 'begin →', onPress: beginBuilt }
-                      : { label: 'curate this path →', onPress: curate }
+                      ? { label: 'Begin →', onPress: beginBuilt }
+                      : { label: 'Curate this path →', onPress: curate }
                 }
                 t={t}
               />
@@ -439,7 +443,7 @@ export default function BridgesScreen({ navigation }) {
 
           {/* Classic paths */}
           <Text style={[label(11), styles.blockLabel, { color: t.inkFaint }]}>
-            classic paths
+            Classic paths
           </Text>
           {MOOD_BRIDGES.map(b => (
             <PressScale
@@ -458,7 +462,7 @@ export default function BridgesScreen({ navigation }) {
                   {b.steps} tracks · {b.eta}
                 </Text>
                 <Text style={[label(9.5), { color: t.accent }]}>
-                  {loadingId === b.id ? 'loading…' : 'begin →'}
+                  {loadingId === b.id ? 'Loading…' : 'Begin →'}
                 </Text>
               </View>
               <BridgeItinerary

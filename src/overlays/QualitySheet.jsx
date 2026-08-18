@@ -34,7 +34,7 @@ export function QualitySheet() {
 
   return (
     <Sheet onClose={closeQualitySheet} closeLabel="close quality">
-      <Text style={[styles.title, { color: t.ink }]}>audio quality</Text>
+      <Text style={[styles.title, { color: t.ink }]}>Audio quality</Text>
       <Text style={[label(9.5), styles.sub, { color: t.inkFaint }]}>
         higher sounds better · lower saves data
       </Text>
@@ -44,7 +44,7 @@ export function QualitySheet() {
           <Pressable
             key={q.id}
             accessibilityRole="button"
-            accessibilityLabel={`quality ${q.label}`}
+            accessibilityLabel={`quality ${q.id}`}
             accessibilityState={{ selected: on }}
             onPress={() => pick(q.id)}
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}

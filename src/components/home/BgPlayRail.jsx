@@ -111,7 +111,7 @@ export function BgPlayRail({ value, onPress }) {
           knobStyle,
         ]}
       >
-        <Text style={[label(8), { color: value ? t.bg : t.inkSoft }]}>bg</Text>
+        <Text style={[label(8), { color: value ? t.bg : t.inkSoft }]}>BG</Text>
       </Animated.View>
     </Pressable>
   );

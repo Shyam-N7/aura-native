@@ -84,7 +84,7 @@ import { countRender } from '../lib/renderCount';
 // chip's icon + label so the owner always sees who can see it (public wins
 // when both a link and collaborators exist — web parity).
 const VIS_ICON = { private: 'lock', shared: 'people', public: 'globe' };
-const VIS_LABEL = { private: 'private', shared: 'shared', public: 'public' };
+const VIS_LABEL = { private: 'Private', shared: 'Shared', public: 'Public' };
 
 // Shared with CatalogPlaylistScreen — same key, so necessarily the same list.
 const SORT_KEY = PLAYLIST_SORT_KEY;
@@ -152,7 +152,7 @@ const PlaylistTrackRow = React.memo(function PlaylistTrackRow({
             extras: [
               {
                 icon: 'close',
-                label: 'remove from this playlist',
+                label: 'Remove from this playlist',
                 danger: true,
                 onPress: () => onRemove(track),
               },
@@ -555,9 +555,9 @@ export default function PlaylistScreen({ route, navigation }) {
       bits.push('the public link turns off');
     }
     confirm({
-      title: 'make this only you?',
-      body: `${bits.join(', ')}. you can share it again anytime.`,
-      action: 'make private',
+      title: 'Make this only you?',
+      body: `${bits.join(', ')}. You can share it again anytime.`,
+      action: 'Make private',
     }).then(async ok => {
       if (!ok) {
         return;
@@ -585,9 +585,9 @@ export default function PlaylistScreen({ route, navigation }) {
   // Owner removes a collaborator from the members sheet (with a confirm).
   const dropCollaborator = async c => {
     const ok = await confirm({
-      title: `remove ${c.name}?`,
-      body: 'they lose access to this playlist. you can re-invite them anytime.',
-      action: 'remove',
+      title: `Remove ${c.name}?`,
+      body: 'They lose access to this playlist. You can re-invite them anytime.',
+      action: 'Remove',
     });
     if (!ok) {
       return;
@@ -611,9 +611,9 @@ export default function PlaylistScreen({ route, navigation }) {
 
   const removeTrack = useCallback(async track => {
     const ok = await confirm({
-      title: `remove "${cleanTitle(track.title)}"?`,
-      body: 'this only removes it from this playlist. your likes are untouched.',
-      action: 'remove',
+      title: `Remove "${cleanTitle(track.title)}"?`,
+      body: 'This only removes it from this playlist. Your likes are untouched.',
+      action: 'Remove',
     });
     if (!ok) {
       return;
@@ -735,7 +735,7 @@ export default function PlaylistScreen({ route, navigation }) {
           highlight={query}
           reason={
             shared && track.addedBy
-              ? `added by ${
+              ? `Added by ${
                   track.addedBy.userId === myId ? 'you' : track.addedBy.name
                 }`
               : undefined
@@ -821,7 +821,7 @@ export default function PlaylistScreen({ route, navigation }) {
               player.playQueue(mix.tracks, 0, mix.name);
               player.ui?.openPlayer?.();
             })
-            .catch(() => showToast("couldn't start the radio."));
+            .catch(() => showToast("Couldn't start the radio."));
         }}
         style={({ pressed }) => [styles.streamFoot, pressed && styles.pressed]}
       >
@@ -855,7 +855,7 @@ export default function PlaylistScreen({ route, navigation }) {
           <View style={styles.head}>
             <CrumbBack onPress={() => navigation.goBack()} />
 
-        {status === 'loading' && <AuraLoader label="loading playlist" />}
+        {status === 'loading' && <AuraLoader label="Loading playlist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
             {/* This was one fixed sentence for both branches, so opening YOUR
@@ -864,8 +864,8 @@ export default function PlaylistScreen({ route, navigation }) {
                 state and simply never rendered — every sibling screen shows
                 it. Lowercase per docs/CONTEXT.md's stated voice. */}
             {publicId
-              ? 'this playlist is private or unavailable. if someone shared it, ask them for a public view link.'
-              : hit.error || "couldn't load this playlist."}
+              ? 'This playlist is private or unavailable. If someone shared it, ask them for a public view link.'
+              : hit.error || "Couldn't load this playlist."}
           </Text>
         )}
 
@@ -893,19 +893,19 @@ export default function PlaylistScreen({ route, navigation }) {
                   ]}
                 >
                   <Text style={[label(8.5), styles.coverEditText]}>
-                    change cover
+                    Change cover
                   </Text>
                 </Pressable>
               )}
             </View>
             <Text style={[label(9.5), { color: t.inkFaint }]}>
-              playlist{shared ? ' · shared' : ''}
+              Playlist{shared ? ' · shared' : ''}
             </Text>
             <Text style={[type.queueHero, { color: t.ink }]}>
               {hit.data.name}
             </Text>
             <Text style={[label(9.5), { color: t.inkSoft }]}>
-              {isOwner ? 'by you' : `by ${hit.data.ownerName ?? 'someone'}`}
+              {isOwner ? 'By you' : `By ${hit.data.ownerName ?? 'someone'}`}
               {updatedAt ? ` · updated ${relTime(updatedAt)}` : ''}
             </Text>
 
@@ -1001,7 +1001,7 @@ export default function PlaylistScreen({ route, navigation }) {
                   <Text
                     style={[label(9.5), { color: saved ? t.accent : t.inkSoft }]}
                   >
-                    {saved ? 'saved' : 'save'}
+                    {saved ? 'Saved' : 'Save'}
                   </Text>
                 </Pressable>
               )}
@@ -1081,34 +1081,34 @@ export default function PlaylistScreen({ route, navigation }) {
       {/* Who can see this — the web's anchored share menu as a sheet. */}
       {shareOpen && (
         <Sheet onClose={() => setShareOpen(false)} closeLabel="close sharing">
-          <SheetHead text="who can see this" />
+          <SheetHead text="Who can see this" />
           <SheetItem
             icon="lock"
-            text="only you"
-            note="just for you"
+            text="Only you"
+            note="Just for you"
             on={visibility === 'private'}
             disabled={visibility === 'private'}
             onPress={makeOnlyMe}
           />
           <SheetHead
-            text={`people you invite${collaborators.length ? ' ·' : ''}`}
+            text={`People you invite${collaborators.length ? ' ·' : ''}`}
           />
           <SheetItem
             icon="people"
-            text="share an edit-invite link"
-            note="they can add and remove songs after signing in"
+            text="Share an edit-invite link"
+            note="They can add and remove songs after signing in"
             onPress={shareInvite('editor')}
           />
           <SheetItem
             icon="people"
-            text="share a view-invite link"
-            note="they can listen after signing in"
+            text="Share a view-invite link"
+            note="They can listen after signing in"
             onPress={shareInvite('viewer')}
           />
-          <SheetHead text={`anyone with the link${isPublic ? ' ·' : ''}`} />
+          <SheetHead text={`Anyone with the link${isPublic ? ' ·' : ''}`} />
           <SheetItem
             icon="globe"
-            text={isPublic ? 'turn off public link' : 'make a public view link'}
+            text={isPublic ? 'Turn off public link' : 'Make a public view link'}
             on={isPublic}
             disabled={shareBusy}
             onPress={togglePublic}
@@ -1116,7 +1116,7 @@ export default function PlaylistScreen({ route, navigation }) {
           {isPublic && !!pubId && (
             <SheetItem
               icon="globe"
-              text="share public link"
+              text="Share public link"
               onPress={sharePublicLink}
             />
           )}
@@ -1131,7 +1131,7 @@ export default function PlaylistScreen({ route, navigation }) {
           closeLabel="close members"
           header={
             <Text style={[styles.sheetTitle, { color: t.ink }]}>
-              who has access
+              Who has access
             </Text>
           }
         >
@@ -1145,9 +1145,9 @@ export default function PlaylistScreen({ route, navigation }) {
             />
             <View style={styles.memberMeta}>
               <Text style={[styles.memberName, { color: t.ink }]}>
-                {isOwner ? 'you' : hit.data?.ownerName ?? 'someone'}
+                {isOwner ? 'You' : hit.data?.ownerName ?? 'Someone'}
               </Text>
-              <Text style={[label(8.5), { color: t.inkSoft }]}>owner</Text>
+              <Text style={[label(8.5), { color: t.inkSoft }]}>Owner</Text>
             </View>
           </View>
           {collaborators.map(c => (
@@ -1155,10 +1155,10 @@ export default function PlaylistScreen({ route, navigation }) {
               <Avatar user={c} size={38} />
               <View style={styles.memberMeta}>
                 <Text style={[styles.memberName, { color: t.ink }]}>
-                  {c.userId === myId ? 'you' : c.name}
+                  {c.userId === myId ? 'You' : c.name}
                 </Text>
                 <Text style={[label(8.5), { color: t.inkSoft }]}>
-                  can {c.role === 'viewer' ? 'view' : 'edit'}
+                  Can {c.role === 'viewer' ? 'view' : 'edit'}
                   {c.joinedAt ? ` · joined ${relTime(c.joinedAt)}` : ''}
                 </Text>
               </View>
@@ -1170,7 +1170,7 @@ export default function PlaylistScreen({ route, navigation }) {
                   hitSlop={8}
                   style={({ pressed }) => pressed && styles.pressed}
                 >
-                  <Text style={[label(9.5), { color: t.accent }]}>remove</Text>
+                  <Text style={[label(9.5), { color: t.accent }]}>Remove</Text>
                 </Pressable>
               )}
             </View>
@@ -1185,7 +1185,7 @@ export default function PlaylistScreen({ route, navigation }) {
           closeLabel="close cover picker"
           header={
             <Text style={[styles.sheetTitle, { color: t.ink }]}>
-              choose a cover
+              Choose a cover
             </Text>
           }
         >
@@ -1201,11 +1201,11 @@ export default function PlaylistScreen({ route, navigation }) {
           >
             <Icon name="plus" size={16} color={t.accent} />
             <Text style={[styles.sheetItemText, { color: t.accent }]}>
-              upload your own image
+              Upload your own image
             </Text>
           </Pressable>
           <Text style={[label(9.5), styles.sheetHead, { color: t.inkFaint }]}>
-            or pick from this playlist
+            Or pick from this playlist
           </Text>
           <View style={styles.coverGrid}>
             {/* A sample is plenty for picking a cover — the full playlist

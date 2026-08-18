@@ -14,10 +14,10 @@ const subs = new Set();
 // Settings-row order. Targets in LUFS (Spotify's tiers): loud levels less,
 // quiet levels hardest.
 export const LEVELING_MODES = [
-  { id: 'off', target: null, label: 'off', caption: 'tracks play as mastered' },
-  { id: 'loud', target: -11, label: 'loud', caption: 'punchy · levels only the loudest' },
-  { id: 'normal', target: -14, label: 'normal', caption: 'even volume across tracks' },
-  { id: 'quiet', target: -19, label: 'quiet', caption: 'gentle · for late nights' },
+  { id: 'off', target: null, label: 'Off', caption: 'Tracks play as mastered' },
+  { id: 'loud', target: -11, label: 'Loud', caption: 'Punchy · levels only the loudest' },
+  { id: 'normal', target: -14, label: 'Normal', caption: 'Even volume across tracks' },
+  { id: 'quiet', target: -19, label: 'Quiet', caption: 'Gentle · for late nights' },
 ];
 export const DEFAULT_LEVELING = 'normal';
 

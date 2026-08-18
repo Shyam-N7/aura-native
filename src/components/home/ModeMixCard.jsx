@@ -74,7 +74,7 @@ export function ModeMixCard({ modeLabel, tracks, loading, onPlayAll }) {
           ))}
         </View>
         <View style={styles.meta}>
-          <Text style={[label(11), { color: t.accent }]}>your mix</Text>
+          <Text style={[label(11), { color: t.accent }]}>Your mix</Text>
           <Text numberOfLines={1} style={[styles.title, { color: t.ink }]}>
             {modeLabel} mix
           </Text>

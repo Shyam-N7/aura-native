@@ -141,28 +141,28 @@ function PlayerMenuSheet({
           </View>
         ))}
         {/* Reading about gestures flows straight into doing them. */}
-        <SheetRow icon="repeat" label="run the tour" onPress={act(onReplayTour)} />
+        <SheetRow icon="repeat" label="Run the tour" onPress={act(onReplayTour)} />
       </Sheet>
     );
   }
   return (
     <Sheet animated={false} onClose={onClose} closeLabel="close player menu">
-      <Text style={[styles.menuTitle, { color: t.ink }]}>player options</Text>
-      <SheetRow icon="prev" label="previous song" onPress={act(player.prev)} />
-      <SheetRow icon="next" label="next song" onPress={act(player.next)} />
+      <Text style={[styles.menuTitle, { color: t.ink }]}>Player options</Text>
+      <SheetRow icon="prev" label="Previous song" onPress={act(player.prev)} />
+      <SheetRow icon="next" label="Next song" onPress={act(player.next)} />
       <SheetRow
         icon="grip"
-        label="open queue"
+        label="Open queue"
         onPress={act(() => player.ui?.openQueue?.())}
       />
       <SheetRow
         icon="share"
-        label="share song"
+        label="Share song"
         onPress={act(() => shareTrack(player.current))}
       />
       <SheetRow
         icon="share"
-        label="share from here"
+        label="Share from here"
         onPress={act(async () => {
           const track = player.current;
           const sec = await player.getPositionSec().catch(() => 0);
@@ -172,31 +172,31 @@ function PlayerMenuSheet({
       <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
       <SheetRow
         icon="sliders"
-        label="equalizer"
+        label="Equalizer"
         onPress={act(onOpenEqualizer)}
       />
       <SheetRow
         icon="wave"
         label={
           ribbonStyle === 'wave'
-            ? 'progress bar: wavy'
-            : 'progress bar: straight'
+            ? 'Progress bar: wavy'
+            : 'Progress bar: straight'
         }
         onPress={act(onToggleRibbon)}
       />
       <SheetRow
         icon={gesturesOff ? 'eye' : 'eye-off'}
-        label={gesturesOff ? 'turn gestures on' : 'turn gestures off'}
+        label={gesturesOff ? 'Turn gestures on' : 'Turn gestures off'}
         onPress={act(onToggleGestures)}
       />
       <SheetRow
         icon="bloom"
-        label="how gestures work"
+        label="How gestures work"
         onPress={() => setGuide(true)}
       />
       <SheetRow
         icon="repeat"
-        label="replay the gesture tour"
+        label="Replay the gesture tour"
         onPress={act(onReplayTour)}
       />
     </Sheet>
@@ -700,13 +700,13 @@ export function PlayerSheet() {
   const backdrop = artUrl(track, 150);
   const liked = isLiked(track.id);
   const likeNow = () => {
-    showToast('liked.');
-    like(track.id).catch(() => showToast("couldn't like — try again."));
+    showToast('Liked.');
+    like(track.id).catch(() => showToast("Couldn't like — try again."));
   };
   const toggleLike = () => {
     if (liked) {
-      showToast('removed from likes.');
-      unlike(track.id).catch(() => showToast("couldn't like — try again."));
+      showToast('Removed from likes.');
+      unlike(track.id).catch(() => showToast("Couldn't like — try again."));
     } else {
       likeNow();
     }
@@ -845,7 +845,7 @@ export function PlayerSheet() {
       }
     });
   const qualityLabel =
-    QUALITIES.find(q => q.id === player.quality)?.label ?? 'quality';
+    QUALITIES.find(q => q.id === player.quality)?.label ?? 'Quality';
 
   // The queue opens as its own sheet above this one — the player stays put
   // and is exactly where you left it when the queue closes.
@@ -873,7 +873,7 @@ export function PlayerSheet() {
             <View style={styles.upNextRow}>
               <TrackArt track={nextTrack} size={28} radius={5} />
               <View style={styles.upNextMeta}>
-                <Text style={[label(7.5), { color: t.inkFaint }]}>up next</Text>
+                <Text style={[label(7.5), { color: t.inkFaint }]}>Up next</Text>
                 <Text
                   numberOfLines={1}
                   style={[styles.upNextTitle, { color: t.ink }]}
@@ -896,7 +896,7 @@ export function PlayerSheet() {
             <View style={styles.upNextRow}>
               <Skeleton height={28} radius={5} style={styles.skelArt} />
               <View style={styles.upNextMeta}>
-                <Text style={[label(7.5), { color: t.inkFaint }]}>up next</Text>
+                <Text style={[label(7.5), { color: t.inkFaint }]}>Up next</Text>
                 <Text
                   numberOfLines={1}
                   style={[styles.upNextTitle, { color: t.inkFaint }]}
@@ -983,7 +983,7 @@ export function PlayerSheet() {
                 numberOfLines={1}
                 style={[label(11), styles.topSource, { color: t.inkFaint }]}
               >
-                {queue.source ?? 'now playing'}
+                {queue.source ?? 'Now playing'}
               </Text>
               <PressScale
                 accessibilityRole="button"
@@ -1022,7 +1022,7 @@ export function PlayerSheet() {
                       >
                         <Icon name="heart" size={13} color={t.accent} />
                         <Text style={[styles.hintText, { color: t.ink }]}>
-                          double-tap to like
+                          Double-tap to like
                         </Text>
                       </View>
                     )}
@@ -1056,7 +1056,7 @@ export function PlayerSheet() {
                       ]}
                     >
                       <Text style={[styles.hintText, { color: t.ink }]}>
-                        {holdSeek.dir > 0 ? 'fast forward' : 'rewind'} ·{' '}
+                        {holdSeek.dir > 0 ? 'Fast forward' : 'Rewind'} ·{' '}
                         {fmtTime(holdSeek.target)}
                       </Text>
                     </View>
@@ -1169,7 +1169,7 @@ export function PlayerSheet() {
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={
-                  player.shuffleActive ? 'shuffle off' : 'shuffle'
+                  player.shuffleActive ? 'Shuffle off' : 'Shuffle'
                 }
                 onPress={player.toggleShuffle}
                 hitSlop={8}
@@ -1214,7 +1214,7 @@ export function PlayerSheet() {
               </PressScale>
               <PressScale
                 accessibilityRole="button"
-                accessibilityLabel={`audio quality, ${qualityLabel}`}
+                accessibilityLabel={`audio quality, ${player.quality}`}
                 onPress={openQualitySheet}
                 style={[styles.qualityPill, { borderColor: t.line }]}
               >
@@ -1248,7 +1248,7 @@ export function PlayerSheet() {
                 <Text
                   style={[styles.saveText, { color: liked ? t.accent : t.ink }]}
                 >
-                  {liked ? 'liked' : 'like'}
+                  {liked ? 'Liked' : 'Like'}
                 </Text>
               </PressScale>
               <PressScale
@@ -1277,7 +1277,7 @@ export function PlayerSheet() {
                     <Text
                       style={[styles.queueHintText, { color: t.inkSoft }]}
                     >
-                      swipe up to open the queue
+                      Swipe up to open the queue
                     </Text>
                   </View>
                 )}

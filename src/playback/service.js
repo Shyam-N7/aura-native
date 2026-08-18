@@ -151,7 +151,7 @@ module.exports = async function service() {
           stallTimer = null;
           stallAnnounced = true;
           crumb('playback', 'stall');
-          showToast('your connection is slow — still loading.');
+          showToast('Your connection is slow — still loading.');
         }, STALL_TOAST_MS);
       }
     } else {

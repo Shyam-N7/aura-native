@@ -41,8 +41,8 @@ export function EqualizerPopup({ visible, onClose }) {
           >
             <View style={styles.head}>
               <View style={styles.headMeta}>
-                <Text style={[label(9.5), { color: t.inkFaint }]}>audio</Text>
-                <Text style={[styles.title, { color: t.ink }]}>equalizer</Text>
+                <Text style={[label(9.5), { color: t.inkFaint }]}>Audio</Text>
+                <Text style={[styles.title, { color: t.ink }]}>Equalizer</Text>
               </View>
               <PressScale
                 accessibilityRole="button"

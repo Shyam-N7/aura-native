@@ -56,10 +56,10 @@ import { partOfDay } from '../utils/daypart';
 // day to day instead of the same "good morning" forever. Late night comes
 // first so the small hours never read as "good morning".
 const GREETINGS = {
-  night: ['still up?', 'up late?', 'late night?'], // 23:00–04:59
-  morning: ['good morning', 'morning', 'rise and shine'], // 05:00–11:59
-  afternoon: ['good afternoon', 'afternoon', 'hey there'], // 12:00–16:59
-  evening: ['good evening', 'evening', 'good to see you'], // 17:00–22:59
+  night: ['Still up?', 'Up late?', 'Late night?'], // 23:00–04:59
+  morning: ['Good morning', 'Morning', 'Rise and shine'], // 05:00–11:59
+  afternoon: ['Good afternoon', 'Afternoon', 'Hey there'], // 12:00–16:59
+  evening: ['Good evening', 'Evening', 'Good to see you'], // 17:00–22:59
 };
 
 function greetingBucket(hour) {
@@ -153,7 +153,7 @@ export default function HomeScreen({ navigation }) {
   const applyBgPlay = next => {
     setBgPlayState(next);
     setBackgroundPlay(next).catch(() => {});
-    showToast(next ? 'background play on.' : 'background play off.');
+    showToast(next ? 'Background play on.' : 'Background play off.');
   };
   const onBgToggle = () => {
     const next = !bgPlay;
@@ -453,13 +453,13 @@ export default function HomeScreen({ navigation }) {
         (tk, i) => tk.id && list.findIndex(x => x.id === tk.id) === i,
       );
       if (!queue.length) {
-        showToast("couldn't start that station.");
+        showToast("Couldn't start that station.");
         return;
       }
       player.playQueue(queue, 0, `radio · ${station.artist}`);
       openPlayer();
     } catch {
-      showToast("couldn't start that station.");
+      showToast("Couldn't start that station.");
     }
   };
   // A mix card opens the set (web onOpenAuto) — the full track list travels
@@ -467,7 +467,7 @@ export default function HomeScreen({ navigation }) {
   // why they're locked instead.
   const openMix = item => {
     if (item.mix.kind === 'auto-gate' || !item.mix.tracks?.length) {
-      showToast(item.meta || "this mix isn't ready yet");
+      showToast(item.meta || "This mix isn't ready yet");
       return;
     }
     navigation.navigate('CatalogPlaylist', { initialData: item.mix });
@@ -495,7 +495,7 @@ export default function HomeScreen({ navigation }) {
                   : ''}
               </Text>
               <Text style={[styles.tagline, { color: t.inkSoft }]}>
-                music that gets your mood
+                Music that gets your mood
               </Text>
               {/* The 2b status line: recolors with the switch. */}
               <Text
@@ -505,7 +505,7 @@ export default function HomeScreen({ navigation }) {
                   { color: bgPlay ? t.accent : t.inkFaint },
                 ]}
               >
-                {bgPlay ? 'plays in background' : 'stops when you leave'}
+                {bgPlay ? 'Plays in background' : 'Stops when you leave'}
               </Text>
             </View>
             {/* The 2b rail (owner's reference): bell on top, then the full-
@@ -539,10 +539,10 @@ export default function HomeScreen({ navigation }) {
           {homeBlank && (
             <View style={[styles.pad, styles.blank]}>
               <Text style={[styles.blankLine, { color: t.ink }]}>
-                couldn't load your music.
+                Couldn't load your music.
               </Text>
               <Text style={[styles.blankSub, { color: t.inkSoft }]}>
-                check your connection and try again.
+                Check your connection and try again.
               </Text>
               <PressScale
                 accessibilityRole="button"
@@ -551,7 +551,7 @@ export default function HomeScreen({ navigation }) {
                 style={[styles.blankRetry, { borderColor: t.line }]}
               >
                 <Text style={[styles.blankSub, { color: t.inkSoft }]}>
-                  try again
+                  Try again
                 </Text>
               </PressScale>
             </View>
@@ -560,11 +560,11 @@ export default function HomeScreen({ navigation }) {
           {picks.length > 0 && (
             <View>
               <SectionHeader
-                title="quick picks"
+                title="Quick picks"
                 sub={
                   serverRing
-                    ? `your ${partOfDay()} picks`
-                    : 'jump back into what you love'
+                    ? `Your ${partOfDay()} picks`
+                    : 'Jump back into what you love'
                 }
               />
               <View style={styles.wheelWrap}>
@@ -598,7 +598,7 @@ export default function HomeScreen({ navigation }) {
           {(recent?.length ?? 0) > 0 && (
             <View>
               <SectionHeader
-                title="recently played"
+                title="Recently played"
                 sub={`${recent.length} tracks to pick up from`}
               />
               <MemoryRail tracks={recent} onPick={pickLive} />
@@ -608,8 +608,8 @@ export default function HomeScreen({ navigation }) {
           {(moreLike?.tracks?.length ?? 0) > 0 && (
             <View>
               <SectionHeader
-                title={`more like ${moreLike.seedTitle}`}
-                sub="because you played it recently"
+                title={`More like ${moreLike.seedTitle}`}
+                sub="Because you played it recently"
               />
               <RelatedRail
                 tracks={moreLike.tracks}
@@ -622,8 +622,8 @@ export default function HomeScreen({ navigation }) {
           {(topArtists?.length ?? 0) > 0 && (
             <View>
               <SectionHeader
-                title="your top artists"
-                sub="artists you play most"
+                title="Your top artists"
+                sub="Artists you play most"
               />
               <ArtistRail
                 artists={topArtists}
@@ -640,11 +640,11 @@ export default function HomeScreen({ navigation }) {
           {(poolLoading || stations.length > 0) && (
             <View>
               <SectionHeader
-                title="stations"
+                title="Stations"
                 sub={
                   reco?.stations && !explicitOff
-                    ? 'radios from your artists'
-                    : 'start from any song'
+                    ? 'Radios from your artists'
+                    : 'Start from any song'
                 }
               />
               <StationsGrid
@@ -660,8 +660,8 @@ export default function HomeScreen({ navigation }) {
           {(yourPlaylists?.length ?? 0) > 0 && (
             <View>
               <SectionHeader
-                title="made by you"
-                sub="your playlists"
+                title="Made by you"
+                sub="Your playlists"
                 seeAllLabel="see all playlists"
                 onSeeAll={() => navigation.navigate('Playlists')}
               />
@@ -684,8 +684,8 @@ export default function HomeScreen({ navigation }) {
           {visibleAuto.length > 0 && (
             <View>
               <SectionHeader
-                title="made for you"
-                sub="fresh editions from your plays — skips count"
+                title="Made for you"
+                sub="Fresh editions from your plays — skips count"
                 seeAllLabel="see all made for you"
                 onSeeAll={() => navigation.navigate('Playlists')}
               />
@@ -714,8 +714,8 @@ export default function HomeScreen({ navigation }) {
           {(newPicksLoading || newPicks.length > 0) && (
             <View>
               <SectionHeader
-                title="new for you"
-                sub={newPicksPersonal ? 'from your listening' : 'fresh this week'}
+                title="New for you"
+                sub={newPicksPersonal ? 'From your listening' : 'Fresh this week'}
               />
               {newPicksLoading ? (
                 <View style={styles.skeletonGrid}>
@@ -744,7 +744,7 @@ export default function HomeScreen({ navigation }) {
 
           {(discover?.popularPlaylists?.length ?? 0) > 0 && (
             <View>
-              <SectionHeader title="popular playlists" sub="trending now" />
+              <SectionHeader title="Popular playlists" sub="Trending now" />
               <PlaylistGrid
                 items={discover.popularPlaylists.slice(0, 4).map(p => ({
                   id: p.id,
@@ -764,15 +764,15 @@ export default function HomeScreen({ navigation }) {
         visible={!!bgAsk}
         title={
           bgAsk?.next
-            ? 'turn on background play?'
-            : 'turn off background play?'
+            ? 'Turn on background play?'
+            : 'Turn off background play?'
         }
         body={
           bgAsk?.next
-            ? 'music keeps playing when you close the app.'
-            : 'music stops when you close the app.'
+            ? 'Music keeps playing when you close the app.'
+            : 'Music stops when you close the app.'
         }
-        action={bgAsk?.next ? 'turn on' : 'turn off'}
+        action={bgAsk?.next ? 'Turn on' : 'Turn off'}
         onConfirm={confirmBgPlay}
         onCancel={() => setBgAsk(null)}
         dontAsk={bgDontAsk}

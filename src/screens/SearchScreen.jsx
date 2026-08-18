@@ -263,7 +263,7 @@ export default function SearchScreen({ navigation }) {
               <View>
                 <View style={styles.recentHead}>
                   <Text style={[styles.section, { color: t.inkFaint }]}>
-                    recent searches
+                    Recent searches
                   </Text>
                   <Pressable
                     accessibilityRole="button"
@@ -271,7 +271,7 @@ export default function SearchScreen({ navigation }) {
                     onPress={recents.clear}
                     hitSlop={8}>
                     <Text style={[styles.clear, { color: t.accent }]}>
-                      clear
+                      Clear
                     </Text>
                   </Pressable>
                 </View>
@@ -293,12 +293,12 @@ export default function SearchScreen({ navigation }) {
               </View>
             ) : (
               <Text style={[styles.hint, { color: t.inkFaint }]}>
-                find songs, artists and albums from the catalog.
+                Find songs, artists and albums from the catalog.
               </Text>
             )}
             <View>
               <Text style={[styles.section, { color: t.inkFaint }]}>
-                trending{lang !== 'all' ? ` · ${lang}` : ''}
+                Trending{lang !== 'all' ? ` · ${lang}` : ''}
               </Text>
               <View style={styles.chips}>
                 {trending.map(item => (
@@ -322,10 +322,10 @@ export default function SearchScreen({ navigation }) {
           </>
         )}
 
-        {status === 'loading' && <AuraLoader label="searching" />}
+        {status === 'loading' && <AuraLoader label="Searching" />}
         {status === 'error' && (
           <Text style={[styles.hint, { color: t.inkFaint }]}>
-            search failed — {view.error}
+            Search failed — {view.error}
           </Text>
         )}
 
@@ -334,7 +334,7 @@ export default function SearchScreen({ navigation }) {
             const songsSection = songs.length > 0 && (
               <View key="songs">
                 <Text style={[styles.section, { color: t.inkFaint }]}>
-                  songs
+                  Songs
                 </Text>
                 {songs.map(track => (
                   <TrackRow
@@ -349,14 +349,14 @@ export default function SearchScreen({ navigation }) {
             const artistsSection = view.artists.length > 0 && (
               <View key="artists">
                 <Text style={[styles.section, { color: t.inkFaint }]}>
-                  artists
+                  Artists
                 </Text>
                 {view.artists.map(a => (
                   <EntityRow
                     key={a.id}
                     image={a.image}
                     name={a.name}
-                    sub="artist"
+                    sub="Artist"
                     round
                     t={t}
                     onPress={() => {
@@ -370,14 +370,14 @@ export default function SearchScreen({ navigation }) {
             const albumsSection = view.albums.length > 0 && (
               <View key="albums">
                 <Text style={[styles.section, { color: t.inkFaint }]}>
-                  albums & movies
+                  Albums & movies
                 </Text>
                 {view.albums.map(a => (
                   <EntityRow
                     key={a.id}
                     image={a.image}
                     name={a.name}
-                    sub={[a.isMovie ? 'movie' : 'album', a.year]
+                    sub={[a.isMovie ? 'Movie' : 'Album', a.year]
                       .filter(Boolean)
                       .join(' · ')}
                     t={t}
@@ -393,7 +393,7 @@ export default function SearchScreen({ navigation }) {
               <>
                 {nothing && (
                   <Text style={[styles.hint, { color: t.inkFaint }]}>
-                    nothing matched “{trimmed}”.
+                    Nothing matched “{trimmed}”.
                   </Text>
                 )}
                 {view.top && view.top.type !== 'song' && (
@@ -421,8 +421,8 @@ export default function SearchScreen({ navigation }) {
                       <Text style={[styles.entitySub, { color: t.inkSoft }]}>
                         {view.top.type === 'album'
                           ? view.top.isMovie
-                            ? 'movie'
-                            : 'album'
+                            ? 'Movie'
+                            : 'Album'
                           : view.top.type}
                       </Text>
                     </View>
@@ -434,7 +434,7 @@ export default function SearchScreen({ navigation }) {
                 {view.playlists.length > 0 && (
                   <View>
                     <Text style={[styles.section, { color: t.inkFaint }]}>
-                      playlists
+                      Playlists
                     </Text>
                     {view.playlists.map(p => (
                       <EntityRow
@@ -454,7 +454,7 @@ export default function SearchScreen({ navigation }) {
                 {view.userPlaylists.length > 0 && (
                   <View>
                     <Text style={[styles.section, { color: t.inkFaint }]}>
-                      your playlists
+                      Your playlists
                     </Text>
                     {view.userPlaylists.map(p => (
                       <EntityRow

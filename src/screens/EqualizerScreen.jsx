@@ -34,8 +34,8 @@ export default function EqualizerScreen({ navigation }) {
           >
             <Icon name="chevron-left" size={22} color={t.ink} />
           </PressScale>
-          <Text style={[label(10), { color: t.inkFaint }]}>audio · equalizer</Text>
-          <Text style={[styles.hero, { color: t.ink }]}>equalizer</Text>
+          <Text style={[label(10), { color: t.inkFaint }]}>Audio · equalizer</Text>
+          <Text style={[styles.hero, { color: t.ink }]}>Equalizer</Text>
           <EqualizerPanel />
         </ScrollView>
       </ScreenFade>

@@ -35,21 +35,21 @@ const MIN_PICKS = 3; // minimum artists to finish; no upper cap
 const MAX_TILES = 12; // first page of the artist grid
 
 const STEPS = [
-  { key: 'language', label: 'language', title: 'what do you listen to?' },
-  { key: 'mood', label: 'mood', title: 'how do you feel?' },
-  { key: 'artists', label: 'artists', title: 'pick a few you love' },
+  { key: 'language', label: 'language', title: 'What do you listen to?' },
+  { key: 'mood', label: 'mood', title: 'How do you feel?' },
+  { key: 'artists', label: 'artists', title: 'Pick a few you love' },
 ];
 
 // Six moods. `key` is the seed value home reads — unchanged from the web. `tint`
 // is the lighter stop of the web's swatch gradient; the glyph says what the mood
 // feels like. Labels/subs are plain-lowercase for the app's voice.
 const MOODS = [
-  { key: 'focused', label: 'focus', sub: 'for concentration', tint: '#6e85a3', glyph: 'focused' },
-  { key: 'unwound', label: 'chill', sub: 'wind down', tint: '#c4a36e', glyph: 'unwound' },
-  { key: 'in-motion', label: 'energy', sub: 'get pumped', tint: '#c47554', glyph: 'in-motion' },
-  { key: 'late-night', label: 'late night', sub: 'after-hours', tint: '#4f7a62', glyph: 'late-night' },
-  { key: 'curious', label: 'discover', sub: 'try new music', tint: '#8970a0', glyph: 'curious' },
-  { key: 'remembering', label: 'throwback', sub: 'old favorites', tint: '#b08e6a', glyph: 'remembering' },
+  { key: 'focused', label: 'Focus', sub: 'For concentration', tint: '#6e85a3', glyph: 'focused' },
+  { key: 'unwound', label: 'Chill', sub: 'Wind down', tint: '#c4a36e', glyph: 'unwound' },
+  { key: 'in-motion', label: 'Energy', sub: 'Get pumped', tint: '#c47554', glyph: 'in-motion' },
+  { key: 'late-night', label: 'Late night', sub: 'After-hours', tint: '#4f7a62', glyph: 'late-night' },
+  { key: 'curious', label: 'Discover', sub: 'Try new music', tint: '#8970a0', glyph: 'curious' },
+  { key: 'remembering', label: 'Throwback', sub: 'Old favorites', tint: '#b08e6a', glyph: 'remembering' },
 ];
 
 const GLYPH_COLOR = 'rgba(255,255,255,0.9)';
@@ -302,10 +302,10 @@ export function OnboardingScreen({ onDone }) {
     if (step === 0) {
       return selectedLangs.size > 0
         ? `${selectedLangs.size} selected`
-        : 'choose one or more';
+        : 'Choose one or more';
     }
     if (step === 1) {
-      return selectedMoodMeta ? selectedMoodMeta.label : 'pick one';
+      return selectedMoodMeta ? selectedMoodMeta.label : 'Pick one';
     }
     return picks.length < MIN_PICKS
       ? `${picks.length} of ${MIN_PICKS}`
@@ -357,7 +357,7 @@ export function OnboardingScreen({ onDone }) {
       </View>
 
       <View style={styles.header}>
-        <Text style={[label(10), { color: t.accent }]}>welcome to aura</Text>
+        <Text style={[label(10), { color: t.accent }]}>Welcome to AURA</Text>
 
         <View style={styles.dots}>
           {STEPS.map((s, i) => {
@@ -416,7 +416,7 @@ export function OnboardingScreen({ onDone }) {
                   style={[styles.moreLangs, { borderColor: t.line }]}
                 >
                   <Text style={[styles.chipText, { color: t.inkFaint }]}>
-                    {showMoreLangs ? 'fewer' : 'more'}
+                    {showMoreLangs ? 'Fewer' : 'More'}
                   </Text>
                 </PressScale>
               )}
@@ -510,7 +510,7 @@ export function OnboardingScreen({ onDone }) {
               {tiles.length === 0 && (
                 <View style={styles.empty}>
                   <Text style={[styles.emptyLine, { color: t.inkSoft }]}>
-                    {loadError ? "couldn't load artists" : 'no artists yet'}
+                    {loadError ? "Couldn't load artists" : 'No artists yet'}
                   </Text>
                   <PressScale
                     accessibilityRole="button"
@@ -519,7 +519,7 @@ export function OnboardingScreen({ onDone }) {
                     style={[styles.retry, { borderColor: t.line }]}
                   >
                     <Text style={[styles.chipText, { color: t.inkSoft }]}>
-                      try again
+                      Try again
                     </Text>
                   </PressScale>
                 </View>
@@ -527,7 +527,7 @@ export function OnboardingScreen({ onDone }) {
             </View>
             {canLoadMore &&
               (loadingMore ? (
-                <AuraLoader label="loading more" />
+                <AuraLoader label="Loading more" />
               ) : (
                 <PressScale
                   accessibilityRole="button"
@@ -540,7 +540,7 @@ export function OnboardingScreen({ onDone }) {
                 >
                   <Icon name="plus" size={14} color={t.inkSoft} />
                   <Text style={[styles.chipText, { color: t.inkSoft }]}>
-                    load more artists
+                    Load more artists
                   </Text>
                 </PressScale>
               ))}
@@ -557,7 +557,7 @@ export function OnboardingScreen({ onDone }) {
           style={[styles.backBtn, step === 0 && styles.footHidden]}
         >
           <Icon name="chevron-left" size={18} color={t.inkSoft} />
-          <Text style={[styles.chipText, { color: t.inkSoft }]}>back</Text>
+          <Text style={[styles.chipText, { color: t.inkSoft }]}>Back</Text>
         </PressScale>
         <View style={styles.footSpacer} />
         <PressScale
@@ -567,7 +567,7 @@ export function OnboardingScreen({ onDone }) {
           style={styles.skipBtn}
         >
           <Text style={[styles.chipText, { color: t.inkFaint }]}>
-            skip for now
+            Skip for now
           </Text>
         </PressScale>
         <View style={styles.footSpacer} />
@@ -587,7 +587,7 @@ export function OnboardingScreen({ onDone }) {
               { color: valid[step] ? t.bg : t.inkFaint },
             ]}
           >
-            {isLast ? 'get started' : 'next'}
+            {isLast ? 'Get started' : 'Next'}
           </Text>
           <Icon
             name="arrow-right"
