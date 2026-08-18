@@ -61,6 +61,7 @@ import {
 import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { Sheet } from '../components/ui/Sheet';
+import { SheetRow } from '../components/ui/SheetRow';
 import { Avatar } from '../components/Avatar';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
@@ -172,41 +173,6 @@ const PlaylistTrackRow = React.memo(function PlaylistTrackRow({
     />
   );
 });
-
-function SheetItem({ icon, text, note, on, disabled, onPress }) {
-  const { t } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={text}
-      accessibilityState={disabled ? { disabled: true } : {}}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.sheetItem, pressed && styles.pressed]}
-    >
-      {icon ? (
-        <Icon name={icon} size={18} color={on ? t.accent : t.inkSoft} />
-      ) : (
-        <View style={styles.sheetIconGap} />
-      )}
-      <View style={styles.sheetItemMeta}>
-        <Text
-          style={[
-            styles.sheetItemText,
-            { color: disabled ? t.inkFaint : on ? t.accent : t.ink },
-          ]}
-        >
-          {text}
-        </Text>
-        {!!note && (
-          <Text style={[styles.sheetItemNote, { color: t.inkSoft }]}>
-            {note}
-          </Text>
-        )}
-      </View>
-    </Pressable>
-  );
-}
 
 function SheetHead({ text }) {
   const { t } = useTheme();
@@ -562,6 +528,9 @@ export default function PlaylistScreen({ route, navigation }) {
       title: 'Make this only you?',
       body: `${bits.join(', ')}. You can share it again anytime.`,
       action: 'Make private',
+      // Not destructive — nothing is deleted and it can be shared again
+      // anytime; it only wore red because confirm() used to default to it.
+      danger: false,
     }).then(async ok => {
       if (!ok) {
         return;
@@ -592,6 +561,8 @@ export default function PlaylistScreen({ route, navigation }) {
       title: `Remove ${c.name}?`,
       body: 'They lose access to this playlist. You can re-invite them anytime.',
       action: 'Remove',
+      // Takes someone's access away.
+      danger: true,
     });
     if (!ok) {
       return;
@@ -618,6 +589,8 @@ export default function PlaylistScreen({ route, navigation }) {
       title: `Remove "${cleanTitle(track.title)}"?`,
       body: 'This only removes it from this playlist. Your likes are untouched.',
       action: 'Remove',
+      // Deletes a track out of the playlist.
+      danger: true,
     });
     if (!ok) {
       return;
@@ -1090,9 +1063,9 @@ export default function PlaylistScreen({ route, navigation }) {
       {shareOpen && (
         <Sheet onClose={() => setShareOpen(false)} closeLabel="close sharing">
           <SheetHead text="Who can see this" />
-          <SheetItem
+          <SheetRow
             icon="lock"
-            text="Only you"
+            label="Only you"
             note="Just for you"
             on={visibility === 'private'}
             disabled={visibility === 'private'}
@@ -1101,30 +1074,30 @@ export default function PlaylistScreen({ route, navigation }) {
           <SheetHead
             text={`People you invite${collaborators.length ? ' ·' : ''}`}
           />
-          <SheetItem
+          <SheetRow
             icon="people"
-            text="Share an edit-invite link"
+            label="Share an edit-invite link"
             note="They can add and remove songs after signing in"
             onPress={shareInvite('editor')}
           />
-          <SheetItem
+          <SheetRow
             icon="people"
-            text="Share a view-invite link"
+            label="Share a view-invite link"
             note="They can listen after signing in"
             onPress={shareInvite('viewer')}
           />
           <SheetHead text={`Anyone with the link${isPublic ? ' ·' : ''}`} />
-          <SheetItem
+          <SheetRow
             icon="globe"
-            text={isPublic ? 'Turn off public link' : 'Make a public view link'}
+            label={isPublic ? 'Turn off public link' : 'Make a public view link'}
             on={isPublic}
             disabled={shareBusy}
             onPress={togglePublic}
           />
           {isPublic && !!pubId && (
-            <SheetItem
+            <SheetRow
               icon="globe"
-              text="Share public link"
+              label="Share public link"
               onPress={sharePublicLink}
             />
           )}
@@ -1332,16 +1305,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   sheetHead: { marginTop: 12, marginBottom: 2 },
-  sheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 11,
-  },
-  sheetIconGap: { width: 18 },
-  sheetItemMeta: { flex: 1, minWidth: 0, gap: 2 },
   sheetItemText: { fontFamily: fonts.medium, fontSize: 15 },
-  sheetItemNote: { fontFamily: fonts.regular, fontSize: 12 },
   member: {
     flexDirection: 'row',
     alignItems: 'center',

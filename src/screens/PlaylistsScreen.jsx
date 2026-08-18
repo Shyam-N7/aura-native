@@ -31,7 +31,7 @@ import { showToast } from '../lib/toast';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
-import { SHEET_DANGER } from '../components/ui/SheetRow';
+import { SheetRow } from '../components/ui/SheetRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, type } from '../theme/tokens';
 
@@ -686,10 +686,10 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
 
           <View style={[styles.menuRule, { backgroundColor: t.line }]} />
 
-          <MenuRow icon="play" label={playBusy ? 'Starting…' : 'Play'} disabled={playBusy} onPress={onPlay} />
-          <MenuRow icon="arrow-right" label="Open playlist" onPress={onOpen} />
-          {onShare && <MenuRow icon="people" label="Who can see this" onPress={onShare} />}
-          <MenuRow
+          <SheetRow icon="play" label={playBusy ? 'Starting…' : 'Play'} disabled={playBusy} onPress={onPlay} />
+          <SheetRow icon="arrow-right" label="Open playlist" onPress={onOpen} />
+          {onShare && <SheetRow icon="people" label="Who can see this" onPress={onShare} />}
+          <SheetRow
             icon="close"
             danger
             label={owned ? 'Delete playlist' : 'Leave playlist'}
@@ -698,34 +698,6 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
         </Pressable>
       </Pressable>
     </Modal>
-  );
-}
-
-function MenuRow({ icon, label: text, danger, disabled, onPress }) {
-  const { t } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={text}
-      accessibilityState={disabled ? { disabled: true } : {}}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}
-    >
-      {icon ? (
-        <Icon name={icon} size={18} color={danger ? SHEET_DANGER : t.inkSoft} />
-      ) : (
-        <View style={styles.menuIconGap} />
-      )}
-      <Text
-        style={[
-          styles.menuRowText,
-          { color: disabled ? t.inkFaint : danger ? SHEET_DANGER : t.ink },
-        ]}
-      >
-        {text}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -770,9 +742,6 @@ const styles = StyleSheet.create({
   },
   menuHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12 },
   menuRule: { height: 1, marginBottom: 6 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
-  menuIconGap: { width: 18 },
-  menuRowText: { fontFamily: fonts.medium, fontSize: 15 },
   create: { borderRadius: 12, padding: 14, gap: 9 },
   input: {
     borderWidth: 1,

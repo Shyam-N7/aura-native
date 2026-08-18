@@ -4,30 +4,59 @@ import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
 import { fonts } from '../../theme/tokens';
 
-// One menu row inside a bottom sheet: leading icon + label, optional danger
-// red. Shared by the track-actions and queue-options sheets so every sheet
-// menu reads identically. Reads on every theme; there is no danger token.
+// One menu row inside a sheet or a menu popup: leading icon + label, with an
+// optional second line, an `on` (currently-active) accent state, a `disabled`
+// dimming and a `danger` red. Every sheet menu in the app renders through this
+// — the track-actions and queue-options sheets, the playlists ⋯ popup and the
+// playlist sharing sheet — so they read identically. Reads on every theme;
+// there is no danger token.
 export const SHEET_DANGER = '#b3402e';
 
-export function SheetRow({ icon, label, danger = false, onPress }) {
+// One icon size for every menu row. 19 is the primitive's own, and the size
+// the majority of rendered rows already used.
+const ICON = 19;
+
+export function SheetRow({
+  icon,
+  label,
+  // A quiet sub-line under the label, for rows whose consequence needs a
+  // sentence (the sharing sheet's "They can listen after signing in").
+  note,
+  danger = false,
+  // The row describes the state the app is already in — accent, not ink.
+  on = false,
+  disabled = false,
+  onPress,
+}) {
   const { t } = useTheme();
+  const tint = danger ? SHEET_DANGER : on ? t.accent : t.inkSoft;
+  const labelColor = disabled
+    ? t.inkFaint
+    : danger
+      ? SHEET_DANGER
+      : on
+        ? t.accent
+        : t.ink;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={disabled ? { disabled: true } : {}}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [styles.item, pressed && styles.pressed]}
     >
       {icon ? (
-        <Icon name={icon} size={19} color={danger ? SHEET_DANGER : t.inkSoft} />
+        <Icon name={icon} size={ICON} color={tint} />
       ) : (
         <View style={styles.iconGap} />
       )}
-      <Text
-        style={[styles.itemLabel, { color: danger ? SHEET_DANGER : t.ink }]}
-      >
-        {label}
-      </Text>
+      <View style={styles.meta}>
+        <Text style={[styles.itemLabel, { color: labelColor }]}>{label}</Text>
+        {!!note && (
+          <Text style={[styles.itemNote, { color: t.inkSoft }]}>{note}</Text>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -40,6 +69,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   pressed: { opacity: 0.6 },
-  iconGap: { width: 19 },
+  iconGap: { width: ICON },
+  meta: { flex: 1, minWidth: 0, gap: 2 },
   itemLabel: { fontFamily: fonts.medium, fontSize: 15 },
+  itemNote: { fontFamily: fonts.regular, fontSize: 12 },
 });

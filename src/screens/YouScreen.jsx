@@ -538,6 +538,8 @@ export default function YouScreen({ navigation }) {
         title: 'Sign out?',
         body: 'You can sign back in anytime.',
         action: 'Sign out',
+        // Ends the session and tears the signed-in tree down.
+        danger: true,
         // Signing out unmounts the navigator this sheet lives in — it can't
         // still be animating out when that happens.
         instant: true,

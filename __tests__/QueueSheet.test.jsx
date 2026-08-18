@@ -187,10 +187,14 @@ test('clear queue confirms first, then clears through the player context', async
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'Clear queue').props.onPress();
   });
+  // `danger` is spelled out at the call site now that confirm() no longer
+  // defaults to red — clearing the queue throws work away, so it stays red,
+  // and this pins that rather than leaving it to a default.
   expect(confirm).toHaveBeenCalledWith({
     title: 'Clear queue?',
     body: "We'll keep the currently playing track.",
     action: 'Clear',
+    danger: true,
   });
   expect(mockClearQueue).not.toHaveBeenCalled();
 
