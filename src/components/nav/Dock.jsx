@@ -20,7 +20,13 @@ import { PressScale } from '../ui/PressScale';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
 import { subscribeScrollDepth } from '../../lib/scrollDepth';
-import { fonts, gooFill, label, radii } from '../../theme/tokens';
+import {
+  CHROME_MAX_FONT_SCALE,
+  fonts,
+  gooFill,
+  label,
+  radii,
+} from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
 const TAB_ICONS = { Home: 'home', Search: 'search', Talk: 'chat', You: 'user' };
@@ -90,7 +96,16 @@ function DockTab({ route, focused, label: tabLabel, tint, accent, onPress, index
         style={styles.tabInner}
       >
         <Icon name={TAB_ICONS[route.name]} size={22} color={tint} />
-        <Text style={[label(7.5), { color: tint }]}>{tabLabel}</Text>
+        {/* Capped: the capsule is a fixed 52dp and DOCK_CLEARANCE (96) is
+            baked into every screen's scroll padding, so the bar cannot grow
+            with the OS font scale without moving every screen. 15dp of room
+            is left for this label — see CHROME_MAX_FONT_SCALE. */}
+        <Text
+          maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+          style={[label(7.5), { color: tint }]}
+        >
+          {tabLabel}
+        </Text>
         <Animated.View style={[styles.dot, { backgroundColor: accent }, dotStyle]} />
       </PressScale>
     </Animated.View>
@@ -472,7 +487,10 @@ export function Dock({ navRef }) {
                 style={styles.bttPress}
               >
                 <Icon name="arrow-up" size={14} color={t.ink} />
-                <Text style={[styles.bttText, { color: t.ink }]}>
+                <Text
+                  maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+                  style={[styles.bttText, { color: t.ink }]}
+                >
                   Take me back up
                 </Text>
               </Pressable>

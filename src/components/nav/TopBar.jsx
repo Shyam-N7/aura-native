@@ -26,7 +26,14 @@ import {
   useSearchQuery,
 } from '../../lib/searchQuery';
 import { usePlayer } from '../../playback/PlayerContext';
-import { themes, type, radii, label, fonts } from '../../theme/tokens';
+import {
+  CHROME_MAX_FONT_SCALE,
+  themes,
+  type,
+  radii,
+  label,
+  fonts,
+} from '../../theme/tokens';
 import { EASE, SPRING } from '../../theme/motion';
 
 // Resting halo opacity once the wordmark's bloom settles.
@@ -271,7 +278,17 @@ export function TopBar({ activeTab, goTab }) {
               </Svg>
             </Animated.View>
             <Animated.View style={squishStyle}>
-              <Text style={[type.wordmark, { color: t.ink }]}>aura</Text>
+              {/* The whole bar is a fixed 52dp and TOPBAR_CLEARANCE (68) is
+                  baked into every screen's top padding, so nothing in this
+                  row may grow with the OS font scale — see
+                  CHROME_MAX_FONT_SCALE. The wordmark is the tightest: 24dp
+                  at 1.3× is a ~39dp line box inside 52. */}
+              <Text
+                maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+                style={[type.wordmark, { color: t.ink }]}
+              >
+                aura
+              </Text>
             </Animated.View>
           </Pressable>
           <View style={styles.spacer} />
@@ -287,6 +304,7 @@ export function TopBar({ activeTab, goTab }) {
             ]}
           >
             <Text
+              maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
               style={[
                 label(8.5),
                 { color: mode === 'everyday' ? t.inkSoft : t.accent },
@@ -324,7 +342,10 @@ export function TopBar({ activeTab, goTab }) {
             hitSlop={8}
             style={[styles.profile, { backgroundColor: t.accentSoft }]}
           >
-            <Text style={[styles.profileText, { color: t.accent }]}>
+            <Text
+              maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+              style={[styles.profileText, { color: t.accent }]}
+            >
               {initial}
             </Text>
           </PressScale>
@@ -355,6 +376,7 @@ export function TopBar({ activeTab, goTab }) {
             placeholder="Search a song, artist, or mood…"
             placeholderTextColor={t.inkFaint}
             style={[styles.fieldInput, { color: t.ink }]}
+            maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
             autoCapitalize="none"
             autoCorrect={false}
             inputMode="search"

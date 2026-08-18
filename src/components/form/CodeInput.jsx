@@ -48,7 +48,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.input,
     borderWidth: 1,
     flex: 1,
-    height: 56,
+    // minHeight, not height: at the default font scale the 20dp digit sits
+    // well inside 56 and this renders identically, but at a large OS font
+    // scale the box grows with the digit instead of clipping it. The code is
+    // the one thing on this screen the user has to read back character by
+    // character, so it is capped nowhere — the container gives instead.
+    // (`flex: 1` here is the ROW axis; it does not constrain the height.)
+    minHeight: 56,
     justifyContent: 'center',
   },
   char: { fontFamily: fonts.semibold, fontSize: 20 },

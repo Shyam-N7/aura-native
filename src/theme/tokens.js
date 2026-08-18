@@ -123,6 +123,27 @@ export const label = size => ({
   textTransform: 'uppercase',
 });
 
+// The OS font-scale policy (Settings → Display → Font size). Everything in
+// this app scales with it by default and MUST keep doing so — body copy,
+// titles, list rows, lyrics, empty states. That setting is the whole point.
+//
+// The one exception is text sealed inside chrome whose height is a fixed
+// CONTRACT with the rest of the layout, not a container that can just grow:
+//   · the dock capsule (52dp) — DOCK_CLEARANCE (96) is the padding ~20
+//     screens leave at the bottom of their scrollers for it;
+//   · the top bar (52dp) — TOPBAR_CLEARANCE (68) is the same deal at the top.
+// Those two numbers are compiled into every screen, so the bar cannot grow
+// without every screen's padding growing with it. The text living in them is
+// a 7.5–14dp label or the wordmark — chrome, never content — so capping its
+// growth is the smaller loss: the label stays legible and nothing clips.
+//
+// 1.3 is the largest multiplier every capped site still fits at. The tightest
+// is the dock tab label: 52 capsule − 12 padding − 22 icon − 3 gap = 15dp of
+// room, and label(7.5) at 1.3× is a ~13.6dp line box.
+//
+// Anything in a flexible container gets NO cap. If a box can grow, it grows.
+export const CHROME_MAX_FONT_SCALE = 1.3;
+
 export const radii = {
   pill: 999,
   dock: 26,
