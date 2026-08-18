@@ -10,8 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
-import { useAppActive } from '../../hooks/useAppActive';
-import { useNavFocused } from '../../hooks/useNavFocused';
+import { useMotionGate } from '../../hooks/useMotionGate';
 import { label } from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
@@ -21,9 +20,11 @@ const BAR_COUNT = 9;
 
 // One EQ bar of the rail. Own component so each bar owns its shared value
 // (hooks can't live in a map). The loop runs ONLY while the switch is on AND
-// the app is foregrounded — an invisible infinite animation under a dark
-// screen is exactly the leak class that killed screen-off playback once.
-function EqBar({ index, animate, on, color }) {
+// the app is foregrounded AND motion is wanted — an invisible infinite
+// animation under a dark screen is exactly the leak class that killed
+// screen-off playback once, and nine of them under a reduced-motion setting
+// is nine loops the listener explicitly asked not to see.
+function EqBar({ index, animate, on, reduced, color }) {
   const sx = useSharedValue(0.34);
   useEffect(() => {
     if (animate) {
@@ -42,9 +43,13 @@ function EqBar({ index, animate, on, color }) {
       return () => cancelAnimation(sx);
     }
     cancelAnimation(sx);
-    sx.value = withTiming(on ? 1 : 0.34, { duration: 200 });
+    // The parked height IS the bar's final value, so reduced motion lands on
+    // it in one frame instead of easing there. Everything else (a paused
+    // loop behind another tab, the switch going off) keeps the 200ms settle.
+    const rest = on ? 1 : 0.34;
+    sx.value = reduced ? rest : withTiming(rest, { duration: 200 });
     return undefined;
-  }, [animate, on, index, sx]);
+  }, [animate, on, reduced, index, sx]);
   const style = useAnimatedStyle(() => ({
     transform: [{ scaleX: sx.value }],
   }));
@@ -59,25 +64,25 @@ function EqBar({ index, animate, on, color }) {
 // the OtterToggle + label box.
 export function BgPlayRail({ value, onPress }) {
   const { t } = useTheme();
-  // Both gates or the loop runs invisibly: app-active covers screen-off,
-  // focus covers Home parked behind another tab (tabs keep screens mounted).
-  const active = useAppActive();
-  const focused = useNavFocused();
+  // All three gates or the bars run unwanted: app-active covers screen-off,
+  // focus covers Home parked behind another tab (tabs keep screens mounted),
+  // reduced covers the OS setting. mayLoop is exactly that conjunction.
+  const { reduced, mayLoop } = useMotionGate();
   const [railH, setRailH] = useState(0);
 
   const pos = useSharedValue(value ? 0 : 1);
   useEffect(() => {
-    pos.value = withTiming(value ? 0 : 1, {
-      duration: DUR.dot,
-      easing: EASE.settle,
-    });
-  }, [value, pos]);
+    const to = value ? 0 : 1;
+    pos.value = reduced
+      ? to
+      : withTiming(to, { duration: DUR.dot, easing: EASE.settle });
+  }, [value, reduced, pos]);
   const travel = Math.max(0, railH - KNOB - PAD * 2);
   const knobStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: pos.value * travel }],
   }));
 
-  const animate = value && active && focused;
+  const animate = value && mayLoop;
 
   return (
     <Pressable
@@ -100,6 +105,7 @@ export function BgPlayRail({ value, onPress }) {
             index={i}
             animate={animate}
             on={value}
+            reduced={reduced}
             color={value ? t.accent : t.inkFaint}
           />
         ))}

@@ -184,18 +184,28 @@ export function Dock({ navRef }) {
       firstRender.current = false;
       prevTrack.current = hasTrack;
       prevBtt.current = btt;
-      return;
+      return undefined;
     }
     const trackFlipped = prevTrack.current !== hasTrack;
     const bttFlipped = prevBtt.current !== btt;
     prevTrack.current = hasTrack;
     prevBtt.current = btt;
+    // Reduced motion: no goo window at all, and — the part that used to be
+    // implicit — the bead silhouette is written straight to its FINAL radius
+    // instead of budding there. It was only ever safe because the window
+    // below happens to be gated too; a one-line change to that condition
+    // would have quietly re-armed a 260ms grow the listener switched off.
+    if (reduced) {
+      budR.value = BEAD_SIZE / 2;
+      setGooActive(false);
+      return undefined;
+    }
     // bttFlipped keeps the RETURN morph covered with no track loaded:
     // (hasTrack || btt) alone goes false on that flip, so the capsule
     // re-expanded with the blur LIVE mid-resize — BlurView re-crops per
     // layout pass and printed a displaced pill outline (owner's ghost,
     // the no-disc crops). Solid + goo must ride every geometry change.
-    if ((hasTrack || btt || bttFlipped) && !reduced) {
+    if (hasTrack || btt || bttFlipped) {
       setGooActive(true);
       // The bud animation belongs to the track appearing — a back-to-top flip
       // reuses the window but must not re-bud a bead that was already out
@@ -208,6 +218,7 @@ export function Dock({ navRef }) {
       return () => clearTimeout(id);
     }
     setGooActive(false);
+    return undefined;
   }, [hasTrack, btt, budR, reduced]);
 
   // Silhouette geometry for the goo window, all off the same two clocks.
@@ -281,8 +292,15 @@ export function Dock({ navRef }) {
   // Tabs slide right to clear the bead (web: padding-left 60).
   const padLeft = useSharedValue(hasTrack ? 60 : 4);
   useEffect(() => {
-    padLeft.value = withTiming(hasTrack ? 60 : 4, { duration: DUR.bud, easing: EASE.settle });
-  }, [hasTrack, padLeft]);
+    // Lands on the final padding in one frame under reduced motion — the row
+    // still clears the bead, it just doesn't slide there. This one was the
+    // real leak: unlike the goo window two effects up, nothing above it was
+    // gated, so every track change slid the tabs 56px regardless.
+    const to = hasTrack ? 60 : 4;
+    padLeft.value = reduced
+      ? to
+      : withTiming(to, { duration: DUR.bud, easing: EASE.settle });
+  }, [hasTrack, reduced, padLeft]);
   const rowStyle = useAnimatedStyle(() => ({ paddingLeft: padLeft.value }));
 
   // Hold-and-slide across the dock to switch tabs — iPhone-camera-mode style.
