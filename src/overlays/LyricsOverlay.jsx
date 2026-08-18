@@ -579,8 +579,8 @@ function KaraokeView({
               ]}
             >
               {preparingStems
-                ? 'preparing music… tap to cancel'
-                : 'music only'}
+                ? 'Preparing music… tap to cancel'
+                : 'Music only'}
             </Text>
           </Pressable>
         </View>
@@ -691,7 +691,7 @@ function KaraokeView({
   );
 }
 
-function ViewToggle({ view, language, onChange, t }) {
+function ViewToggle({ view, language, onChange, t, isMidnight }) {
   const [w, setW] = useState(0);
   const x = useSharedValue(view === 'orig' ? 1 : 0);
   useEffect(() => {
@@ -706,7 +706,14 @@ function ViewToggle({ view, language, onChange, t }) {
   }));
   return (
     <View
-      style={styles.toggle}
+      style={[
+        styles.toggle,
+        // Same branch the header cluster runs: white films only read over
+        // midnight's dark panel — on dusk/bloom the toggle would paint
+        // near-white on the light surface and vanish. t.line is the token.
+        isMidnight ? styles.toggleMidnight : { backgroundColor: t.line },
+        !isMidnight && { borderColor: t.line },
+      ]}
       onLayout={e => setW(e.nativeEvent.layout.width)}
     >
       <Animated.View
@@ -1232,7 +1239,7 @@ export function LyricsOverlay() {
           >
             <Text style={styles.epigraphTitle}>{cleanTitle(track.title)}</Text>
             <Text style={styles.epigraphCounter}>
-              {ended ? 'song ended' : track.artist || 'unknown artist'}
+              {ended ? 'Song ended' : track.artist || 'Unknown artist'}
             </Text>
           </Animated.View>
         )}
@@ -1282,7 +1289,7 @@ export function LyricsOverlay() {
                   numberOfLines={1}
                   style={[styles.headerMeta, { color: t.inkFaint }]}
                 >
-                  {track.artist || 'unknown artist'}
+                  {track.artist || 'Unknown artist'}
                 </Text>
                 {/* Karaoke needs timings — the pill only exists on synced
                     lyrics. It pulses until the user has entered once. */}
@@ -1321,6 +1328,7 @@ export function LyricsOverlay() {
                     language={track.language || 'original'}
                     onChange={setView}
                     t={t}
+                    isMidnight={isMidnight}
                   />
                 )}
               </View>
@@ -1372,7 +1380,7 @@ export function LyricsOverlay() {
                   { color: t.inkSoft },
                 ]}
               >
-                lyrics aren't available{'\n'}for this track.
+                Lyrics aren't available{'\n'}for this track.
               </Text>
             </View>
           )}
@@ -1621,8 +1629,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
+  },
+  toggleMidnight: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderColor: 'rgba(255,255,255,0.18)',
   },
   toggleThumb: {
@@ -1719,6 +1729,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 25,
   },
+  // Cinematic-only chrome: it fades in with `cin`, by which point the glass
+  // panel has dissolved and this hairline (like the epigraph below) sits on
+  // the dark-scrimmed cover art in EVERY theme — so the white register stays.
   progressArc: {
     position: 'absolute',
     top: 0,

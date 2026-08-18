@@ -14,7 +14,13 @@ import { cleanTitle } from '../../utils/title';
 // HeroBand.jsx (mobile variant: headline + artist line + begin pill over the
 // blurred track art). Tapping anywhere queues the ENTIRE pool from the top.
 export function HeroBand({ track, reason, loading, onBegin }) {
-  const { t } = useTheme();
+  const { t, name } = useTheme();
+  // Everything here rides blurred cover art under a dark gradient, so the copy
+  // and the begin pill must read LIGHT in every theme: that's `surface` on the
+  // light themes and `ink` on midnight. `onArtInk` is its inverse — the dark
+  // ink that sits ON the light pill (midnight's `bg`, the old #1a1612).
+  const onArt = name === 'midnight' ? t.ink : t.surface;
+  const onArtInk = name === 'midnight' ? t.bg : t.ink;
 
   if (loading) {
     return <Skeleton height={200} radius={18} style={styles.pad} />;
@@ -62,7 +68,7 @@ export function HeroBand({ track, reason, loading, onBegin }) {
             <Text numberOfLines={1} style={[label(9), styles.light70]}>
               {eyebrow}
             </Text>
-            <Text numberOfLines={2} style={styles.headline}>
+            <Text numberOfLines={2} style={[styles.headline, { color: onArt }]}>
               {cleanTitle(track.title)}
             </Text>
             {!!track.artist && (
@@ -70,11 +76,12 @@ export function HeroBand({ track, reason, loading, onBegin }) {
                 {track.artist}
               </Text>
             )}
-            <View style={styles.beginPill}>
+            <View style={[styles.beginPill, { backgroundColor: onArt }]}>
               <View style={[styles.beginDisc, { backgroundColor: t.accent }]}>
-                <Icon name="play" size={10} color="#fff" />
+                {/* On the accent disc, not on art — the app's on-accent ink. */}
+                <Icon name="play" size={10} color={t.bg} />
               </View>
-              <Text style={[label(9), styles.beginText]}>begin the set</Text>
+              <Text style={[label(9), { color: onArtInk }]}>Begin the set</Text>
             </View>
           </View>
         </View>
@@ -102,16 +109,17 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 24,
     lineHeight: 27,
-    color: '#fff',
   },
   artist: { fontFamily: fonts.regular, fontSize: 13 },
+  // Deliberate literal: the eyebrow/artist line is a FADED light ink over the
+  // art, and no theme carries a light-with-alpha token (dusk/bloom's inkSoft
+  // is dark ink) — tokenizing this would bury it on the two light themes.
   light70: { color: 'rgba(255,255,255,0.72)' },
   beginPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -124,5 +132,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  beginText: { color: '#1a1612' },
 });

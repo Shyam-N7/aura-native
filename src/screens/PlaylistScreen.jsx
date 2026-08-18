@@ -221,7 +221,11 @@ export default function PlaylistScreen({ route, navigation }) {
   // __DEV__-only; stripped from release (lib/renderCount).
   countRender('PlaylistScreen');
   const backToTop = useBackToTop();
-  const { t } = useTheme();
+  const { t, name: themeName } = useTheme();
+  // The "change cover" strip rides a fixed dark scrim over the cover art, so
+  // its label has to stay LIGHT in every theme — that's `surface` on the two
+  // light themes and `ink` on midnight (was dusk's #f4ece0 pasted flat).
+  const onScrimInk = themeName === 'midnight' ? t.ink : t.surface;
   const insets = useSafeAreaInsets();
   const player = usePlayer();
   const { id = null, publicId = null, share = false, importJobId = null } =
@@ -892,7 +896,7 @@ export default function PlaylistScreen({ route, navigation }) {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={[label(8.5), styles.coverEditText]}>
+                  <Text style={[label(8.5), { color: onScrimInk }]}>
                     Change cover
                   </Text>
                 </Pressable>
@@ -1273,7 +1277,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     alignItems: 'center',
   },
-  coverEditText: { color: '#f4ece0' },
   collabs: {
     flexDirection: 'row',
     alignItems: 'center',
