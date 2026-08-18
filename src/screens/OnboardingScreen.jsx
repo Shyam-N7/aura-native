@@ -7,8 +7,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Animated, {
-  SlideInLeft,
-  SlideInRight,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +26,7 @@ import { PRIMARY_LANGUAGES, MORE_LANGUAGES } from '../data/languages';
 import { SEED_ARTIST_FALLBACK } from '../data/seedArtists';
 import { setSeedArtists, setSeedSignals, markOnboarded } from '../lib/onboarding';
 import { fonts, label } from '../theme/tokens';
+import { EASE } from '../theme/motion';
 
 // First-run "pick three" flow — the web OnboardingScreen reimagined for mobile:
 // a full-screen stepper, one panel at a time (language → mood → artists). The
@@ -147,10 +150,32 @@ function buildTiles(pool) {
   return [...fromPool, ...fill];
 }
 
+// One step's panel sliding into place — keyed by step, so a step change
+// remounts it and the slide plays once, from the right going forward and from
+// the left coming back. The Arrive idiom (YouScreen.jsx): a shared value
+// cancelled on unmount, never the entering= layout animation it replaces
+// (SlideInRight/SlideInLeft — the reanimated 4.2.3/Fabric abort class).
+const PANEL_SLIDE = 280;
+function StepPanel({ dir, width, children }) {
+  const reduced = useReducedMotion();
+  const p = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) {
+      p.value = 1;
+      return undefined;
+    }
+    p.value = withTiming(1, { duration: PANEL_SLIDE, easing: EASE.enter });
+    return () => cancelAnimation(p);
+  }, [reduced, p]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: (1 - p.value) * dir * width }],
+  }));
+  return <Animated.View style={[styles.panel, style]}>{children}</Animated.View>;
+}
+
 export function OnboardingScreen({ onDone }) {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
-  const reduced = useReducedMotion();
   const { width } = useWindowDimensions();
 
   const [selectedLangs, setSelectedLangs] = useState(() => new Set());
@@ -313,11 +338,6 @@ export function OnboardingScreen({ onDone }) {
   };
 
   const tile = Math.floor((width - 40 - 20) / 3); // 20 pad each side, 10 gaps ×2
-  let entering;
-  if (!reduced) {
-    entering = dir > 0 ? SlideInRight.duration(280) : SlideInLeft.duration(280);
-  }
-
   const langChip = L => {
     const on = selectedLangs.has(L);
     return (
@@ -399,7 +419,7 @@ export function OnboardingScreen({ onDone }) {
         <Text style={[label(9), { color: t.inkFaint }]}>{metaLine()}</Text>
       </View>
 
-      <Animated.View key={step} entering={entering} style={styles.panel}>
+      <StepPanel key={step} dir={dir} width={width}>
         {step === 0 && (
           <ScrollView
             contentContainerStyle={styles.scrollBody}
@@ -546,7 +566,7 @@ export function OnboardingScreen({ onDone }) {
               ))}
           </ScrollView>
         )}
-      </Animated.View>
+      </StepPanel>
 
       <View style={[styles.foot, { paddingBottom: insets.bottom + 14 }]}>
         <PressScale

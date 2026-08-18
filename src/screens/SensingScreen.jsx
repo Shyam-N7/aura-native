@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
-  FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -15,6 +14,27 @@ import { getCurrentMood } from '../api/mood';
 import { getTopArtists } from '../api/stats';
 import { partOfDay } from '../lib/sensing';
 import { fonts, label } from '../theme/tokens';
+import { EASE } from '../theme/motion';
+
+// One unfolding line's arrival, the Arrive idiom (YouScreen.jsx): a shared
+// value cancelled on unmount, never an entering= animation (the reanimated
+// 4.2.3/Fabric abort class). Mounted once each as `shown` grows, so the fade
+// plays once per line — the 400ms the FadeIn it replaces ran for.
+const LINE_FADE = 400;
+function LineFade({ style, children }) {
+  const reduced = useReducedMotion();
+  const o = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) {
+      o.value = 1;
+      return undefined;
+    }
+    o.value = withTiming(1, { duration: LINE_FADE, easing: EASE.enter });
+    return () => cancelAnimation(o);
+  }, [reduced, o]);
+  const fade = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.Text style={[style, fade]}>{children}</Animated.Text>;
+}
 
 // A gentle time-of-day vibe word for the reveal when there's no confident mood
 // read — a vibe, not a claimed personal mood (no invented "sensing").
@@ -136,13 +156,9 @@ export function SensingScreen({ name, onReady }) {
 
       <View style={styles.lines}>
         {lines.slice(0, shown).map((l, i) => (
-          <Animated.Text
-            key={i}
-            entering={FadeIn.duration(400)}
-            style={[styles.line, { color: t.inkSoft }]}
-          >
+          <LineFade key={i} style={[styles.line, { color: t.inkSoft }]}>
             {l}
-          </Animated.Text>
+          </LineFade>
         ))}
       </View>
 
