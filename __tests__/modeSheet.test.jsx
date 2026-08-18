@@ -67,10 +67,10 @@ test('lists modes (car hidden), marks the active one, and switches on tap', asyn
   });
 
   const body = texts(tree.toJSON());
-  expect(body).toContain('listening mode');
-  expect(body).toContain('everyday');
-  expect(body).toContain('focus');
-  expect(body).toContain('family');
+  expect(body).toContain('Listening mode');
+  expect(body).toContain('Everyday');
+  expect(body).toContain('Focus');
+  expect(body).toContain('Family');
   // Car is a Phase-5 experience layer — not offered here.
   expect(byLabel(tree, 'car')).toBeUndefined();
 

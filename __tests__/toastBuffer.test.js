@@ -26,7 +26,7 @@ test('a toast fired just before the host mounts still arrives', () => {
 });
 
 test('a message from a minute ago still arrives — the outage may be live', () => {
-  showToast('your connection dropped — waiting for it to come back.');
+  showToast('Your connection dropped — waiting for it to come back.');
 
   // The activity was destroyed mid-outage and the user reopens shortly after.
   // A 5s TTL dropped this, which traded a stale toast for NO toast in exactly
@@ -42,7 +42,7 @@ test('a message from a minute ago still arrives — the outage may be live', () 
 });
 
 test('a stale one is dropped instead of replaying next launch', () => {
-  showToast("couldn't play this track — skipping.");
+  showToast("Couldn't play this track — skipping.");
 
   // An hour later, the app is reopened and the Toast host mounts.
   const realNow = Date.now;
@@ -71,7 +71,7 @@ test('a dropped message is not kept for the subscriber after it', () => {
 
 // Buffered toasts are one account's, like every other module-scope store.
 test('sign-out clears a buffered toast', () => {
-  showToast('your connection dropped — waiting for it to come back.');
+  showToast('Your connection dropped — waiting for it to come back.');
 
   resetSessionState({ signedOut: true });
 

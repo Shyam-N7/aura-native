@@ -106,16 +106,16 @@ test('a failed prefs fetch says so and retries — it never paints the switches 
   };
   const tree = await render(<YouScreen navigation={navigation} />);
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'settings').props.onPress();
+    byLabel(tree, 'Settings').props.onPress();
   });
 
   // The bug: all three rows rendered from the null fallback (on, in the accent
   // colour) and quietly ate every tap. They must not be there at all.
-  expect(byLabel(tree, 'new music for you')).toBeUndefined();
-  expect(byLabel(tree, 'friends & playlists')).toBeUndefined();
-  expect(byLabel(tree, 'listening reminders')).toBeUndefined();
+  expect(byLabel(tree, 'New music for you')).toBeUndefined();
+  expect(byLabel(tree, 'Friends & playlists')).toBeUndefined();
+  expect(byLabel(tree, 'Listening reminders')).toBeUndefined();
   expect(texts(tree.toJSON())).toContain(
-    "couldn't load your notification settings.",
+    "Couldn't load your notification settings.",
   );
 
   // Recoverable by hand, and the rows then wear the account's real state —
@@ -124,9 +124,9 @@ test('a failed prefs fetch says so and retries — it never paints the switches 
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'try again').props.onPress();
   });
-  const mixesRow = () => byLabel(tree, 'new music for you');
+  const mixesRow = () => byLabel(tree, 'New music for you');
   expect(mixesRow().props.accessibilityState).toEqual({});
-  expect(texts(tree.toJSON())).toContain('no mix announcements.');
+  expect(texts(tree.toJSON())).toContain('No mix announcements.');
 
   // And the switch is live again.
   setPushPrefs.mockResolvedValueOnce({ mixes: true, social: true });

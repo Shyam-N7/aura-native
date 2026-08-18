@@ -53,14 +53,14 @@ afterEach(() => {
 
 test('renders the sign-in form', async () => {
   const tree = await renderScreen();
-  expect(rendered(tree)).toContain('welcome back.');
+  expect(rendered(tree)).toContain('Welcome back.');
   await unmount(tree);
 });
 
 test('validates fields before calling the api', async () => {
   const tree = await renderScreen();
   await press(tree, 'auth-submit');
-  expect(rendered(tree)).toContain('an email is needed.');
+  expect(rendered(tree)).toContain('An email is needed.');
   expect(login).not.toHaveBeenCalled();
   await unmount(tree);
 });
@@ -79,13 +79,13 @@ test('signup routes to the verification code step', async () => {
   signup.mockResolvedValue({ pendingVerification: true, email: 'a@b.co' });
   const tree = await renderScreen();
   await press(tree, 'auth-switch-mode');
-  expect(rendered(tree)).toContain('create your account.');
+  expect(rendered(tree)).toContain('Create your account.');
   await type(tree, 'auth-name', 'shyam');
   await type(tree, 'auth-email', 'a@b.co');
   await type(tree, 'auth-password', 'secret123');
   await press(tree, 'auth-submit');
   expect(signup).toHaveBeenCalledWith('shyam', 'a@b.co', 'secret123');
-  expect(rendered(tree)).toContain('check your email for a 6-digit code');
+  expect(rendered(tree)).toContain('Check your email for a 6-digit code');
   await unmount(tree);
 });
 
@@ -101,7 +101,7 @@ test('device limit shows the picker and retries with eviction', async () => {
   await type(tree, 'auth-email', 'a@b.co');
   await type(tree, 'auth-password', 'secret123');
   await press(tree, 'auth-submit');
-  expect(rendered(tree)).toContain('device limit reached.');
+  expect(rendered(tree)).toContain('Device limit reached.');
   expect(rendered(tree)).toContain('pixel 8');
   await press(tree, 'auth-evict-s1');
   expect(login).toHaveBeenLastCalledWith('a@b.co', 'secret123', 's1');

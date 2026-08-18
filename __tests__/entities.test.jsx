@@ -125,7 +125,7 @@ test('album: movie eyebrow, first artist only, rows play the sequence', async ()
   const body = texts(tree.toJSON());
   expect(body).toContain('movie');
   expect(body).toContain('Movie X');
-  expect(body).toContain('by A');
+  expect(body).toContain('By A');
   expect(body).not.toContain('by A, B');
   expect(body).toContain('2 tracks');
 
@@ -196,7 +196,7 @@ test('language hub: shelves render, tiles pick live or open playlists', async ()
   const body = texts(tree.toJSON());
   expect(body).toContain('tamil.');
   expect(body).toContain('Popular in Tamil right now');
-  expect(body).toContain('— end of tamil —');
+  expect(body).toContain('— End of tamil —');
 
   byLabel(tree, 'Song').props.onPress();
   expect(mockPlayTrack).toHaveBeenCalledWith(TRACK, { source: 'your pick' });

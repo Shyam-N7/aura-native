@@ -76,7 +76,7 @@ test('a song link wears its errand while the fetch runs, then dissolves into the
   await ReactTestRenderer.act(async () => {
     urlListener()({ url: 'https://www.aurafm.live/t/x9?src=share' });
   });
-  expect(texts(tree.toJSON())).toContain('opening the song');
+  expect(texts(tree.toJSON())).toContain('Opening the song');
 
   await ReactTestRenderer.act(async () => {
     release();
@@ -86,7 +86,7 @@ test('a song link wears its errand while the fetch runs, then dissolves into the
   await ReactTestRenderer.act(async () => {
     await new Promise(r => setTimeout(r, 450));
   });
-  expect(texts(tree.toJSON())).not.toContain('opening the song');
+  expect(texts(tree.toJSON())).not.toContain('Opening the song');
 });
 
 test('a moment link says where it will start', async () => {
@@ -99,7 +99,7 @@ test('a moment link says where it will start', async () => {
   await ReactTestRenderer.act(async () => {
     urlListener()({ url: 'https://www.aurafm.live/t/x1?at=84' });
   });
-  expect(texts(tree.toJSON())).toContain('starting from 1:24');
+  expect(texts(tree.toJSON())).toContain('Starting from 1:24');
 });
 
 test('a failed fetch clears the landing and says so', async () => {
@@ -116,8 +116,8 @@ test('a failed fetch clears the landing and says so', async () => {
     await new Promise(r => setTimeout(r, 450));
   });
   const body = texts(tree.toJSON());
-  expect(body).not.toContain('opening the song');
-  expect(body).toContain("couldn't open that song.");
+  expect(body).not.toContain('Opening the song');
+  expect(body).toContain("Couldn't open that song.");
 });
 
 test('the same link fired twice within the window is one intent, not two', async () => {
@@ -145,7 +145,7 @@ test('signed out, a link raises no landing over the auth screen', async () => {
   await ReactTestRenderer.act(async () => {
     urlListener()({ url: 'https://www.aurafm.live/t/x1' });
   });
-  expect(texts(tree.toJSON())).not.toContain('opening the song');
+  expect(texts(tree.toJSON())).not.toContain('Opening the song');
 });
 
 test('a cold main-flow start paints the landing from the launch intent', async () => {
@@ -156,5 +156,5 @@ test('a cold main-flow start paints the landing from the launch intent', async (
       : Promise.reject(new Error('offline')),
   );
   await mount();
-  expect(texts(tree.toJSON())).toContain('opening the song');
+  expect(texts(tree.toJSON())).toContain('Opening the song');
 });

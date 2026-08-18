@@ -94,8 +94,8 @@ test('nothing cached and the fetch fails: home says so, and try again refetches'
   const tree = await render(<HomeScreen />);
 
   const body = texts(tree.toJSON());
-  expect(body).toContain("couldn't load your music.");
-  expect(body).toContain('check your connection and try again.');
+  expect(body).toContain("Couldn't load your music.");
+  expect(body).toContain('Check your connection and try again.');
   // No NetInfo in this app — it cannot assert the user is offline.
   expect(body.toLowerCase()).not.toContain('offline');
 
@@ -104,7 +104,7 @@ test('nothing cached and the fetch fails: home says so, and try again refetches'
     byLabel(tree, 'try again').props.onPress();
   });
   expect(getFeatured).toHaveBeenCalledTimes(2);
-  expect(texts(tree.toJSON())).not.toContain("couldn't load your music.");
+  expect(texts(tree.toJSON())).not.toContain("Couldn't load your music.");
   // Real home is back: the hero band offers the set again.
   expect(byLabel(tree, 'begin the set')).toBeTruthy();
 
@@ -116,13 +116,13 @@ test('a failed refresh keeps the cached pool — no error state over real conten
   getFeatured.mockRejectedValue(new Error('network'));
   const tree = await render(<HomeScreen />);
 
-  expect(texts(tree.toJSON())).not.toContain("couldn't load your music.");
+  expect(texts(tree.toJSON())).not.toContain("Couldn't load your music.");
   expect(byLabel(tree, 'begin the set')).toBeTruthy();
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
-// ── "new for you" had no loading state ─────────────────────────────────────
+// ── "New for you" had no loading state ─────────────────────────────────────
 // The rail was gated on the FEATURED pool's status alone. Its content can
 // come from either the pool or the personal call, so when the pool resolved
 // with nothing to slice the rail was not rendered at all — and then popped
@@ -146,7 +146,7 @@ test('the rail shows a loading state while the personal call is in flight', asyn
   const tree = await render(<HomeScreen />);
 
   // Announced, not absent.
-  expect(texts(tree.toJSON())).toContain('new for you');
+  expect(texts(tree.toJSON())).toContain('New for you');
 
   await ReactTestRenderer.act(async () => {
     personal.resolve({ tracks: [{ id: 'n1', title: 'Fresh', artist: 'b' }] });
@@ -154,9 +154,9 @@ test('the rail shows a loading state while the personal call is in flight', asyn
   });
 
   const body = texts(tree.toJSON());
-  expect(body).toContain('new for you');
+  expect(body).toContain('New for you');
   expect(body).toContain('Fresh');
-  expect(body).toContain('from your listening');
+  expect(body).toContain('From your listening');
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
@@ -174,6 +174,6 @@ test('a failed personal call settles the rail instead of spinning', async () => 
 
   // Nothing personal and nothing to slice: the rail is honestly absent, not
   // stuck showing placeholders.
-  expect(texts(tree.toJSON())).not.toContain('new for you');
+  expect(texts(tree.toJSON())).not.toContain('New for you');
   await ReactTestRenderer.act(() => tree.unmount());
 });

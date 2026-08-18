@@ -169,9 +169,9 @@ test("home greets and begins tonight's set from the hero band", async () => {
   const body = texts(tree.toJSON());
   // A warm part-of-day greeting (rotates daily) followed by the first name.
   expect(body).toMatch(
-    /(good morning|morning|rise and shine|good afternoon|afternoon|hey there|good evening|evening|good to see you|still up\?|up late\?|late night\?),? shyam/,
+    /(Good morning|Morning|Rise and shine|Good afternoon|Afternoon|Hey there|Good evening|Evening|Good to see you|Still up\?|Up late\?|Late night\?),? shyam/,
   );
-  expect(body).toContain('music that gets your mood');
+  expect(body).toContain('Music that gets your mood');
   expect(getFeatured).toHaveBeenCalledWith({ limit: 24 });
 
   // The pool feeds the quick-picks fallback — the wheel renders its discs.
@@ -193,15 +193,15 @@ test('background play: the greeting-row switch confirms, then flips the engine',
   // (the switch itself is named by its accessibility label).
   const toggle = byLabel(tree, 'background play');
   expect(toggle.props.accessibilityState).toEqual({ checked: true });
-  expect(texts(tree.toJSON())).toContain('plays in background');
+  expect(texts(tree.toJSON())).toContain('Plays in background');
 
   // Tap → the confirm POPUP asks; cancel changes nothing.
   await ReactTestRenderer.act(async () => {
     toggle.props.onPress();
   });
   const body = texts(tree.toJSON());
-  expect(body).toContain('turn off background play?');
-  expect(body).toContain('music stops when you close the app.');
+  expect(body).toContain('Turn off background play?');
+  expect(body).toContain('Music stops when you close the app.');
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'cancel').props.onPress();
   });
@@ -212,7 +212,7 @@ test('background play: the greeting-row switch confirms, then flips the engine',
     byLabel(tree, 'background play').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'turn off').props.onPress();
+    byLabel(tree, 'Turn off').props.onPress();
   });
   expect(mockSetBackgroundPlay).toHaveBeenCalledWith(false);
   await ReactTestRenderer.act(() => tree.unmount());
@@ -227,7 +227,7 @@ test("background play: don't ask again silences the popup for good", async () =>
     byLabel(tree, "don't ask again").props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'turn off').props.onPress();
+    byLabel(tree, 'Turn off').props.onPress();
   });
   expect(mockSetBackgroundPlay).toHaveBeenCalledWith(false);
 
@@ -235,7 +235,7 @@ test("background play: don't ask again silences the popup for good", async () =>
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'background play').props.onPress();
   });
-  expect(texts(tree.toJSON())).not.toContain('turn on background play?');
+  expect(texts(tree.toJSON())).not.toContain('Turn on background play?');
   expect(mockSetBackgroundPlay).toHaveBeenCalledWith(true);
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -248,15 +248,15 @@ test('you is the library: your year, accordion shelves, settings', async () => {
   const tree = await render(<YouScreen navigation={navigation} />);
 
   const body = texts(tree.toJSON());
-  expect(body).toContain('your year');
+  expect(body).toContain('Your year');
   expect(body).toContain('12 tracks played');
-  expect(body).toContain('for 34 minutes');
+  expect(body).toContain('For 34 minutes');
   expect(body).toContain('Shyam N');
   expect(body).toContain('s@x.y');
 
   // Liked shelf opens, plays the liked sequence, links to the full page.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'liked songs').props.onPress();
+    byLabel(tree, 'Liked songs').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'play Liked Song').props.onPress();
@@ -272,7 +272,7 @@ test('you is the library: your year, accordion shelves, settings', async () => {
 
   // Settings shelf hosts the quality picker and sign out.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'settings').props.onPress();
+    byLabel(tree, 'Settings').props.onPress();
   });
 
   // Welcome-screen toggle: on by default (pref absent), optimistic flip while
@@ -281,7 +281,7 @@ test('you is the library: your year, accordion shelves, settings', async () => {
     selected: true,
   });
   expect(texts(tree.toJSON())).toContain(
-    'a short intro reads your mood when you open aura',
+    'A short intro reads your mood when you open AURA',
   );
   let resolveUpdate;
   updatePreferences.mockImplementationOnce(
@@ -292,7 +292,7 @@ test('you is the library: your year, accordion shelves, settings', async () => {
   });
   expect(updatePreferences).toHaveBeenCalledWith({ showSensing: false });
   expect(texts(tree.toJSON())).toContain(
-    'skipped — you go straight to your home.',
+    'Skipped — you go straight to your home.',
   );
   await ReactTestRenderer.act(async () => resolveUpdate({}));
   updatePreferences.mockRejectedValueOnce(new Error('offline'));
@@ -300,7 +300,7 @@ test('you is the library: your year, accordion shelves, settings', async () => {
     byLabel(tree, 'welcome screen').props.onPress();
   });
   expect(texts(tree.toJSON())).toContain(
-    'a short intro reads your mood when you open aura',
+    'A short intro reads your mood when you open AURA',
   );
 
   byLabel(tree, 'quality low').props.onPress();
@@ -310,7 +310,7 @@ test('you is the library: your year, accordion shelves, settings', async () => {
     byLabel(tree, 'sign out').props.onPress();
   });
   expect(confirm).toHaveBeenCalledWith(
-    expect.objectContaining({ action: 'sign out' }),
+    expect.objectContaining({ action: 'Sign out' }),
   );
 
   await ReactTestRenderer.act(() => tree.unmount());
@@ -350,7 +350,7 @@ test('the settings admin row shows only for admins and routes to the composer', 
   // Not an admin: no row.
   let tree = await render(<YouScreen navigation={navigation} />);
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'settings').props.onPress();
+    byLabel(tree, 'Settings').props.onPress();
   });
   expect(byLabel(tree, 'send a notification')).toBeUndefined();
   await ReactTestRenderer.act(() => tree.unmount());
@@ -359,7 +359,7 @@ test('the settings admin row shows only for admins and routes to the composer', 
   mockUser = { name: 'Shyam N', email: 's@x.y', admin: true };
   tree = await render(<YouScreen navigation={navigation} />);
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'settings').props.onPress();
+    byLabel(tree, 'Settings').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'send a notification').props.onPress();

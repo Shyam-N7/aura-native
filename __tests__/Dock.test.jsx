@@ -51,14 +51,14 @@ test('highlight follows the state carried by nav events', async () => {
   const liveState = { current: tabsState(0) };
   const navRef = makeNavRef(liveState);
   const tree = await render(navRef);
-  expect(selected(tree, 'home')).toBe(true);
+  expect(selected(tree, 'Home')).toBe(true);
 
   liveState.current = tabsState(1);
   await ReactTestRenderer.act(async () => {
     navRef.emit(liveState.current);
   });
-  expect(selected(tree, 'search')).toBe(true);
-  expect(selected(tree, 'home')).toBe(false);
+  expect(selected(tree, 'Search')).toBe(true);
+  expect(selected(tree, 'Home')).toBe(false);
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -69,12 +69,12 @@ test('taps always navigate — even the focused tab (pops detail screens)', asyn
   const tree = await render(navRef);
 
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'talk').props.onPress();
+    byLabel(tree, 'Talk').props.onPress();
   });
   expect(navRef.navigate).toHaveBeenCalledWith('Tabs', { screen: 'Talk' });
 
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'home').props.onPress();
+    byLabel(tree, 'Home').props.onPress();
   });
   expect(navRef.navigate).toHaveBeenCalledWith('Tabs', { screen: 'Home' });
 
@@ -91,16 +91,16 @@ test('a stale highlight heals on tap instead of locking (field regression)', asy
   await ReactTestRenderer.act(async () => {
     navRef.emit(tabsState(3));
   });
-  expect(selected(tree, 'you')).toBe(true);
+  expect(selected(tree, 'You')).toBe(true);
 
   // Tapping home navigates (a no-op inside the container, so no state event
   // will come back) and the tap-time resync re-trues the highlight anyway.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'home').props.onPress();
+    byLabel(tree, 'Home').props.onPress();
   });
   expect(navRef.navigate).toHaveBeenCalledWith('Tabs', { screen: 'Home' });
-  expect(selected(tree, 'home')).toBe(true);
-  expect(selected(tree, 'you')).toBe(false);
+  expect(selected(tree, 'Home')).toBe(true);
+  expect(selected(tree, 'You')).toBe(false);
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

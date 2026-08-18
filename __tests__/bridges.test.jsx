@@ -82,8 +82,8 @@ test('the clairvoyant hero suggests and begins tonight’s journey', async () =>
   });
 
   const body = texts(tree.toJSON());
-  expect(body).toContain('gradual paths between feelings');
-  expect(body).toContain('the bridge already knows');
+  expect(body).toContain('Gradual paths between feelings');
+  expect(body).toContain('The bridge already knows');
   expect(body).toContain('you sound worn down — here is the lift.');
   expect(mockGetSuggestion).toHaveBeenCalled();
   expect(mockGetBridge).toHaveBeenCalledWith(
@@ -91,7 +91,7 @@ test('the clairvoyant hero suggests and begins tonight’s journey', async () =>
   );
 
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'begin →').props.onPress();
+    byLabel(tree, 'Begin →').props.onPress();
   });
   expect(mockPlayQueue).toHaveBeenCalledWith(TRACKS, 0, 'tired → energized');
   expect(mockOpenPlayer).toHaveBeenCalled();
@@ -127,12 +127,12 @@ test('changing a mood invalidates the curated path back to a fresh preview', asy
   });
   // Curate the default sad→happy path, then change the target mood.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'curate this path →').props.onPress();
+    byLabel(tree, 'Curate this path →').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
     await Promise.resolve();
   });
-  // Built now — the CTA reads "begin →" for the custom path.
+  // Built now — the CTA reads "Begin →" for the custom path.
   expect(
     tree.root.findAllByProps({ accessibilityLabel: 'curate this path →' }),
   ).toHaveLength(0);
@@ -140,7 +140,7 @@ test('changing a mood invalidates the curated path back to a fresh preview', asy
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'calm').props.onPress();
   });
-  expect(byLabel(tree, 'curate this path →')).toBeTruthy();
+  expect(byLabel(tree, 'Curate this path →')).toBeTruthy();
   await ReactTestRenderer.act(() => tree.unmount());
 });
 

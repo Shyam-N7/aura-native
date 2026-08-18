@@ -239,7 +239,7 @@ test('a blip the ladder recovers from stays silent', async () => {
   notePlaybackStarted();
   await jest.advanceTimersByTimeAsync(TROUBLE_NOTICE_MS * 2);
 
-  // No "connection trouble", and no "back on." either — the user never knew.
+  // No "connection trouble", and no "Back on." either — the user never knew.
   expect(seen).toEqual([]);
 });
 

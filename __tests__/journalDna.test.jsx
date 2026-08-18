@@ -73,11 +73,11 @@ test('journal renders entries and hydrates track-id strings into thumbs', async 
 
   const tree = await render(<JournalScreen navigation={nav()} />);
   const body = texts(tree.toJSON());
-  expect(body).toContain('your private listening journal');
+  expect(body).toContain('Your private listening journal');
   expect(body).toContain('Yesterday');
   expect(body).toContain('warm');
   expect(body).toContain('a slow tamil evening');
-  expect(body).toContain('tracks heard');
+  expect(body).toContain('Tracks heard');
   expect(mockGetTrack).toHaveBeenCalledWith('j1');
 
   await ReactTestRenderer.act(async () => {
@@ -94,7 +94,7 @@ test('journal renders entries and hydrates track-id strings into thumbs', async 
 test('journal empty state waits honestly', async () => {
   mockGetJournal.mockResolvedValue({ entries: [], totalEvents: 0 });
   const tree = await render(<JournalScreen navigation={nav()} />);
-  expect(texts(tree.toJSON())).toContain('your journal is waiting on you.');
+  expect(texts(tree.toJSON())).toContain('Your journal is waiting on you.');
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
@@ -114,12 +114,12 @@ test('dna renders axes, stats and real mood counts when available', async () => 
   });
   const tree = await render(<DnaScreen navigation={nav()} />);
   const body = texts(tree.toJSON());
-  expect(body).toContain('you, as a');
+  expect(body).toContain('You, as a');
   expect(body).toContain('slow-burning tamil evenings · drifting brighter');
   expect(body).toContain('pace');
   expect(body).toContain('70');
-  expect(body).toContain('this month · in numbers');
-  expect(body).toContain('unique artists');
+  expect(body).toContain('This month · in numbers');
+  expect(body).toContain('Unique artists');
   expect(body).toContain('unwound');
   expect(body).toContain('21 plays');
   await ReactTestRenderer.act(() => tree.unmount());
@@ -133,7 +133,7 @@ test('dna unavailable state reads eventsSeen (the web read a field that never ex
   });
   const tree = await render(<DnaScreen navigation={nav()} />);
   const body = texts(tree.toJSON());
-  expect(body).toContain('not enough listening yet.');
-  expect(body).toContain("you're at 4/10 plays so far.");
+  expect(body).toContain('Not enough listening yet.');
+  expect(body).toContain("You're at 4/10 plays so far.");
   await ReactTestRenderer.act(() => tree.unmount());
 });

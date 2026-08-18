@@ -58,9 +58,9 @@ afterEach(() => storage.removeItem('aura.authUser'));
 test('empty form shows the default preview, the aura card and a disabled send', async () => {
   const tree = await render(<AdminComposeScreen navigation={nav()} />);
   const body = texts(tree.toJSON());
-  expect(body).toContain('hello from aura');
-  expect(body).toContain('your message shows here, exactly how it lands.');
-  expect(body).toContain('goes only to your own devices (a safe test).');
+  expect(body).toContain('Hello from AURA');
+  expect(body).toContain('Your message shows here, exactly how it lands.');
+  expect(body).toContain('Goes only to your own devices (a safe test).');
   // No image typed → the brand-only composed card is the banner.
   expect(byLabel(tree, 'notification image preview').props.source).toEqual({
     uri: 'https://www.aurafm.live/api/push/card-art',
@@ -79,7 +79,7 @@ test('typing feeds the live preview; send posts to me and goes back', async () =
   const body = texts(tree.toJSON());
   expect(body).toContain('fresh mixes');
   expect(body).toContain('three new sets today.');
-  expect(body).not.toContain('hello from aura');
+  expect(body).not.toContain('Hello from AURA');
 
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'send notification').props.onPress();
@@ -93,7 +93,7 @@ test('typing feeds the live preview; send posts to me and goes back', async () =
       image: 'https://www.aurafm.live/api/push/card-art',
     }),
   );
-  expect(mockToast).toHaveBeenCalledWith('sent to 2 devices.', { tick: true });
+  expect(mockToast).toHaveBeenCalledWith('Sent to 2 devices.', { tick: true });
   expect(navigation.goBack).toHaveBeenCalled();
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -111,7 +111,7 @@ test('image toggle off drops the banner, hides the url field, sends plain text',
   expect(
     tree.root.findAllByProps({ accessibilityLabel: 'notification image url' }),
   ).toHaveLength(0);
-  expect(texts(tree.toJSON())).toContain('off — sends as plain text.');
+  expect(texts(tree.toJSON())).toContain('Off — sends as plain text.');
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'send notification').props.onPress();
   });
@@ -144,7 +144,7 @@ test('a typed email wins the audience and disables the toggle', async () => {
     byLabel(tree, 'send to one email').props.onChangeText('friend@x.y');
   });
   expect(byLabel(tree, 'send to everyone').props.disabled).toBe(true);
-  expect(texts(tree.toJSON())).toContain('ignored — the email above wins.');
+  expect(texts(tree.toJSON())).toContain('Ignored — the email above wins.');
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'send notification').props.onPress();
   });
@@ -199,8 +199,8 @@ test('a non-admin gets no composer and is sent back', async () => {
 
   const tree = await render(<AdminComposeScreen navigation={navigation} />);
 
-  expect(texts(tree.toJSON())).not.toContain('hello from aura');
-  expect(tree.root.findAllByProps({ accessibilityLabel: 'send notification' }))
+  expect(texts(tree.toJSON())).not.toContain('Hello from AURA');
+  expect(tree.root.findAllByProps({ accessibilityLabel: 'Send notification' }))
     .toHaveLength(0);
   expect(navigation.goBack).toHaveBeenCalled();
   // Nothing admin-only is even fetched on the way out.
@@ -226,7 +226,7 @@ test('a signed-out reader gets the same treatment', async () => {
 test('losing admin mid-session closes the composer', async () => {
   const navigation = nav();
   const tree = await render(<AdminComposeScreen navigation={navigation} />);
-  expect(texts(tree.toJSON())).toContain('hello from aura');
+  expect(texts(tree.toJSON())).toContain('Hello from AURA');
   expect(navigation.goBack).not.toHaveBeenCalled();
 
   const { fetchMe } = require('../src/lib/auth');
@@ -245,6 +245,6 @@ test('losing admin mid-session closes the composer', async () => {
   }
 
   expect(navigation.goBack).toHaveBeenCalled();
-  expect(texts(tree.toJSON())).not.toContain('hello from aura');
+  expect(texts(tree.toJSON())).not.toContain('Hello from AURA');
   await ReactTestRenderer.act(() => tree.unmount());
 });

@@ -48,14 +48,14 @@ test('opens from the bus, honors omit, runs an action, then closes', async () =>
   await ReactTestRenderer.act(async () => {
     openTrackActions({ track: TRACK, menu: { omit: ['artist'] } });
   });
-  expect(byLabel(tree, 'play song')).toBeTruthy();
-  expect(byLabel(tree, 'add to queue')).toBeTruthy();
+  expect(byLabel(tree, 'Play song')).toBeTruthy();
+  expect(byLabel(tree, 'Add to queue')).toBeTruthy();
   expect(
-    tree.root.findAllByProps({ accessibilityLabel: 'open artist' }),
+    tree.root.findAllByProps({ accessibilityLabel: 'Open artist' }),
   ).toHaveLength(0);
 
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'play next').props.onPress();
+    byLabel(tree, 'Play next').props.onPress();
   });
   expect(mockEnqueueNext).toHaveBeenCalledWith(TRACK);
   expect(tree.toJSON()).toBeNull();
@@ -69,7 +69,7 @@ test('play song plays live and opens the player', async () => {
     openTrackActions({ track: TRACK, menu: {} });
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'play song').props.onPress();
+    byLabel(tree, 'Play song').props.onPress();
   });
   expect(mockPlayTrack).toHaveBeenCalledWith(TRACK, { source: 'your pick' });
   expect(mockOpenPlayer).toHaveBeenCalled();
@@ -86,7 +86,7 @@ test('a play override replaces the default single-track play', async () => {
     openTrackActions({ track: TRACK, menu: { play } });
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'play song').props.onPress();
+    byLabel(tree, 'Play song').props.onPress();
   });
   expect(play).toHaveBeenCalled();
   expect(mockPlayTrack).not.toHaveBeenCalled();
@@ -100,12 +100,12 @@ test('per-surface extras render below the base actions', async () => {
     openTrackActions({
       track: TRACK,
       menu: {
-        extras: [{ label: "don't show this again", danger: true, onPress }],
+        extras: [{ label: "Don't show this again", danger: true, onPress }],
       },
     });
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, "don't show this again").props.onPress();
+    byLabel(tree, "Don't show this again").props.onPress();
   });
   expect(onPress).toHaveBeenCalled();
   await ReactTestRenderer.act(() => tree.unmount());

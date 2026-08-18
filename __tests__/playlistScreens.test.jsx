@@ -130,11 +130,11 @@ test('playlists library groups yours, shared-with-you and saved', async () => {
   );
 
   const body = texts(tree.toJSON());
-  expect(body).toContain('made by you');
-  expect(body).toContain('shared with you');
-  expect(body).toContain('saved');
+  expect(body).toContain('Made by you');
+  expect(body).toContain('Shared with you');
+  expect(body).toContain('Saved');
   expect(body).toContain('Drive');
-  expect(body).toContain('shared with you');
+  expect(body).toContain('Shared with you');
   expect(body).toContain('by ann');
 
   byLabel(tree, 'Drive').props.onPress();
@@ -174,15 +174,15 @@ test('deleting a playlist is two steps: a menu, then a question', async () => {
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'Drive options').props.onPress();
   });
-  expect(texts(tree.toJSON())).toContain('open playlist');
+  expect(texts(tree.toJSON())).toContain('Open playlist');
   expect(deletePlaylist).not.toHaveBeenCalled();
 
   // Step two: the danger row raises the ConfirmPopup question — same popup
   // family as the menu, not the global sheet. Cancelling deletes nothing.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'delete playlist').props.onPress();
+    byLabel(tree, 'Delete playlist').props.onPress();
   });
-  expect(texts(tree.toJSON())).toContain('delete "Drive"?');
+  expect(texts(tree.toJSON())).toContain('Delete "Drive"?');
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'cancel').props.onPress();
   });
@@ -194,10 +194,10 @@ test('deleting a playlist is two steps: a menu, then a question', async () => {
     byLabel(tree, 'Drive options').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'delete playlist').props.onPress();
+    byLabel(tree, 'Delete playlist').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'delete').props.onPress();
+    byLabel(tree, 'Delete').props.onPress();
   });
   expect(deletePlaylist).toHaveBeenCalledWith('p1');
 
@@ -205,7 +205,7 @@ test('deleting a playlist is two steps: a menu, then a question', async () => {
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'Us options').props.onPress();
   });
-  expect(byLabel(tree, 'leave playlist')).toBeTruthy();
+  expect(byLabel(tree, 'Leave playlist')).toBeTruthy();
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -244,18 +244,18 @@ test('playlist detail shows hero, share chip, added-by and row actions', async (
 
   const body = texts(tree.toJSON());
   expect(body).toContain('Us');
-  expect(body).toContain('by you');
-  expect(body).toContain('added by ann');
+  expect(body).toContain('By you');
+  expect(body).toContain('Added by ann');
   expect(body).toContain('shared');
 
   // The share chip wears the reach; opening it lists the three states.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'shared — change who can see this').props.onPress();
+    byLabel(tree, 'Shared — change who can see this').props.onPress();
   });
   const sheet = texts(tree.toJSON());
-  expect(sheet).toContain('who can see this');
-  expect(sheet).toContain('only you');
-  expect(sheet).toContain('make a public view link');
+  expect(sheet).toContain('Who can see this');
+  expect(sheet).toContain('Only you');
+  expect(sheet).toContain('Make a public view link');
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

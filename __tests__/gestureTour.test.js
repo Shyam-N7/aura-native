@@ -54,7 +54,7 @@ test('finishing the last step ends the tour for good, with a send-off', () => {
   expect(noteTourGesture('close')).toBe(true);
   expect(getTourState().active).toBe(false);
   expect(tourDone()).toBe(true);
-  expect(showToast).toHaveBeenCalledWith("that's the tour. enjoy.", {
+  expect(showToast).toHaveBeenCalledWith("That's the tour. Enjoy.", {
     tick: true,
   });
   expect(seen.length).toBeGreaterThan(0);
