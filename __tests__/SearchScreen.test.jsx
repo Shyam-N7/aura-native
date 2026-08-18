@@ -203,7 +203,7 @@ test('remembers only committed queries and re-runs them from recents', async () 
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
   });
-  expect(texts(tree.toJSON())).not.toContain('recent searches');
+  expect(texts(tree.toJSON())).not.toContain('Recent searches');
 
   // Committing — tapping a result — is what records the query.
   await ReactTestRenderer.act(async () => {
@@ -221,7 +221,7 @@ test('remembers only committed queries and re-runs them from recents', async () 
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(600);
   });
-  expect(texts(tree.toJSON())).toContain('recent searches');
+  expect(texts(tree.toJSON())).toContain('Recent searches');
 
   const recent = byLabel(tree, 'search song');
   await ReactTestRenderer.act(async () => {
@@ -242,7 +242,7 @@ test('remembers only committed queries and re-runs them from recents', async () 
   await ReactTestRenderer.act(async () => {
     clear.props.onPress();
   });
-  expect(texts(tree.toJSON())).not.toContain('recent searches');
+  expect(texts(tree.toJSON())).not.toContain('Recent searches');
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

@@ -57,7 +57,7 @@ test('messages are lowercase and carry no status code', async () => {
 describe('the endpoints that had no server message to fall back on', () => {
   afterEach(() => delete global.fetch);
 
-  test('liked songs', async () => {
+  test('Liked songs', async () => {
     global.fetch = jest.fn(async () => res(500, {}));
     const err = await listLiked().catch(e => e);
     expect(err.message).not.toMatch(/likes fetch failed/);

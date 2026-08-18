@@ -51,7 +51,7 @@ export function TrackActionsSheet() {
     items.push({
       id: 'play',
       icon: 'play',
-      label: 'play song',
+      label: 'Play song',
       run:
         play ??
         (() => {
@@ -64,20 +64,20 @@ export function TrackActionsSheet() {
     items.push({
       id: 'radio',
       icon: 'wave',
-      label: 'start aura radio',
+      label: 'Start AURA radio',
       // Our radio, not YouTube's weather: seed station + similarity graph,
       // served as a ready queue (see server/seedMix.js for the verdict).
       run: () => {
         getSeedRadio(track.id)
           .then(mix => {
             if (!mix?.tracks?.length) {
-              showToast('not enough nearby songs yet — play it a little first.');
+              showToast('Not enough nearby songs yet — play it a little first.');
               return;
             }
             player.playQueue(mix.tracks, 0, mix.name);
             player.ui?.openPlayer?.();
           })
-          .catch(() => showToast("couldn't start the radio."));
+          .catch(() => showToast("Couldn't start the radio."));
       },
     });
   }
@@ -85,10 +85,10 @@ export function TrackActionsSheet() {
     items.push({
       id: 'playNext',
       icon: 'next',
-      label: 'play next',
+      label: 'Play next',
       run: () => {
         player.enqueueNext(track);
-        showToast('queued next.');
+        showToast('Queued next.');
       },
     });
   }
@@ -96,10 +96,10 @@ export function TrackActionsSheet() {
     items.push({
       id: 'addToQueue',
       icon: 'queue-add',
-      label: 'add to queue',
+      label: 'Add to queue',
       run: () => {
         player.enqueueLast(track);
-        showToast('added to queue.');
+        showToast('Added to queue.');
       },
     });
   }
@@ -107,7 +107,7 @@ export function TrackActionsSheet() {
     items.push({
       id: 'addToPlaylist',
       icon: 'plus',
-      label: 'add to playlist',
+      label: 'Add to playlist',
       run: () => openAddToPlaylist(track),
     });
   }
@@ -115,11 +115,11 @@ export function TrackActionsSheet() {
     items.push({
       id: 'like',
       icon: liked ? 'heart-filled' : 'heart',
-      label: liked ? 'unlike' : 'like',
+      label: liked ? 'Unlike' : 'Like',
       run: () => {
-        showToast(liked ? 'removed from likes.' : 'added to likes.');
+        showToast(liked ? 'Removed from likes.' : 'Added to likes.');
         (liked ? unlike(track.id) : like(track.id)).catch(() => {
-          showToast("couldn't like — try again.");
+          showToast("Couldn't like — try again.");
         });
       },
     });
@@ -128,7 +128,7 @@ export function TrackActionsSheet() {
     items.push({
       id: 'share',
       icon: 'share',
-      label: 'share song',
+      label: 'Share song',
       run: () => shareTrack(track),
     });
   }
@@ -136,7 +136,7 @@ export function TrackActionsSheet() {
     items.push({
       id: 'why',
       icon: 'bloom',
-      label: 'why this song',
+      label: 'Why this song',
       run: () => openWhy(track),
     });
   }
@@ -144,7 +144,7 @@ export function TrackActionsSheet() {
     items.push({
       id: 'artist',
       icon: 'user',
-      label: 'open artist',
+      label: 'Open artist',
       // The artist screen lives in the navigator UNDER the player/queue
       // overlays — fold those away or the navigation happens invisibly.
       run: () => {

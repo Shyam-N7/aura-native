@@ -67,17 +67,17 @@ export default function ArtistScreen({ route, navigation }) {
         <View style={styles.crumbRow}>
           <CrumbBack onPress={() => navigation.goBack()} />
           <Text style={[label(10), { color: t.inkFaint }]}>
-            artist
+            Artist
             {artist?.followerCount
               ? ` · ${artist.followerCount.toLocaleString()} fans`
               : ''}
           </Text>
         </View>
 
-        {status === 'loading' && <AuraLoader label="loading artist" />}
+        {status === 'loading' && <AuraLoader label="Loading artist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            couldn't load — {hit.error}
+            Couldn't load — {hit.error}
           </Text>
         )}
 

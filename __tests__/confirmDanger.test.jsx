@@ -7,7 +7,7 @@ import { SHEET_DANGER } from '../src/components/ui/SheetRow';
 // The app has two confirm dialogs — a sheet and a centered popup — that
 // started byte-identical and drifted. Only the sheet ever honoured `danger`,
 // so the equalizer's DELETE PRESET confirm rendered its action pill in the
-// ordinary accent, indistinguishable from the "turn on" and "boost it" asks
+// ordinary accent, indistinguishable from the "Turn on" and "boost it" asks
 // sitting beside it in the same panel. Red on a destructive action is the one
 // visual cue this app uses for the difference.
 
@@ -35,14 +35,14 @@ test('a destructive popup wears the danger colour', async () => {
     <ConfirmPopup
       visible
       title='delete "night"?'
-      action="delete"
+      action="Delete"
       danger
       onConfirm={() => {}}
       onCancel={() => {}}
     />,
   );
 
-  expect(actionColor(tree, 'delete')).toBe(SHEET_DANGER);
+  expect(actionColor(tree, 'Delete')).toBe(SHEET_DANGER);
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
@@ -50,14 +50,14 @@ test('an ordinary popup does not — it must stay the accent', async () => {
   const tree = await render(
     <ConfirmPopup
       visible
-      title="turn on the equalizer?"
-      action="turn on"
+      title="Turn on the equalizer?"
+      action="Turn on"
       onConfirm={() => {}}
       onCancel={() => {}}
     />,
   );
 
-  const color = actionColor(tree, 'turn on');
+  const color = actionColor(tree, 'Turn on');
   expect(color).toBeDefined();
   expect(color).not.toBe(SHEET_DANGER);
   await ReactTestRenderer.act(() => tree.unmount());
@@ -73,6 +73,6 @@ test('the equalizer delete confirm is marked destructive', () => {
     'utf8',
   );
 
-  const deleteBlock = body.slice(body.indexOf('action="delete"'));
+  const deleteBlock = body.slice(body.indexOf('action="Delete"'));
   expect(deleteBlock.slice(0, 60)).toContain('danger');
 });

@@ -346,7 +346,7 @@ export function GestureTourOverlay({ reduced, targets }) {
             hitSlop={8}
           >
             <Text style={[styles.btn, { color: t.inkSoft }]}>
-              skip this one
+              Skip this one
             </Text>
           </PressScale>
           <PressScale
@@ -356,7 +356,7 @@ export function GestureTourOverlay({ reduced, targets }) {
             hitSlop={8}
           >
             <Text style={[styles.btn, { color: t.inkFaint }]}>
-              skip the tour
+              Skip the tour
             </Text>
           </PressScale>
         </View>

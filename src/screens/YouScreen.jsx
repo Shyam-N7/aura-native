@@ -183,7 +183,7 @@ function SeeAll({ what, onPress }) {
       hitSlop={8}
       style={({ pressed }) => [styles.seeAll, pressed && styles.pressed]}
     >
-      <Text style={[label(9.5), { color: t.accent }]}>see all →</Text>
+      <Text style={[label(9.5), { color: t.accent }]}>See all →</Text>
     </Pressable>
   );
 }
@@ -227,7 +227,7 @@ export default function YouScreen({ navigation }) {
   const togglePrivate = () => {
     const next = !priv;
     setPrivateSession(next);
-    showToast(next ? 'private session on.' : 'private session off.');
+    showToast(next ? 'Private session on.' : 'Private session off.');
   };
 
   // Family mode — a PIN-gated toggle. Off → reveal a "set a PIN" field; on →
@@ -242,17 +242,17 @@ export default function YouScreen({ navigation }) {
       return;
     }
     if (!/^\d{4,6}$/.test(pin)) {
-      showToast('enter a 4–6 digit PIN');
+      showToast('Enter a 4–6 digit PIN');
       return;
     }
     setPinBusy(true);
     try {
       if (familyOn) {
         await disableFamilyMode(pin);
-        showToast('family mode is off.');
+        showToast('Family mode is off.');
       } else {
         await enableFamilyMode(pin);
-        showToast('family mode is on.');
+        showToast('Family mode is on.');
       }
       setPin('');
       setPinOpen(false);
@@ -260,7 +260,7 @@ export default function YouScreen({ navigation }) {
       const left = err.attemptsLeft;
       showToast(
         typeof left === 'number'
-          ? `that PIN isn't right — ${left} left`
+          ? `That PIN isn't right — ${left} left`
           : err.message,
       );
     } finally {
@@ -284,9 +284,9 @@ export default function YouScreen({ navigation }) {
     setSensingOverride(next);
     try {
       await updatePreferences({ showSensing: next });
-      showToast(next ? 'welcome screen is on.' : 'welcome screen is off.');
+      showToast(next ? 'Welcome screen is on.' : 'Welcome screen is off.');
     } catch (err) {
-      showToast(`couldn't update — ${err.message}`);
+      showToast(`Couldn't update — ${err.message}`);
     } finally {
       setSensingOverride(null);
     }
@@ -360,7 +360,7 @@ export default function YouScreen({ navigation }) {
       setPushPrefsState(await setPushPrefs({ [key]: flipped }));
     } catch (err) {
       setPushPrefsState(prev);
-      showToast(`couldn't update — ${err.message}`);
+      showToast(`Couldn't update — ${err.message}`);
     }
   };
 
@@ -386,9 +386,9 @@ export default function YouScreen({ navigation }) {
       setAvatarBusy(true);
       const { url } = await uploadImage(asset, { kind: 'avatar' });
       await setMyAvatar(url);
-      showToast('photo updated.');
+      showToast('Photo updated.');
     } catch (err) {
-      showToast(`couldn't update photo — ${err.message}`);
+      showToast(`Couldn't update photo — ${err.message}`);
     } finally {
       setAvatarBusy(false);
     }
@@ -400,7 +400,7 @@ export default function YouScreen({ navigation }) {
     setAvatarBusy(true);
     try {
       await clearMyAvatar();
-      showToast('photo removed.');
+      showToast('Photo removed.');
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -410,10 +410,10 @@ export default function YouScreen({ navigation }) {
   const privUntil = privateSessionUntil();
   const privCaption =
     priv && privUntil
-      ? `on · until ${new Date(privUntil)
+      ? `On · until ${new Date(privUntil)
           .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
           .toLowerCase()}`
-      : "what you play won't shape your mixes.";
+      : "What you play won't shape your mixes.";
   useEffect(() => {
     if (openShelf !== 'settings') {
       return undefined;
@@ -442,7 +442,7 @@ export default function YouScreen({ navigation }) {
       setHidden(hs => (hs ?? []).filter(h => h.id !== id));
       // Same staleness as hiding, in reverse.
       invalidateHomeCache('autoPlaylists', 'quickPicks');
-      showToast('back in the mix.');
+      showToast('Back in the mix.');
     } catch (err) {
       showToast(err.message);
     }
@@ -535,9 +535,9 @@ export default function YouScreen({ navigation }) {
   const confirmSignOut = async () => {
     if (
       await confirm({
-        title: 'sign out?',
-        body: 'you can sign back in anytime.',
-        action: 'sign out',
+        title: 'Sign out?',
+        body: 'You can sign back in anytime.',
+        action: 'Sign out',
         // Signing out unmounts the navigator this sheet lives in — it can't
         // still be animating out when that happens.
         instant: true,
@@ -548,7 +548,7 @@ export default function YouScreen({ navigation }) {
   };
 
   const emptyPeek = (
-    <Text style={[label(9.5), { color: t.inkFaint }]}>nothing yet</Text>
+    <Text style={[label(9.5), { color: t.inkFaint }]}>Nothing yet</Text>
   );
   const countPeek = n => (
     <Text style={[label(10), { color: t.inkFaint }]}>{n}</Text>
@@ -578,7 +578,7 @@ export default function YouScreen({ navigation }) {
               { backgroundColor: t.accentCard },
             ]}
           >
-            <Text style={[label(9.5), { color: t.inkFaint }]}>your year</Text>
+            <Text style={[label(9.5), { color: t.inkFaint }]}>Your year</Text>
             {!loaded ? (
               // Blobs only — the card's own "your year" label already names
               // it; the goo breathing IS the aura, no gray bars.
@@ -589,7 +589,7 @@ export default function YouScreen({ navigation }) {
                   <CountUp to={summary?.tracksPlayed ?? 0} /> tracks played
                 </Text>
                 <Text style={[label(10), { color: t.inkSoft }]}>
-                  for <CountUp to={summary?.minutesListened ?? 0} /> minutes
+                  For <CountUp to={summary?.minutesListened ?? 0} /> minutes
                 </Text>
               </>
             )}
@@ -615,10 +615,10 @@ export default function YouScreen({ navigation }) {
               ]}
             >
               <Text style={[label(9.5), { color: t.inkFaint }]}>
-                your journal
+                Your journal
               </Text>
               <Text style={[styles.duoSub, { color: t.inkSoft }]}>
-                what you listened to, and why.
+                What you listened to, and why.
               </Text>
             </PressScale>
             <PressScale
@@ -630,7 +630,7 @@ export default function YouScreen({ navigation }) {
                 { backgroundColor: t.surface, borderColor: t.line },
               ]}
             >
-              <Text style={[label(9.5), { color: t.inkFaint }]}>sonic dna</Text>
+              <Text style={[label(9.5), { color: t.inkFaint }]}>Sonic DNA</Text>
               <Text style={[styles.duoSub, { color: t.inkSoft }]}>
                 you, as a fingerprint.
               </Text>
@@ -649,12 +649,12 @@ export default function YouScreen({ navigation }) {
               { backgroundColor: t.accentCard },
             ]}
           >
-            <Text style={[label(9.5), { color: t.inkFaint }]}>mood bridges</Text>
+            <Text style={[label(9.5), { color: t.inkFaint }]}>Mood bridges</Text>
             <Text style={[styles.bridgeTitle, { color: t.ink }]}>
-              from here to there
+              From here to there
             </Text>
             <Text style={[styles.duoSub, { color: t.inkSoft }]}>
-              songs threaded so the mood shifts gradually — or let the bridge
+              Songs threaded so the mood shifts gradually — or let the bridge
               read you.
             </Text>
           </PressScale>
@@ -662,19 +662,19 @@ export default function YouScreen({ navigation }) {
 
           {!loaded ? (
             <View style={styles.shelvesLoading}>
-              <AuraLoader label="opening your library" />
+              <AuraLoader label="Opening your library" />
             </View>
           ) : (
             <Arrive i={3}>
             <View style={styles.shelves}>
               <Shelf
-                title="liked songs"
+                title="Liked songs"
                 open={openShelf === 'liked'}
                 onToggle={() => toggleShelf('liked')}
                 hint={
                   hintOn && openShelf === null ? (
                     <Text style={[styles.hint, label(8), { color: t.accent }]}>
-                      tap to open
+                      Tap to open
                     </Text>
                   ) : null
                 }
@@ -706,7 +706,7 @@ export default function YouScreen({ navigation }) {
               </Shelf>
 
               <Shelf
-                title="playlists"
+                title="Playlists"
                 open={openShelf === 'playlists'}
                 onToggle={() => toggleShelf('playlists')}
                 peek={
@@ -769,7 +769,7 @@ export default function YouScreen({ navigation }) {
               </Shelf>
 
               <Shelf
-                title="history"
+                title="History"
                 open={openShelf === 'history'}
                 onToggle={() => toggleShelf('history')}
                 peek={
@@ -801,7 +801,7 @@ export default function YouScreen({ navigation }) {
               </Shelf>
 
               <Shelf
-                title="languages"
+                title="Languages"
                 open={openShelf === 'languages'}
                 onToggle={() => toggleShelf('languages')}
                 peek={
@@ -841,13 +841,13 @@ export default function YouScreen({ navigation }) {
               </Shelf>
 
               <Shelf
-                title="settings"
+                title="Settings"
                 open={openShelf === 'settings'}
                 onToggle={() => toggleShelf('settings')}
                 peek={<Icon name="cog" size={18} color={t.inkFaint} strokeWidth={1.6} />}
               >
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  profile photo
+                  Profile photo
                 </Text>
                 <View style={styles.photoRow}>
                   <Avatar user={user} size={44} />
@@ -855,8 +855,8 @@ export default function YouScreen({ navigation }) {
                     style={[styles.qualityCaption, styles.photoCaption, { color: t.inkSoft }]}
                   >
                     {user?.avatarUrl
-                      ? 'your photo'
-                      : 'add a photo, or keep the initial'}
+                      ? 'Your photo'
+                      : 'Add a photo, or keep the initial'}
                   </Text>
                   {!!user?.avatarUrl && (
                     <Pressable
@@ -868,7 +868,7 @@ export default function YouScreen({ navigation }) {
                       style={({ pressed }) => pressed && styles.pressed}
                     >
                       <Text style={[label(9.5), { color: t.inkSoft }]}>
-                        remove
+                        Remove
                       </Text>
                     </Pressable>
                   )}
@@ -882,16 +882,16 @@ export default function YouScreen({ navigation }) {
                   >
                     <Text style={[label(9.5), { color: t.accent }]}>
                       {avatarBusy
-                        ? 'uploading…'
+                        ? 'Uploading…'
                         : user?.avatarUrl
-                        ? 'change'
-                        : 'add photo'}
+                        ? 'Change'
+                        : 'Add photo'}
                     </Text>
                   </Pressable>
                 </View>
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  privacy
+                  Privacy
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -910,7 +910,7 @@ export default function YouScreen({ navigation }) {
                         { color: priv ? t.accent : t.ink },
                       ]}
                     >
-                      private session
+                      Private session
                     </Text>
                     <Text
                       style={[styles.qualityCaption, { color: t.inkSoft }]}
@@ -928,7 +928,7 @@ export default function YouScreen({ navigation }) {
                 </Pressable>
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  family mode
+                  Family mode
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -950,12 +950,12 @@ export default function YouScreen({ navigation }) {
                         { color: familyOn ? t.accent : t.ink },
                       ]}
                     >
-                      family mode
+                      Family mode
                     </Text>
                     <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
                       {familyOn
-                        ? 'explicit songs are hidden. enter your PIN to turn it off.'
-                        : 'hide explicit songs. set a PIN to lock it.'}
+                        ? 'Explicit songs are hidden. Enter your PIN to turn it off.'
+                        : 'Hide explicit songs. Set a PIN to lock it.'}
                     </Text>
                   </View>
                   <View
@@ -973,7 +973,7 @@ export default function YouScreen({ navigation }) {
                       onChangeText={v => setPin(v.replace(/\D/g, ''))}
                       onSubmitEditing={submitFamily}
                       placeholder={
-                        familyOn ? 'PIN to turn off' : 'set a 4–6 digit PIN'
+                        familyOn ? 'PIN to turn off' : 'Set a 4–6 digit PIN'
                       }
                       placeholderTextColor={t.inkFaint}
                       cursorColor={t.accent}
@@ -999,14 +999,14 @@ export default function YouScreen({ navigation }) {
                       ]}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
-                        {familyOn ? 'turn off' : 'turn on'}
+                        {familyOn ? 'Turn off' : 'Turn on'}
                       </Text>
                     </Pressable>
                   </View>
                 )}
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  welcome screen
+                  Welcome screen
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -1026,14 +1026,14 @@ export default function YouScreen({ navigation }) {
                         { color: sensingOn ? t.accent : t.ink },
                       ]}
                     >
-                      welcome screen
+                      Welcome screen
                     </Text>
                     <Text
                       style={[styles.qualityCaption, { color: t.inkSoft }]}
                     >
                       {sensingOn
-                        ? 'a short intro reads your mood when you open aura. shows once a day — tap it to skip.'
-                        : 'skipped — you go straight to your home.'}
+                        ? 'A short intro reads your mood when you open AURA. Shows once a day — tap it to skip.'
+                        : 'Skipped — you go straight to your home.'}
                     </Text>
                   </View>
                   <View
@@ -1046,7 +1046,7 @@ export default function YouScreen({ navigation }) {
                 </Pressable>
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  notifications
+                  Notifications
                 </Text>
                 {/* The OS's answer, not the server's. Without this row the
                     switches below render "on" while Android blocks every
@@ -1058,7 +1058,7 @@ export default function YouScreen({ navigation }) {
                       <Text
                         style={[styles.qualityCaption, { color: t.inkSoft }]}
                       >
-                        notifications are off for aura in your phone's
+                        Notifications are off for AURA in your phone's
                         settings — nothing below can arrive until that changes.
                       </Text>
                     </View>
@@ -1069,21 +1069,21 @@ export default function YouScreen({ navigation }) {
                         const ok = await repairNotifications();
                         if (ok) {
                           setOsBlocked(false);
-                          showToast('notifications are on.');
+                          showToast('Notifications are on.');
                         }
                       }}
                       hitSlop={8}
                       style={({ pressed }) => pressed && styles.pressed}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
-                        turn on
+                        Turn on
                       </Text>
                     </Pressable>
                   </View>
                 )}
                 {!pushPrefs && !pushError && (
                   <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
-                    loading…
+                    Loading…
                   </Text>
                 )}
                 {pushError && (
@@ -1092,7 +1092,7 @@ export default function YouScreen({ navigation }) {
                       <Text
                         style={[styles.qualityCaption, { color: t.inkSoft }]}
                       >
-                        couldn't load your notification settings.
+                        Couldn't load your notification settings.
                       </Text>
                     </View>
                     <Pressable
@@ -1103,7 +1103,7 @@ export default function YouScreen({ navigation }) {
                       style={({ pressed }) => pressed && styles.pressed}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
-                        try again
+                        Try again
                       </Text>
                     </Pressable>
                   </View>
@@ -1111,21 +1111,21 @@ export default function YouScreen({ navigation }) {
                 {pushPrefs && [
                   {
                     key: 'mixes',
-                    title: 'new music for you',
-                    onCap: 'a heads-up when your daily mixes are ready.',
-                    offCap: 'no mix announcements.',
+                    title: 'New music for you',
+                    onCap: 'A heads-up when your daily mixes are ready.',
+                    offCap: 'No mix announcements.',
                   },
                   {
                     key: 'social',
-                    title: 'friends & playlists',
-                    onCap: 'someone joins your playlist or adds a song.',
-                    offCap: 'playlist activity stays quiet.',
+                    title: 'Friends & playlists',
+                    onCap: 'Someone joins your playlist or adds a song.',
+                    offCap: 'Playlist activity stays quiet.',
                   },
                   {
                     key: 'nudges',
-                    title: 'listening reminders',
-                    onCap: "an occasional nudge when your music's been waiting a while.",
-                    offCap: 'no reminders.',
+                    title: 'Listening reminders',
+                    onCap: "An occasional nudge when your music's been waiting a while.",
+                    offCap: 'No reminders.',
                   },
                 ].map(row => {
                   const on = pushPrefs[row.key] !== false;
@@ -1170,7 +1170,7 @@ export default function YouScreen({ navigation }) {
                 {isAdmin && (
                   <>
                     <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                      admin
+                      Admin
                     </Text>
                     <Pressable
                       accessibilityRole="button"
@@ -1183,10 +1183,10 @@ export default function YouScreen({ navigation }) {
                     >
                       <View style={styles.rowMeta}>
                         <Text style={[styles.rowTitle, { color: t.ink }]}>
-                          send a notification
+                          Send a notification
                         </Text>
                         <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                          compose a push with a live preview of the card.
+                          Compose a push with a live preview of the card.
                         </Text>
                       </View>
                     </Pressable>
@@ -1194,7 +1194,7 @@ export default function YouScreen({ navigation }) {
                 )}
 
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  audio quality
+                  Audio quality
                 </Text>
                 {QUALITIES.map(q => {
                   const on = player.quality === q.id;
@@ -1202,7 +1202,7 @@ export default function YouScreen({ navigation }) {
                     <Pressable
                       key={q.id}
                       accessibilityRole="button"
-                      accessibilityLabel={`quality ${q.label}`}
+                      accessibilityLabel={`quality ${q.id}`}
                       accessibilityState={on ? { selected: true } : {}}
                       onPress={() => player.setQuality(q.id)}
                       style={({ pressed }) => [
@@ -1237,7 +1237,7 @@ export default function YouScreen({ navigation }) {
                 {/* The equalizer lives on its own screen — faders, presets and
                     a separate profile per output (lib/equalizer). */}
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  equalizer
+                  Equalizer
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -1250,10 +1250,10 @@ export default function YouScreen({ navigation }) {
                 >
                   <View style={styles.rowMeta}>
                     <Text style={[styles.rowTitle, { color: t.ink }]}>
-                      equalizer
+                      Equalizer
                     </Text>
                     <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                      shape the sound — separate settings for speaker and
+                      Shape the sound — separate settings for speaker and
                       earphones.
                     </Text>
                   </View>
@@ -1263,7 +1263,7 @@ export default function YouScreen({ navigation }) {
                 {/* Volume leveling — evens out loud masters toward the chosen
                     target (attenuate-only; see lib/leveling). */}
                 <Text style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}>
-                  volume leveling
+                  Volume leveling
                 </Text>
                 {LEVELING_MODES.map(m => {
                   const on = player.leveling === m.id;
@@ -1315,10 +1315,10 @@ export default function YouScreen({ navigation }) {
                 >
                   <View style={styles.rowMeta}>
                     <Text style={[styles.rowTitle, { color: t.ink }]}>
-                      what's new
+                      What's new
                     </Text>
                     <Text style={[styles.qualityCaption, { color: t.inkSoft }]}>
-                      the latest features, explained
+                      The latest features, explained
                     </Text>
                   </View>
                 </Pressable>
@@ -1326,21 +1326,21 @@ export default function YouScreen({ navigation }) {
                 <Text
                   style={[label(9.5), styles.settingHead, { color: t.inkFaint }]}
                 >
-                  made for you
+                  Made for you
                 </Text>
                 {hidden === null && !hiddenError && (
                   <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
-                    loading…
+                    Loading…
                   </Text>
                 )}
                 {hiddenError && (
                   <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
-                    couldn't load hidden songs — try reopening settings.
+                    Couldn't load hidden songs — try reopening settings.
                   </Text>
                 )}
                 {hidden !== null && !hiddenError && hidden.length === 0 && (
                   <Text style={[styles.emptyRow, { color: t.inkSoft }]}>
-                    no hidden songs. "don't show this again" on any mix track
+                    No hidden songs. "don't show this again" on any mix track
                     lands here.
                   </Text>
                 )}
@@ -1358,7 +1358,7 @@ export default function YouScreen({ navigation }) {
                         style={[label(9.5), { color: t.inkSoft }]}
                       >
                         {(h.artist || '').toLowerCase() ||
-                          "aura won't pick this for you"}
+                          "AURA won't pick this for you"}
                       </Text>
                     </View>
                     <Pressable
@@ -1369,7 +1369,7 @@ export default function YouScreen({ navigation }) {
                       style={({ pressed }) => pressed && styles.pressed}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
-                        unhide
+                        Unhide
                       </Text>
                     </Pressable>
                   </View>
@@ -1378,7 +1378,7 @@ export default function YouScreen({ navigation }) {
                 {crash && (
                   <View style={[styles.crashCard, { borderColor: t.line }]}>
                     <Text style={[label(9.5), { color: t.inkFaint }]}>
-                      last crash report
+                      Last crash report
                     </Text>
                     <Text style={[styles.crashText, { color: t.inkSoft }]}>
                       {new Date(crash.at).toLocaleString()} — {crash.message}
@@ -1401,7 +1401,7 @@ export default function YouScreen({ navigation }) {
                       hitSlop={8}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
-                        clear report
+                        Clear report
                       </Text>
                     </Pressable>
                   </View>
@@ -1418,11 +1418,11 @@ export default function YouScreen({ navigation }) {
                   ]}
                 >
                   <Text style={[styles.signOutText, { color: t.accent }]}>
-                    sign out
+                    Sign out
                   </Text>
                 </Pressable>
                 <Text style={[styles.version, { color: t.inkFaint }]}>
-                  aura · phase 2
+                  AURA · phase 2
                 </Text>
               </Shelf>
             </View>

@@ -64,8 +64,8 @@ beforeEach(() => {
 test('greets with the live mood reading when the server is confident', async () => {
   const tree = await render();
   const body = texts(tree.toJSON());
-  expect(body).toContain("i'm reading you as unwound right now");
-  expect(body).toContain('take me somewhere quieter');
+  expect(body).toContain("I'm reading you as unwound right now");
+  expect(body).toContain('Take me somewhere quieter');
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
@@ -73,7 +73,7 @@ test('falls back to a plain invitation when the mood read is thin', async () => 
   mockGetCurrentMood.mockResolvedValue({ mood: null, confidence: 0 });
   const tree = await render();
   expect(texts(tree.toJSON())).toContain(
-    'tell me what you want to hear, how you feel, or where to take you next.',
+    'Tell me what you want to hear, how you feel, or where to take you next.',
   );
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -93,20 +93,20 @@ test('a turn sends history + mood, renders the reply and its play set', async ()
 
   // Suggestion chips are one-tap sends.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'take me somewhere quieter').props.onPress();
+    byLabel(tree, 'Take me somewhere quieter').props.onPress();
   });
   expect(mockTalk).toHaveBeenCalledWith({
-    message: 'take me somewhere quieter',
+    message: 'Take me somewhere quieter',
     history: expect.arrayContaining([
       expect.objectContaining({ who: 'aura' }),
-      { who: 'you', text: 'take me somewhere quieter' },
+      { who: 'you', text: 'Take me somewhere quieter' },
     ]),
     context: { mood: 'unwound' },
   });
 
   const body = texts(tree.toJSON());
   expect(body).toContain('shifting the set quieter.');
-  expect(body).toContain('play set · 2');
+  expect(body).toContain('Play set · 2');
   // The reply's suggestions replace the static chips.
   expect(body).toContain('keep it acoustic');
 
@@ -123,10 +123,10 @@ test('a failed turn stays in the thread as an honest error line', async () => {
   mockTalk.mockRejectedValue(new Error('rate limited'));
   const tree = await render();
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'i need to focus').props.onPress();
+    byLabel(tree, 'I need to focus').props.onPress();
   });
   expect(texts(tree.toJSON())).toContain(
-    "couldn't reach the dj — rate limited",
+    "Couldn't reach the dj — rate limited",
   );
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -135,7 +135,7 @@ test('clear resets the conversation and re-greets', async () => {
   mockTalk.mockResolvedValue({ reply: 'ok.', tracks: null, suggestions: [] });
   const tree = await render();
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'play tamil indie').props.onPress();
+    byLabel(tree, 'Play tamil indie').props.onPress();
   });
   expect(texts(tree.toJSON())).toContain('ok.');
 
@@ -144,7 +144,7 @@ test('clear resets the conversation and re-greets', async () => {
   });
   const body = texts(tree.toJSON());
   expect(body).not.toContain('ok.');
-  expect(body).toContain("i'm reading you as unwound right now");
+  expect(body).toContain("I'm reading you as unwound right now");
 
   await ReactTestRenderer.act(() => tree.unmount());
 });

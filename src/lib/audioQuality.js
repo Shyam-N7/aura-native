@@ -15,17 +15,17 @@ export const QUALITIES = [
   {
     id: 'auto',
     bitrate: 320,
-    label: 'auto',
-    caption: 'adapts to your signal',
+    label: 'Auto',
+    caption: 'Adapts to your signal',
   },
-  { id: 'high', bitrate: 320, label: 'high', caption: 'best sound · 320 kbps' },
+  { id: 'high', bitrate: 320, label: 'High', caption: 'Best sound · 320 kbps' },
   {
     id: 'normal',
     bitrate: 160,
-    label: 'normal',
-    caption: 'balanced · 160 kbps',
+    label: 'Normal',
+    caption: 'Balanced · 160 kbps',
   },
-  { id: 'low', bitrate: 96, label: 'low', caption: 'saves data · 96 kbps' },
+  { id: 'low', bitrate: 96, label: 'Low', caption: 'Saves data · 96 kbps' },
 ];
 export const DEFAULT_QUALITY = 'auto';
 

@@ -43,7 +43,7 @@ test('a link error keeps its code, so the copy pack can answer it', async () => 
   });
   // And the code — not the server's prose — is what the user reads.
   expect(copyForCode('YT_VIDEO_ONLY', 'single video').title).toBe(
-    "that's a single video",
+    "That's a single video",
   );
 });
 
@@ -140,10 +140,10 @@ test('every error code has copy, and an unknown one falls back to the server', (
   for (const [code, entry] of Object.entries(all)) {
     expect(typeof entry.title).toBe('string');
     expect(entry.title.length).toBeGreaterThan(0);
-    // The native voice, guarded so a later sync from web cannot quietly
-    // re-case the pack back to sentence case.
+    // The native voice, guarded so a later sync cannot quietly re-case the
+    // pack back to the old all-lowercase voice.
     expect(`${code}: ${entry.title}`).toMatch(
-      new RegExp(`^${code}: [^A-Z]`),
+      new RegExp(`^${code}: [A-Z]`),
     );
   }
   expect(copyForCode('YT_FROM_THE_FUTURE', 'server said this')).toMatchObject({

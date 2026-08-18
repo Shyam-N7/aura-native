@@ -348,7 +348,7 @@ export function TopBar({ activeTab, goTab }) {
             ref={searchInputRef}
             value={query}
             onChangeText={setQuery}
-            placeholder="search a song, artist, or mood…"
+            placeholder="Search a song, artist, or mood…"
             placeholderTextColor={t.inkFaint}
             style={[styles.fieldInput, { color: t.ink }]}
             autoCapitalize="none"

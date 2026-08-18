@@ -181,7 +181,7 @@ export function ListTools({ query, onQuery, sort, onSort, sorts }) {
                   <Pressable
                     key={s.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`sort by ${s.label}`}
+                    accessibilityLabel={`sort by ${s.id}`}
                     accessibilityState={on ? { selected: true } : {}}
                     onPress={() => onSort(s.id)}
                     style={styles.seg}
@@ -217,7 +217,7 @@ export function ListTools({ query, onQuery, sort, onSort, sorts }) {
               ref={inputRef}
               value={query}
               onChangeText={onQuery}
-              placeholder="find in songs"
+              placeholder="Find in songs"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}

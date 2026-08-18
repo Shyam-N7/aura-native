@@ -787,7 +787,7 @@ function armTroubleNotice() {
   }
   troubleTimer = setTimeout(() => {
     troubleTimer = null;
-    announceTrouble('connection trouble — trying to get it back.');
+    announceTrouble('Connection trouble — trying to get it back.');
   }, TROUBLE_NOTICE_MS);
 }
 
@@ -826,7 +826,7 @@ export function notePlaybackStarted({ userInitiated = false } = {}) {
   if (troubleAnnounced) {
     troubleAnnounced = false;
     if (!userInitiated) {
-      showToast('back on.');
+      showToast('Back on.');
     }
   }
 }
@@ -956,7 +956,7 @@ export async function handlePlaybackError(err) {
       // plenty of time to press next onto something the disk cache plays fine,
       // and pausing THAT with an offline toast would be a lie.
       if (await stillOnSlot(cur.id, cur.url)) {
-        announceTrouble("you're offline — music will wait for you.");
+        announceTrouble("You're offline — music will wait for you.");
         await TrackPlayer.pause();
         recovery = { id: null, ladderPos: 0, refetched: false };
         // ...and something has to actually be waiting, or that toast is a
@@ -1063,9 +1063,9 @@ export async function handlePlaybackError(err) {
     if (online) {
       // The origin answers, so this is the catalog or these particular
       // streams — waiting for a network that is already here would be a lie.
-      announceTrouble("couldn't play these songs — playback stopped.");
+      announceTrouble("Couldn't play these songs — playback stopped.");
     } else {
-      announceTrouble('your connection dropped — waiting for it to come back.');
+      announceTrouble('Your connection dropped — waiting for it to come back.');
       startResumeWait(cur.id, cur.url);
     }
     // The streak is NOT cleared here: one more failure after this should stop
@@ -1079,7 +1079,7 @@ export async function handlePlaybackError(err) {
   // after a routine skip would be noise.
   clearTroubleTimer();
   troubleAnnounced = false;
-  showToast("couldn't play this track — skipping.");
+  showToast("Couldn't play this track — skipping.");
   if (active + 1 < rQueue.length) {
     await TrackPlayer.skipToNext();
     await TrackPlayer.play();

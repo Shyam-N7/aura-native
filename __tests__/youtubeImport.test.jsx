@@ -146,8 +146,8 @@ test('a single-video link gets the copy written for it, not a generic apology', 
   await typeUrl(tree, 'https://youtu.be/x');
   await flush(() => jest.advanceTimersByTime(350));
   const body = texts(tree.toJSON());
-  expect(body).toContain("that's a single video");
-  expect(body).toContain('open the playlist or mix it belongs to');
+  expect(body).toContain("That's a single video");
+  expect(body).toContain('Open the playlist or mix it belongs to');
 });
 
 test('starting the import shows countable progress and says leaving is safe', async () => {
@@ -571,7 +571,7 @@ test('a failed import offers retry only where retrying can change the answer', a
   await typeUrl(tree, 'https://youtube.com/playlist?list=PL1');
   await flush(() => jest.advanceTimersByTime(350));
   await flush(() => byLabel(tree, COPY.confirm.action).props.onPress());
-  expect(texts(tree.toJSON())).toContain('imports are paused until tomorrow');
+  expect(texts(tree.toJSON())).toContain('Imports are paused until tomorrow');
   expect(byLabel(tree, COPY.confirm.action)).toBeUndefined();
 });
 
@@ -774,7 +774,7 @@ test('a refresh on a mix explains why there is nothing to check', async () => {
   );
   const tree = await renderDetail();
   await flush(() => byLabel(tree, COPY.refresh.action).props.onPress());
-  expect(showToast).toHaveBeenCalledWith("there's nothing to refresh");
+  expect(showToast).toHaveBeenCalledWith("There's nothing to refresh");
 });
 
 // The stack keeps parked screens mounted, so without this the list comes back

@@ -105,7 +105,7 @@ test('gesture hints ride the art until each gesture has been performed', async (
   mockState.player = basePlayer();
   let tree = await render();
   let body = texts(tree.toJSON());
-  expect(body).toContain('double-tap to like');
+  expect(body).toContain('Double-tap to like');
   expect(body).toContain('swipe left for next, right for back');
   await ReactTestRenderer.act(() => tree.unmount());
 
@@ -114,7 +114,7 @@ test('gesture hints ride the art until each gesture has been performed', async (
   markHintDone(HINT_NEXT);
   tree = await render();
   body = texts(tree.toJSON());
-  expect(body).not.toContain('double-tap to like');
+  expect(body).not.toContain('Double-tap to like');
   expect(body).not.toContain('swipe left for next, right for back');
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -151,7 +151,7 @@ test('shows the current track with transport, quality and up next', async () => 
   expect(p.next).toHaveBeenCalled();
   byLabel(tree, 'previous').props.onPress();
   expect(p.prev).toHaveBeenCalled();
-  byLabel(tree, 'shuffle').props.onPress();
+  byLabel(tree, 'Shuffle').props.onPress();
   expect(p.toggleShuffle).toHaveBeenCalled();
   byLabel(tree, 'repeat off').props.onPress();
   expect(p.cycleRepeat).toHaveBeenCalled();
@@ -179,19 +179,19 @@ test('first open runs the do-it-live tour once; skipping ends it for good', asyn
   let tree = await render();
 
   // The tour starts a beat after the slide lands, not on mount.
-  expect(texts(tree.toJSON())).not.toContain('double-tap the art');
+  expect(texts(tree.toJSON())).not.toContain('Double-tap the art');
   await ReactTestRenderer.act(async () => {
     jest.advanceTimersByTime(1200);
   });
   let body = texts(tree.toJSON());
   expect(body).toContain('try it · 1 of 5');
-  expect(body).toContain('double-tap the art');
+  expect(body).toContain('Double-tap the art');
 
   // Skipping a step moves on; skipping the tour ends it and persists.
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'skip this step').props.onPress();
   });
-  expect(texts(tree.toJSON())).toContain('swipe the art left or right');
+  expect(texts(tree.toJSON())).toContain('Swipe the art left or right');
   await ReactTestRenderer.act(async () => {
     byLabel(tree, 'skip the tour').props.onPress();
   });
@@ -235,10 +235,10 @@ test('the gesture guide flows straight into running the tour', async () => {
     byLabel(tree, 'player menu').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'how gestures work').props.onPress();
+    byLabel(tree, 'How gestures work').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'run the tour').props.onPress();
+    byLabel(tree, 'Run the tour').props.onPress();
   });
   expect(texts(tree.toJSON())).toContain('try it · 1 of 5');
 
@@ -256,7 +256,7 @@ test('the ⋯ menu switches the progress bar style and persists it', async () =>
   });
   // Default is the wavy ribbon; the row names the CURRENT style.
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'progress bar: wavy').props.onPress();
+    byLabel(tree, 'Progress bar: wavy').props.onPress();
   });
   expect(storage.getItem('aura.ribbonStyle')).toBe('line');
 
@@ -265,7 +265,7 @@ test('the ⋯ menu switches the progress bar style and persists it', async () =>
     byLabel(tree, 'player menu').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'progress bar: straight').props.onPress();
+    byLabel(tree, 'Progress bar: straight').props.onPress();
   });
   expect(storage.getItem('aura.ribbonStyle')).toBe('wave');
   await ReactTestRenderer.act(() => tree.unmount());
@@ -279,10 +279,10 @@ test('the ⋯ menu replays the tour on demand', async () => {
     byLabel(tree, 'player menu').props.onPress();
   });
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'replay the gesture tour').props.onPress();
+    byLabel(tree, 'Replay the gesture tour').props.onPress();
   });
   expect(texts(tree.toJSON())).toContain('try it · 1 of 5');
-  expect(texts(tree.toJSON())).toContain('double-tap the art');
+  expect(texts(tree.toJSON())).toContain('Double-tap the art');
 
   // Leave the module store inactive for any test that follows.
   await ReactTestRenderer.act(async () => {

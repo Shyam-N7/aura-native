@@ -334,7 +334,7 @@ export default function YouTubeImportScreen({ navigation }) {
         {/* One line, not the web's serif/italic two-liner: this app has a single
             typeface with no italic face (tokens.js — the filename IS the weight). */}
         <Text style={[type.queueHero, styles.hero, { color: t.ink }]}>
-          from youtube.
+          From YouTube.
         </Text>
 
         <PhaseBody

@@ -38,7 +38,7 @@ export function ConfirmSheet() {
           hitSlop={8}
           style={({ pressed }) => [styles.cancel, { borderColor: t.line }, pressed && styles.pressed]}
         >
-          <Text style={[styles.cancelText, { color: t.inkSoft }]}>cancel</Text>
+          <Text style={[styles.cancelText, { color: t.inkSoft }]}>Cancel</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"

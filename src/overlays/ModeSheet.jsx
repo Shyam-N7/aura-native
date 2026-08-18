@@ -16,6 +16,9 @@ import { fonts, label } from '../theme/tokens';
 // { key, label, explicitOff }); switching reseeds the home pool and retags
 // events. 'car' is a Phase-5 experience layer (drive-safe UI + leveling), not
 // a vibe — hidden here until that lands so it isn't a confusing no-op.
+// The mode name is data (or its logic key) — capitalize at render only.
+const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 export function ModeSheet() {
   const { t } = useTheme();
   const [open, setOpen] = useState(false);
@@ -44,13 +47,13 @@ export function ModeSheet() {
 
   return (
     <Sheet onClose={closeModeSheet} closeLabel="close modes">
-      <Text style={[styles.title, { color: t.ink }]}>listening mode</Text>
+      <Text style={[styles.title, { color: t.ink }]}>Listening mode</Text>
       <Text style={[label(9.5), styles.sub, { color: t.inkFaint }]}>
-        shapes what home suggests
+        Shapes what home suggests
       </Text>
       {modes.length === 0 && (
         <Text style={[styles.empty, { color: t.inkSoft }]}>
-          modes load with your account — try again in a moment.
+          Modes load with your account — try again in a moment.
         </Text>
       )}
       {modes.map(m => {
@@ -68,10 +71,10 @@ export function ModeSheet() {
               <Text
                 style={[styles.rowLabel, { color: on ? t.accent : t.ink }]}
               >
-                {(m.label ?? m.key).toLowerCase()}
+                {cap(m.label ?? m.key)}
               </Text>
               <Text style={[styles.rowHint, { color: t.inkSoft }]}>
-                {MODE_HINT[m.key] ?? (m.explicitOff ? 'clean' : '')}
+                {MODE_HINT[m.key] ?? (m.explicitOff ? 'Clean' : '')}
               </Text>
             </View>
             {on ? <Icon name="check" size={20} color={t.accent} /> : null}

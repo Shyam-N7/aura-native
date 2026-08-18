@@ -14,19 +14,19 @@ const KEY = 'aura.gestureTourDone';
 // Step ids double as the vocabulary the player's gesture handlers speak via
 // noteTourGesture. how/what copy is shared with the ⋯ menu's gesture guide.
 export const TOUR_STEPS = [
-  { id: 'like', how: 'double-tap the art', what: 'like the song' },
+  { id: 'like', how: 'Double-tap the art', what: 'Like the song' },
   {
     id: 'swipe',
-    how: 'swipe the art left or right',
-    what: 'next song / previous song',
+    how: 'Swipe the art left or right',
+    what: 'Next song / previous song',
   },
   {
     id: 'hold',
-    how: 'hold the art near an edge',
-    what: 'right fast-forwards, left rewinds',
+    how: 'Hold the art near an edge',
+    what: 'Right fast-forwards, left rewinds',
   },
-  { id: 'queue', how: 'swipe up over "up next"', what: 'open the queue' },
-  { id: 'close', how: 'drag down from the top', what: 'close the player' },
+  { id: 'queue', how: 'Swipe up over "up next"', what: 'Open the queue' },
+  { id: 'close', how: 'Drag down from the top', what: 'Close the player' },
 ];
 
 let state = { active: false, step: 0 };
@@ -87,7 +87,7 @@ function advance() {
     storage.setItem(KEY, '1');
     state = { active: false, step: 0 };
     emit();
-    showToast("that's the tour. enjoy.", { tick: true });
+    showToast("That's the tour. Enjoy.", { tick: true });
   } else {
     state = { active: true, step: state.step + 1 };
     emit();

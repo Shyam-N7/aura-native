@@ -117,7 +117,7 @@ test('lists the queue with source, count and row actions', async () => {
   const body = texts(tree.toJSON());
   expect(body).toContain('more like this');
   expect(body).toContain('3 tracks');
-  expect(body).toContain('now playing');
+  expect(body).toContain('Now playing');
 
   // Tap a row → jump to that index.
   byLabel(tree, 'play Third Song').props.onPress();
@@ -141,7 +141,7 @@ test('lists the queue with source, count and row actions', async () => {
 
   byLabel(tree, 'repeat off').props.onPress();
   expect(mockCycleRepeat).toHaveBeenCalled();
-  byLabel(tree, 'shuffle').props.onPress();
+  byLabel(tree, 'Shuffle').props.onPress();
   expect(mockToggleShuffle).toHaveBeenCalled();
 
   // Closing the sheet flips the ui state — the player underneath stays put.
@@ -163,15 +163,15 @@ test('queue options menu lists every action with plain labels', async () => {
   const tree = await render();
   await openMenu(tree);
 
-  expect(byLabel(tree, 'save queue as playlist')).toBeTruthy();
-  expect(byLabel(tree, 'add queue to playlist')).toBeTruthy();
-  expect(byLabel(tree, 'hide past songs')).toBeTruthy();
-  expect(byLabel(tree, 'clear queue')).toBeTruthy();
+  expect(byLabel(tree, 'Save queue as playlist')).toBeTruthy();
+  expect(byLabel(tree, 'Add queue to playlist')).toBeTruthy();
+  expect(byLabel(tree, 'Hide past songs')).toBeTruthy();
+  expect(byLabel(tree, 'Clear queue')).toBeTruthy();
 
-  // "add queue to playlist" hands over the WHOLE queue — past and current
+  // "Add queue to playlist" hands over the WHOLE queue — past and current
   // included, hide-past never filters it (web parity).
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'add queue to playlist').props.onPress();
+    byLabel(tree, 'Add queue to playlist').props.onPress();
   });
   expect(mockOpenAddToPlaylist).toHaveBeenCalledWith(mockQueue.tracks);
 
@@ -185,12 +185,12 @@ test('clear queue confirms first, then clears through the player context', async
   // Declining the house confirm leaves the queue alone.
   confirm.mockResolvedValueOnce(false);
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'clear queue').props.onPress();
+    byLabel(tree, 'Clear queue').props.onPress();
   });
   expect(confirm).toHaveBeenCalledWith({
-    title: 'clear queue?',
-    body: "we'll keep the currently playing track.",
-    action: 'clear',
+    title: 'Clear queue?',
+    body: "We'll keep the currently playing track.",
+    action: 'Clear',
   });
   expect(mockClearQueue).not.toHaveBeenCalled();
 
@@ -198,7 +198,7 @@ test('clear queue confirms first, then clears through the player context', async
   await openMenu(tree);
   confirm.mockResolvedValueOnce(true);
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'clear queue').props.onPress();
+    byLabel(tree, 'Clear queue').props.onPress();
   });
   expect(mockClearQueue).toHaveBeenCalled();
 
@@ -212,7 +212,7 @@ test('save queue as playlist creates it and adds every queue track', async () =>
   await openMenu(tree);
 
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'save queue as playlist').props.onPress();
+    byLabel(tree, 'Save queue as playlist').props.onPress();
   });
   // The name step opens EMPTY (web parity: naming is a conscious act) — a
   // bare save must be a no-op, not a playlist literally called "my queue".
@@ -251,7 +251,7 @@ test('hide past songs trims rows before the current track, keeping queue indices
   });
   await openMenu(tree);
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'hide past songs').props.onPress();
+    byLabel(tree, 'Hide past songs').props.onPress();
   });
 
   // The past row is gone and the header counts what is visible.
@@ -273,9 +273,9 @@ test('hide past songs trims rows before the current track, keeping queue indices
 
   // The row label reflects state and toggles the rows back.
   await openMenu(tree);
-  expect(byLabel(tree, 'hide past songs')).toBeUndefined();
+  expect(byLabel(tree, 'Hide past songs')).toBeUndefined();
   await ReactTestRenderer.act(async () => {
-    byLabel(tree, 'show past songs').props.onPress();
+    byLabel(tree, 'Show past songs').props.onPress();
   });
   expect(texts(tree.toJSON())).toContain('First Song');
   expect(texts(tree.toJSON())).toContain('3 tracks');

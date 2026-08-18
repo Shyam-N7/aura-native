@@ -31,10 +31,10 @@ const TAB_ICONS = { Home: 'home', Search: 'search', Talk: 'chat', You: 'user' };
 // set is static, so it needs no descriptors — just the container ref for the
 // active index and navigation.
 const TABS = [
-  { name: 'Home', label: 'home' },
-  { name: 'Search', label: 'search' },
-  { name: 'Talk', label: 'talk' },
-  { name: 'You', label: 'you' },
+  { name: 'Home', label: 'Home' },
+  { name: 'Search', label: 'Search' },
+  { name: 'Talk', label: 'Talk' },
+  { name: 'You', label: 'You' },
 ];
 
 // How much vertical room the floating chrome needs under scrolling content.
@@ -454,7 +454,7 @@ export function Dock({ navRef }) {
               >
                 <Icon name="arrow-up" size={14} color={t.ink} />
                 <Text style={[styles.bttText, { color: t.ink }]}>
-                  take me back up
+                  Take me back up
                 </Text>
               </Pressable>
             </Animated.View>

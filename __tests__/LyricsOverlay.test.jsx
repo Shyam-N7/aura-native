@@ -177,7 +177,7 @@ test('plain (untimed) lyrics carry the not-synced caption', async () => {
   const tree = await render();
   const body = texts(tree.toJSON());
   expect(body).toContain('words without time');
-  expect(body).toContain("these lyrics aren't synced to the music.");
+  expect(body).toContain("These lyrics aren't synced to the music.");
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
@@ -186,7 +186,7 @@ test('karaoke: hint shows until first entry, stage sings and taps play/pause', a
 
   // In-place discovery — the hint line sits with the pill, not in a tour.
   expect(texts(tree.toJSON())).toContain(
-    'new — tap karaoke to sing along, line by line.',
+    'New — tap karaoke to sing along, line by line.',
   );
 
   await ReactTestRenderer.act(async () => {
@@ -201,7 +201,7 @@ test('karaoke: hint shows until first entry, stage sings and taps play/pause', a
   expect(body).toContain('second words');
   expect(body).toContain('third words');
   // The glass stage-tap chip rides the stage until the tap is performed.
-  expect(body).toContain('tap the words to pause');
+  expect(body).toContain('Tap the words to pause');
 
   // A tap on the stage itself is play/pause (karaoke ergonomics) — and
   // performing it retires the chip's hint for good.
@@ -210,7 +210,7 @@ test('karaoke: hint shows until first entry, stage sings and taps play/pause', a
   });
   expect(mockState.player.togglePlay).toHaveBeenCalled();
   expect(hintDone(HINT_STAGE_TAP)).toBe(true);
-  expect(texts(tree.toJSON())).not.toContain('tap the words to pause');
+  expect(texts(tree.toJSON())).not.toContain('Tap the words to pause');
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -245,7 +245,7 @@ test('karaoke: paused stage rests the coming line with a plain cue', async () =>
   });
   const body = texts(tree.toJSON());
   // Never an empty stage: the cue names the state, the tap label flips.
-  expect(body).toContain('paused — tap the words to continue');
+  expect(body).toContain('Paused — tap the words to continue');
   expect(byLabel(tree, 'play')).toBeTruthy();
   await ReactTestRenderer.act(() => tree.unmount());
 });
@@ -257,7 +257,7 @@ test('pending and unavailable states explain themselves', async () => {
     pending: true,
   });
   let tree = await render();
-  expect(texts(tree.toJSON())).toContain('syncing the lyrics…');
+  expect(texts(tree.toJSON())).toContain('Syncing the lyrics…');
   await ReactTestRenderer.act(() => tree.unmount());
 
   mockGetLyrics.mockResolvedValue({ available: false, synced: false });

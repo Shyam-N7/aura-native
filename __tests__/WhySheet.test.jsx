@@ -80,14 +80,14 @@ test('reasons about the published track with the confident mood attached', async
     expect.objectContaining({ trackId: 'w1', mood: 'unwound' }),
   );
   const body = texts(tree.toJSON());
-  expect(body).toContain('why this song');
+  expect(body).toContain('Why this song');
   expect(body).toContain('built for a slow evening');
-  expect(body).toContain('matched on');
+  expect(body).toContain('Matched on');
   expect(body).toContain('pace');
   expect(body).toContain('80%');
   expect(body).toContain('considered · ruled out');
   expect(body).toContain('too bright for now');
-  expect(body).toContain('confidence');
+  expect(body).toContain('Confidence');
   expect(body).toContain('72');
 
   await ReactTestRenderer.act(() => tree.unmount());
@@ -112,7 +112,7 @@ test('a failed reasoning shows the honest error state', async () => {
     openWhy(TRACK);
   });
   const body = texts(tree.toJSON());
-  expect(body).toContain("couldn't reason");
+  expect(body).toContain("Couldn't reason");
   expect(body).toContain('model unavailable');
   await ReactTestRenderer.act(() => tree.unmount());
 });

@@ -103,7 +103,7 @@ export function WhySheet() {
       header={
         <View style={styles.head}>
           <View style={[styles.dot, { backgroundColor: t.accent }]} />
-          <Text style={[label(10), { color: t.inkSoft }]}>why this song</Text>
+          <Text style={[label(10), { color: t.inkSoft }]}>Why this song</Text>
           <Text
             numberOfLines={1}
             style={[styles.headTitle, { color: t.inkFaint }]}
@@ -115,14 +115,14 @@ export function WhySheet() {
     >
       {status === 'loading' && (
         <View style={styles.loading}>
-          <AuraLoader label="reading the room" />
+          <AuraLoader label="Reading the room" />
         </View>
       )}
 
       {status === 'error' && (
         <View style={styles.block}>
           <Text style={[label(9), { color: t.inkFaint }]}>
-            couldn't reason
+            Couldn't reason
           </Text>
           <Text style={[styles.errorText, { color: t.inkSoft }]}>
             {hit.error}
@@ -140,7 +140,7 @@ export function WhySheet() {
           </View>
 
           <View style={styles.block}>
-            <Text style={[label(9), { color: t.inkFaint }]}>matched on</Text>
+            <Text style={[label(9), { color: t.inkFaint }]}>Matched on</Text>
             {(r.dimensions ?? []).map((d, i) => (
               <View
                 key={i}
@@ -192,7 +192,7 @@ export function WhySheet() {
           )}
 
           <View style={styles.confidenceRow}>
-            <Text style={[label(9), { color: t.inkFaint }]}>confidence</Text>
+            <Text style={[label(9), { color: t.inkFaint }]}>Confidence</Text>
             <ConfidenceDial
               progress={r.confidence ?? 0}
               accent={t.accent}

@@ -19,10 +19,10 @@ import { fonts, label } from '../theme/tokens';
 // A gentle time-of-day vibe word for the reveal when there's no confident mood
 // read — a vibe, not a claimed personal mood (no invented "sensing").
 const PART_VIBE = {
-  morning: 'fresh',
-  afternoon: 'easy',
-  evening: 'warm',
-  night: 'quiet',
+  morning: 'Fresh',
+  afternoon: 'Easy',
+  evening: 'Warm',
+  night: 'Quiet',
 };
 
 // The ~6s welcome intro (web SensingScreen). Snapshots a greeting at mount,
@@ -37,7 +37,7 @@ export function SensingScreen({ name, onReady }) {
     const part = partOfDay();
     const who = (name || '').trim().split(/\s+/)[0];
     return {
-      greeting: who ? `good ${part}, ${who.toLowerCase()}` : `good ${part}`,
+      greeting: who ? `Good ${part}, ${who.toLowerCase()}` : `Good ${part}`,
       part,
     };
   });
@@ -51,7 +51,7 @@ export function SensingScreen({ name, onReady }) {
       .then(list => {
         const top = list?.[0]?.artist;
         if (top) {
-          setRecap(`back on a ${top} run`);
+          setRecap(`Back on a ${top} run`);
         }
       })
       .catch(() => {});
@@ -59,14 +59,14 @@ export function SensingScreen({ name, onReady }) {
   }, []);
 
   const confident = snapshot?.mood && snapshot.confidence >= 0.5;
-  const liveMood = confident ? snapshot.mood : PART_VIBE[intro.part] ?? 'here';
+  const liveMood = confident ? snapshot.mood : PART_VIBE[intro.part] ?? 'Here';
   const reason = confident ? snapshot.reason : null;
 
   const lines = [
     intro.greeting,
-    'reading the moment',
-    recap || `matching tracks to your ${intro.part}`,
-    'almost there',
+    'Reading the moment',
+    recap || `Matching tracks to your ${intro.part}`,
+    'Almost there',
   ];
   const lineAt = [200, 1100, 2000, 2900];
   const [shown, setShown] = useState(0);
@@ -122,7 +122,7 @@ export function SensingScreen({ name, onReady }) {
     >
       <View style={styles.topRow}>
         <View style={[styles.dot, { backgroundColor: t.accent }]} />
-        <Text style={[label(10), { color: t.inkSoft }]}>sensing</Text>
+        <Text style={[label(10), { color: t.inkSoft }]}>Sensing</Text>
       </View>
 
       <View style={styles.center}>
@@ -147,19 +147,19 @@ export function SensingScreen({ name, onReady }) {
       </View>
 
       <View style={styles.moodBlock}>
-        <Text style={[label(9), { color: t.inkFaint }]}>your mood</Text>
+        <Text style={[label(9), { color: t.inkFaint }]}>Your mood</Text>
         <Animated.Text style={[styles.mood, { color: t.ink }, revealStyle]}>
           {liveMood}.
         </Animated.Text>
         <Animated.Text
           style={[styles.tagline, { color: t.inkFaint }, revealStyle]}
         >
-          {reveal && reason ? reason : 'setting up your home…'}
+          {reveal && reason ? reason : 'Setting up your home…'}
         </Animated.Text>
       </View>
 
       <Text style={[label(9), styles.skip, { color: t.inkFaint }]}>
-        tap to skip
+        Tap to skip
       </Text>
     </Pressable>
   );

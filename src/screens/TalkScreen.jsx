@@ -42,16 +42,16 @@ import { fonts, label } from '../theme/tokens';
 // redundant and the chat gets the room instead.
 
 const SUGGESTIONS = [
-  'take me somewhere quieter',
-  'i need to focus',
-  'something with more weight',
-  'play tamil indie',
+  'Take me somewhere quieter',
+  'I need to focus',
+  'Something with more weight',
+  'Play tamil indie',
 ];
 
 const GENERIC_SEED =
-  'tell me what you want to hear, how you feel, or where to take you next.';
+  'Tell me what you want to hear, how you feel, or where to take you next.';
 const moodSeed = mood =>
-  `i'm reading you as ${mood} right now. the set is built around that — but tell me how it actually feels and i'll shift it.`;
+  `I'm reading you as ${mood} right now. The set is built around that — but tell me how it actually feels and i'll shift it.`;
 
 function ThinkingDot({ index, inkFaint, reduced }) {
   const v = useSharedValue(0.3);
@@ -92,7 +92,7 @@ export default function TalkScreen() {
   const scrollRef = useRef(null);
   const seeding = useRef(false);
 
-  const dj = getUser()?.djName || 'aura';
+  const dj = getUser()?.djName || 'AURA';
 
   // First-ever load (and after a clear): greet with the live mood reading if
   // the server is confident, otherwise a plain invitation — never a guess.
@@ -167,7 +167,7 @@ export default function TalkScreen() {
     } catch (err) {
       addTalkMessage({
         who: 'aura',
-        text: `couldn't reach the dj — ${err.message}`,
+        text: `Couldn't reach the dj — ${err.message}`,
         error: true,
       });
     } finally {
@@ -205,7 +205,7 @@ export default function TalkScreen() {
       ]}
     >
       <View style={styles.headerRow}>
-        <Text style={[styles.heading, { color: t.ink }]}>talk</Text>
+        <Text style={[styles.heading, { color: t.ink }]}>Talk</Text>
         {messages.length > 1 && (
           <PressScale
             accessibilityRole="button"
@@ -213,7 +213,7 @@ export default function TalkScreen() {
             onPress={clear}
             hitSlop={8}
           >
-            <Text style={[label(9.5), { color: t.inkFaint }]}>clear</Text>
+            <Text style={[label(9.5), { color: t.inkFaint }]}>Clear</Text>
           </PressScale>
         )}
       </View>
@@ -232,7 +232,7 @@ export default function TalkScreen() {
               style={[styles.msg, isAura ? styles.msgAura : styles.msgYou]}
             >
               <Text style={[label(isAura ? 11 : 9), { color: t.inkFaint }]}>
-                {isAura ? dj : 'you'}
+                {isAura ? dj : 'You'}
               </Text>
               <View
                 style={
@@ -266,8 +266,8 @@ export default function TalkScreen() {
                   </View>
                   <Text style={[label(9.5), { color: t.ink }]}>
                     {(m.intentCount ?? m.tracks.length) === 1
-                      ? 'play song'
-                      : `play set · ${m.tracks.length}`}
+                      ? 'Play song'
+                      : `Play set · ${m.tracks.length}`}
                   </Text>
                 </PressScale>
               )}
@@ -311,7 +311,7 @@ export default function TalkScreen() {
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder={`tell ${dj} how it feels…`}
+          placeholder={`Tell ${dj} how it feels…`}
           placeholderTextColor={t.inkFaint}
           cursorColor={t.accent}
           selectionColor={t.accent}

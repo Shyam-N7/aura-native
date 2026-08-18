@@ -154,23 +154,23 @@ export default function AdminComposeScreen({ navigation }) {
         link: form.link.trim() || undefined,
         audience,
       });
-      showToast(`sent to ${out.sent} device${out.sent === 1 ? '' : 's'}.`, {
+      showToast(`Sent to ${out.sent} device${out.sent === 1 ? '' : 's'}.`, {
         tick: true,
       });
       navigation.goBack();
     } catch (err) {
-      showToast(`couldn't send — ${err.message}`);
+      showToast(`Couldn't send — ${err.message}`);
       setBusy(false);
     }
   };
 
   const audienceLine = form.email.trim()
-    ? `goes to ${form.email.trim()} only.`
+    ? `Goes to ${form.email.trim()} only.`
     : form.toAll
     ? reach
-      ? `goes to every enrolled device — ${reach.devices} device${reach.devices === 1 ? '' : 's'} across ${reach.users} user${reach.users === 1 ? '' : 's'}.`
-      : 'goes to every enrolled device.'
-    : 'goes only to your own devices (a safe test).';
+      ? `Goes to every enrolled device — ${reach.devices} device${reach.devices === 1 ? '' : 's'} across ${reach.users} user${reach.users === 1 ? '' : 's'}.`
+      : 'Goes to every enrolled device.'
+    : 'Goes only to your own devices (a safe test).';
 
   const everyoneOn = form.toAll && !form.email.trim();
 
@@ -203,14 +203,14 @@ export default function AdminComposeScreen({ navigation }) {
               <Icon name="chevron-left" size={22} color={t.ink} />
             </PressScale>
             <Text style={[label(10), { color: t.inkFaint }]}>
-              admin · push
+              Admin · push
             </Text>
             <Text style={[styles.hero, { color: t.ink }]}>
-              send a notification
+              Send a notification
             </Text>
 
             <Text style={[label(9.5), styles.sectionHead, { color: t.inkFaint }]}>
-              preview
+              Preview
             </Text>
             <View
               style={[
@@ -223,7 +223,7 @@ export default function AdminComposeScreen({ navigation }) {
                   style={[styles.previewDot, { backgroundColor: t.accent }]}
                 />
                 <Text style={[styles.previewApp, { color: t.inkSoft }]}>
-                  aura
+                  AURA
                 </Text>
                 <Text style={[styles.previewApp, { color: t.inkFaint }]}>
                   {' '}
@@ -234,14 +234,14 @@ export default function AdminComposeScreen({ navigation }) {
                 numberOfLines={1}
                 style={[styles.previewTitle, { color: t.ink }]}
               >
-                {form.title.trim() || 'hello from aura'}
+                {form.title.trim() || 'Hello from AURA'}
               </Text>
               <Text
                 numberOfLines={2}
                 style={[styles.previewBody, { color: t.inkSoft }]}
               >
                 {form.body.trim() ||
-                  'your message shows here, exactly how it lands.'}
+                  'Your message shows here, exactly how it lands.'}
               </Text>
               {previewImage && (
                 <Image
@@ -254,7 +254,7 @@ export default function AdminComposeScreen({ navigation }) {
               )}
               {imageBroken && !!form.image.trim() && (
                 <Text style={[styles.previewHint, { color: t.inkFaint }]}>
-                  couldn't load that image
+                  Couldn't load that image
                 </Text>
               )}
             </View>
@@ -268,12 +268,12 @@ export default function AdminComposeScreen({ navigation }) {
             showsVerticalScrollIndicator={false}
           >
             <Text style={[label(9.5), styles.sectionHead, { color: t.inkFaint }]}>
-              the card
+              The card
             </Text>
             <TextInput
               value={form.title}
               onChangeText={v => set('title', v)}
-              placeholder="title"
+              placeholder="Title"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}
@@ -284,7 +284,7 @@ export default function AdminComposeScreen({ navigation }) {
             <TextInput
               value={form.body}
               onChangeText={v => set('body', v)}
-              placeholder="message"
+              placeholder="Message"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}
@@ -310,12 +310,12 @@ export default function AdminComposeScreen({ navigation }) {
                     { color: form.withImage ? t.accent : t.ink },
                   ]}
                 >
-                  include an image
+                  Include an image
                 </Text>
                 <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
                   {form.withImage
-                    ? 'the aura card, or an image url below.'
-                    : 'off — sends as plain text.'}
+                    ? 'The AURA card, or an image URL below.'
+                    : 'Off — sends as plain text.'}
                 </Text>
               </View>
               <View
@@ -333,7 +333,7 @@ export default function AdminComposeScreen({ navigation }) {
                   setImageBroken(false);
                   set('image', v);
                 }}
-                placeholder="image url (optional — empty = the aura card)"
+                placeholder="Image URL (optional — empty = the AURA card)"
                 placeholderTextColor={t.inkFaint}
                 cursorColor={t.accent}
                 selectionColor={t.accent}
@@ -346,7 +346,7 @@ export default function AdminComposeScreen({ navigation }) {
             <TextInput
               value={form.link}
               onChangeText={v => set('link', v)}
-              placeholder="link (optional — opens on tap)"
+              placeholder="Link (optional — opens on tap)"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}
@@ -357,12 +357,12 @@ export default function AdminComposeScreen({ navigation }) {
             />
 
             <Text style={[label(9.5), styles.sectionHead, { color: t.inkFaint }]}>
-              who gets it
+              Who gets it
             </Text>
             <TextInput
               value={form.email}
               onChangeText={v => set('email', v)}
-              placeholder="one email (optional)"
+              placeholder="One email (optional)"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}
@@ -386,14 +386,14 @@ export default function AdminComposeScreen({ navigation }) {
                     { color: everyoneOn ? t.accent : t.ink },
                   ]}
                 >
-                  send to everyone
+                  Send to everyone
                 </Text>
                 <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
                   {form.email.trim()
-                    ? 'ignored — the email above wins.'
+                    ? 'Ignored — the email above wins.'
                     : reach
-                    ? `reaches ${reach.devices} device${reach.devices === 1 ? '' : 's'} across ${reach.users} user${reach.users === 1 ? '' : 's'}.`
-                    : 'checking reach…'}
+                    ? `Reaches ${reach.devices} device${reach.devices === 1 ? '' : 's'} across ${reach.users} user${reach.users === 1 ? '' : 's'}.`
+                    : 'Checking reach…'}
                 </Text>
               </View>
               <View
@@ -406,7 +406,7 @@ export default function AdminComposeScreen({ navigation }) {
             </Pressable>
             {!!reach && !reach.configured && (
               <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
-                sender not configured — add the firebase key to the server env
+                Sender not configured — add the Firebase key to the server env
                 first.
               </Text>
             )}
@@ -431,7 +431,7 @@ export default function AdminComposeScreen({ navigation }) {
               ]}
             >
               <Text style={[label(9.5), { color: t.accent }]}>
-                {busy ? 'sending…' : 'send notification'}
+                {busy ? 'Sending…' : 'Send notification'}
               </Text>
             </Pressable>
             <Text style={[styles.rowCaption, styles.sendHint, { color: t.inkSoft }]}>

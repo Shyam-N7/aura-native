@@ -67,10 +67,10 @@ describe('classifyLink — the one parser', () => {
 
 describe('landingLabel', () => {
   test('each kind names its errand; the moment carries its stamp', () => {
-    expect(landingLabel({ kind: 'song' })).toBe('opening the song');
-    expect(landingLabel({ kind: 'moment', at: 84 })).toBe('starting from 1:24');
-    expect(landingLabel({ kind: 'playlist' })).toBe('opening the playlist');
-    expect(landingLabel({ kind: 'invite' })).toBe('joining the playlist');
+    expect(landingLabel({ kind: 'song' })).toBe('Opening the song');
+    expect(landingLabel({ kind: 'moment', at: 84 })).toBe('Starting from 1:24');
+    expect(landingLabel({ kind: 'playlist' })).toBe('Opening the playlist');
+    expect(landingLabel({ kind: 'invite' })).toBe('Joining the playlist');
   });
 });
 
@@ -121,7 +121,7 @@ describe('the host', () => {
     await ReactTestRenderer.act(async () => {
       showLanding({ kind: 'moment', at: 84 });
     });
-    expect(texts(tree.toJSON())).toContain('starting from 1:24');
+    expect(texts(tree.toJSON())).toContain('Starting from 1:24');
 
     await ReactTestRenderer.act(async () => {
       hideLanding();
@@ -131,20 +131,20 @@ describe('the host', () => {
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(1000);
     });
-    expect(texts(tree.toJSON())).not.toContain('starting from 1:24');
+    expect(texts(tree.toJSON())).not.toContain('Starting from 1:24');
 
     // The safety valve: a landing nobody dismisses dismisses itself.
     await ReactTestRenderer.act(async () => {
       showLanding({ kind: 'song', trackId: 'x' });
     });
-    expect(texts(tree.toJSON())).toContain('opening the song');
+    expect(texts(tree.toJSON())).toContain('Opening the song');
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(8100);
     });
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(1000);
     });
-    expect(texts(tree.toJSON())).not.toContain('opening the song');
+    expect(texts(tree.toJSON())).not.toContain('Opening the song');
     await ReactTestRenderer.act(async () => tree.unmount());
     jest.useRealTimers();
   });

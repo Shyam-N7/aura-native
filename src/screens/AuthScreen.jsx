@@ -47,11 +47,11 @@ function scorePassword(v) {
   return s;
 }
 const STRENGTH_LABELS = [
-  'strength · gentle',
-  'strength · weak',
-  'strength · weak',
-  'strength · good',
-  'strength · strong',
+  'Strength · gentle',
+  'Strength · weak',
+  'Strength · weak',
+  'Strength · good',
+  'Strength · strong',
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -185,17 +185,17 @@ export default function AuthScreen() {
   const validate = useCallback(() => {
     const e = {};
     if (isSignup && !name.trim()) {
-      e.name = 'your name, please.';
+      e.name = 'Your name, please.';
     }
     if (!email.trim()) {
-      e.email = 'an email is needed.';
+      e.email = 'An email is needed.';
     } else if (!EMAIL_RE.test(email.trim())) {
-      e.email = 'that email looks off.';
+      e.email = 'That email looks off.';
     }
     if (!password) {
-      e.password = 'a password is needed.';
+      e.password = 'A password is needed.';
     } else if (password.length < 6) {
-      e.password = 'at least six characters.';
+      e.password = 'At least six characters.';
     }
     return e;
   }, [isSignup, name, email, password]);
@@ -244,7 +244,7 @@ export default function AuthScreen() {
         toDeviceLimit(err);
         return;
       }
-      const msg = err?.message || 'something went wrong.';
+      const msg = err?.message || 'Something went wrong.';
       showToast(msg);
       setFormError(msg);
     } finally {
@@ -262,7 +262,7 @@ export default function AuthScreen() {
         if (r?.code === 'device_limit') {
           setDeviceSessions(r.sessions ?? []);
           setDeviceLimitN(r.limit ?? 0);
-          showToast('still at the limit — remove another.');
+          showToast('Still at the limit — remove another.');
           return;
         }
         if (r?.pendingVerification) {
@@ -273,10 +273,10 @@ export default function AuthScreen() {
         if (err?.code === 'device_limit') {
           setDeviceSessions(err.sessions ?? []);
           setDeviceLimitN(err.limit ?? 0);
-          showToast('still at the limit — remove another.');
+          showToast('Still at the limit — remove another.');
           return;
         }
-        const m = err?.message || 'could not sign in.';
+        const m = err?.message || 'Could not sign in.';
         showToast(m);
         setFormError(m);
       } finally {
@@ -305,7 +305,7 @@ export default function AuthScreen() {
         return;
       }
       setFormError(
-        (err?.message || 'verification failed.') +
+        (err?.message || 'Verification failed.') +
           attemptsSuffix(err?.attemptsLeft),
       );
       // Stale/locked code → let them resend right away.
@@ -336,12 +336,12 @@ export default function AuthScreen() {
         setStep('forgot-code');
         setOtpCode('');
       }
-      showToast('code sent.');
+      showToast('Code sent.');
     } catch (err) {
       if (err?.code === 'cooldown' && err.retryAfterSec) {
         setResendCooldown(err.retryAfterSec);
       } else {
-        const m = err?.message || 'could not resend code.';
+        const m = err?.message || 'Could not resend code.';
         setFormError(m);
         showToast(m);
       }
@@ -353,7 +353,7 @@ export default function AuthScreen() {
     setFormError('');
     const addr = email.trim();
     if (!addr || !EMAIL_RE.test(addr)) {
-      setErrors({ email: 'that email looks off.' });
+      setErrors({ email: 'That email looks off.' });
       return;
     }
     setErrors({});
@@ -374,7 +374,7 @@ export default function AuthScreen() {
         setNewPassword('');
         setResendCooldown(err.retryAfterSec);
       } else {
-        const m = err?.message || 'could not send code.';
+        const m = err?.message || 'Could not send code.';
         setFormError(m);
         showToast(m);
       }
@@ -387,7 +387,7 @@ export default function AuthScreen() {
   const handleVerifyResetCode = useCallback(async () => {
     setFormError('');
     if (otpCode.length !== 6) {
-      setFormError('enter the 6-digit code.');
+      setFormError('Enter the 6-digit code.');
       return;
     }
     setPending(true);
@@ -398,7 +398,7 @@ export default function AuthScreen() {
       setStep('forgot-newpw');
     } catch (err) {
       setFormError(
-        (err?.message || 'that code isn’t right.') +
+        (err?.message || 'That code isn’t right.') +
           attemptsSuffix(err?.attemptsLeft),
       );
       if (['expired', 'no_code', 'locked'].includes(err?.code)) {
@@ -413,7 +413,7 @@ export default function AuthScreen() {
   const handleResetPassword = useCallback(async () => {
     setFormError('');
     if (newPassword.length < 6) {
-      setErrors({ password: 'at least six characters.' });
+      setErrors({ password: 'At least six characters.' });
       return;
     }
     setErrors({});
@@ -423,12 +423,12 @@ export default function AuthScreen() {
       switchMode('signin'); // back to sign-in (resets step + sub-state)
       setEmail(pendingEmail); // prefill their email
       setPassword(''); // fresh password entry
-      setFormError('password updated — sign in with your new password.');
+      setFormError('Password updated — sign in with your new password.');
     } catch (err) {
       // If the code went stale between steps, bounce back to the code step.
       if (['expired', 'no_code', 'locked', 'mismatch', 'bad_format'].includes(err?.code)) {
         setFormError(
-          (err?.message || 'that code is no longer valid.') +
+          (err?.message || 'That code is no longer valid.') +
             attemptsSuffix(err?.attemptsLeft),
         );
         setStep('forgot-code');
@@ -436,7 +436,7 @@ export default function AuthScreen() {
           setResendCooldown(0);
         }
       } else {
-        setFormError(err?.message || 'reset failed.');
+        setFormError(err?.message || 'Reset failed.');
       }
     } finally {
       setPending(false);
@@ -452,13 +452,13 @@ export default function AuthScreen() {
     <View style={styles.foot}>
       {resendCooldown > 0 ? (
         <Text style={[styles.footText, { color: t.inkFaint }]}>
-          resend code in {resendCooldown}s
+          Resend code in {resendCooldown}s
         </Text>
       ) : (
         <Text style={[styles.footText, { color: t.inkFaint }]}>
-          didn’t get it?{' '}
+          Didn’t get it?{' '}
           <LinkText testID="auth-resend" onPress={handleResendCode}>
-            resend code.
+            Resend code.
           </LinkText>
         </Text>
       )}
@@ -498,19 +498,19 @@ export default function AuthScreen() {
             {step === 'form' && (
               <>
                 <Head
-                  kicker={isSignup ? 'create account · new' : 'sign in · returning'}
-                  title={isSignup ? 'create your account.' : 'welcome back.'}
+                  kicker={isSignup ? 'Create account · new' : 'Sign in · returning'}
+                  title={isSignup ? 'Create your account.' : 'Welcome back.'}
                   sub={
                     isSignup
-                      ? 'quick setup — aura starts learning from your first song.'
-                      : 'sign in and pick up where you left off.'
+                      ? 'Quick setup — AURA starts learning from your first song.'
+                      : 'Sign in and pick up where you left off.'
                   }
                 />
                 {isSignup && (
                   <Field
-                    label="name"
+                    label="Name"
                     testID="auth-name"
-                    placeholder="what’s your name?"
+                    placeholder="What’s your name?"
                     value={name}
                     onChangeText={setName}
                     error={errors.name}
@@ -518,7 +518,7 @@ export default function AuthScreen() {
                   />
                 )}
                 <Field
-                  label="email"
+                  label="Email"
                   testID="auth-email"
                   placeholder="you@somewhere.com"
                   value={email}
@@ -529,7 +529,7 @@ export default function AuthScreen() {
                   autoComplete="email"
                 />
                 <Field
-                  label="password"
+                  label="Password"
                   testID="auth-password"
                   placeholder="••••••••"
                   value={password}
@@ -547,7 +547,7 @@ export default function AuthScreen() {
                           setFormError('');
                           setStep('forgot-request');
                         }}>
-                        forgot?
+                        Forgot?
                       </LinkText>
                     ) : null
                   }
@@ -556,19 +556,19 @@ export default function AuthScreen() {
                 {errorLine}
                 <SubmitButton
                   testID="auth-submit"
-                  label={isSignup ? 'create account' : 'sign in'}
-                  pendingLabel="one moment…"
+                  label={isSignup ? 'Create account' : 'Sign in'}
+                  pendingLabel="One moment…"
                   pending={pending}
                   disabled={pending}
                   onPress={handleSubmit}
                 />
                 <View style={styles.foot}>
                   <Text style={[styles.footText, { color: t.inkFaint }]}>
-                    {isSignup ? 'have an account? ' : 'new to aura? '}
+                    {isSignup ? 'Have an account? ' : 'New to AURA? '}
                     <LinkText
                       testID="auth-switch-mode"
                       onPress={() => switchMode(isSignup ? 'signin' : 'signup')}>
-                      {isSignup ? 'sign in instead.' : 'create an account.'}
+                      {isSignup ? 'Sign in instead.' : 'Create an account.'}
                     </LinkText>
                   </Text>
                 </View>
@@ -579,11 +579,11 @@ export default function AuthScreen() {
             {step === 'otp' && (
               <>
                 <Head
-                  kicker="verify · check your email"
-                  title="almost there."
+                  kicker="Verify · check your email"
+                  title="Almost there."
                   sub={
                     <>
-                      check your email for a 6-digit code — we sent it to{' '}
+                      Check your email for a 6-digit code — we sent it to{' '}
                       <Text style={{ color: t.ink }}>{pendingEmail}</Text>.
                     </>
                   }
@@ -592,8 +592,8 @@ export default function AuthScreen() {
                 {errorLine}
                 <SubmitButton
                   testID="auth-verify"
-                  label="verify"
-                  pendingLabel="verifying…"
+                  label="Verify"
+                  pendingLabel="Verifying…"
                   pending={pending}
                   disabled={pending || otpCode.length !== 6}
                   onPress={handleVerify}
@@ -601,7 +601,7 @@ export default function AuthScreen() {
                 {resendLine}
                 <View style={styles.foot}>
                   <LinkText testID="auth-otp-back" onPress={backToForm}>
-                    wrong email? go back.
+                    Wrong email? Go back.
                   </LinkText>
                 </View>
               </>
@@ -611,18 +611,18 @@ export default function AuthScreen() {
             {step === 'device-limit' && (
               <>
                 <Head
-                  kicker={`device limit · ${deviceLimitN} max`}
-                  title="device limit reached."
-                  sub={`your account is signed in on ${deviceSessions.length} device${
+                  kicker={`Device limit · ${deviceLimitN} max`}
+                  title="Device limit reached."
+                  sub={`Your account is signed in on ${deviceSessions.length} device${
                     deviceSessions.length === 1 ? '' : 's'
-                  }. remove one to sign in here.`}
+                  }. Remove one to sign in here.`}
                 />
                 <View style={styles.devices}>
                   {deviceSessions.map(s => {
                     const seen = relTime(s.lastSeenAt);
                     const loc =
                       [s.city, s.country].filter(Boolean).join(', ') ||
-                      'location unknown';
+                      'Location unknown';
                     return (
                       <View
                         key={s.id}
@@ -632,7 +632,7 @@ export default function AuthScreen() {
                         ]}>
                         <View style={styles.deviceInfo}>
                           <Text style={[styles.deviceLabel, { color: t.ink }]}>
-                            {s.deviceLabel || 'unknown device'}
+                            {s.deviceLabel || 'Unknown device'}
                           </Text>
                           <Text style={[styles.deviceMeta, { color: t.inkFaint }]}>
                             {loc}
@@ -650,7 +650,7 @@ export default function AuthScreen() {
                             pending && styles.dim,
                           ]}>
                           <Text style={[styles.deviceRemoveText, { color: t.accent }]}>
-                            remove & sign in
+                            Remove & sign in
                           </Text>
                         </Pressable>
                       </View>
@@ -660,7 +660,7 @@ export default function AuthScreen() {
                 {errorLine}
                 <View style={styles.foot}>
                   <LinkText testID="auth-device-back" onPress={backToForm}>
-                    back to sign in.
+                    Back to sign in.
                   </LinkText>
                 </View>
               </>
@@ -670,12 +670,12 @@ export default function AuthScreen() {
             {step === 'forgot-request' && (
               <>
                 <Head
-                  kicker="reset · forgot password"
-                  title="reset your password."
-                  sub="enter your email. if it’s registered, we’ll send a 6-digit reset code."
+                  kicker="Reset · forgot password"
+                  title="Reset your password."
+                  sub="Enter your email. If it’s registered, we’ll send a 6-digit reset code."
                 />
                 <Field
-                  label="email"
+                  label="Email"
                   testID="forgot-email"
                   placeholder="you@somewhere.com"
                   value={email}
@@ -688,15 +688,15 @@ export default function AuthScreen() {
                 {errorLine}
                 <SubmitButton
                   testID="forgot-submit"
-                  label="send reset code"
-                  pendingLabel="sending…"
+                  label="Send reset code"
+                  pendingLabel="Sending…"
                   pending={pending}
                   disabled={pending}
                   onPress={handleForgotRequest}
                 />
                 <View style={styles.foot}>
                   <LinkText testID="forgot-back" onPress={backToForm}>
-                    back to sign in.
+                    Back to sign in.
                   </LinkText>
                 </View>
               </>
@@ -706,11 +706,11 @@ export default function AuthScreen() {
             {step === 'forgot-code' && (
               <>
                 <Head
-                  kicker="reset · check your email"
-                  title="enter your code."
+                  kicker="Reset · check your email"
+                  title="Enter your code."
                   sub={
                     <>
-                      if an account exists for{' '}
+                      If an account exists for{' '}
                       <Text style={{ color: t.ink }}>{pendingEmail}</Text>, we’ve
                       sent a 6-digit code.
                     </>
@@ -720,8 +720,8 @@ export default function AuthScreen() {
                 {errorLine}
                 <SubmitButton
                   testID="reset-continue"
-                  label="continue"
-                  pendingLabel="checking…"
+                  label="Continue"
+                  pendingLabel="Checking…"
                   pending={pending}
                   disabled={pending || otpCode.length !== 6}
                   onPress={handleVerifyResetCode}
@@ -729,7 +729,7 @@ export default function AuthScreen() {
                 {resendLine}
                 <View style={styles.foot}>
                   <LinkText testID="reset-back" onPress={backToForm}>
-                    back to sign in.
+                    Back to sign in.
                   </LinkText>
                 </View>
               </>
@@ -739,12 +739,12 @@ export default function AuthScreen() {
             {step === 'forgot-newpw' && (
               <>
                 <Head
-                  kicker="reset · new password"
-                  title="set a new password."
-                  sub="your code checked out. choose a new password for your account."
+                  kicker="Reset · new password"
+                  title="Set a new password."
+                  sub="Your code checked out. Choose a new password for your account."
                 />
                 <Field
-                  label="new password"
+                  label="New password"
                   testID="reset-password"
                   placeholder="••••••••"
                   value={newPassword}
@@ -758,8 +758,8 @@ export default function AuthScreen() {
                 {errorLine}
                 <SubmitButton
                   testID="reset-submit"
-                  label="reset password"
-                  pendingLabel="resetting…"
+                  label="Reset password"
+                  pendingLabel="Resetting…"
                   pending={pending}
                   disabled={pending || newPassword.length < 6}
                   onPress={handleResetPassword}
@@ -772,7 +772,7 @@ export default function AuthScreen() {
                       setOtpCode('');
                       setStep('forgot-code');
                     }}>
-                    re-enter code.
+                    Re-enter code.
                   </LinkText>
                 </View>
               </>

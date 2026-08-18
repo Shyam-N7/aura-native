@@ -75,7 +75,7 @@ const LIST_TOP_PAD = 4;
 const RADIO_HEAD = { id: '__aura-up-next', __radioHead: true };
 // Dropping a song above the playing track is allowed — it just isn't what
 // "next" means any more, and that is invisible unless we say it.
-const BEHIND_MSG = "that sits behind what's playing — it won't play next.";
+const BEHIND_MSG = "That sits behind what's playing — it won't play next.";
 const SHIFT_MS = 160;
 // Auto-scroll while dragging: a continuous per-frame loop (not per-move-event),
 // so it keeps scrolling when the finger holds still at the edge and its speed
@@ -172,7 +172,7 @@ function NowPlayingLine({ t }) {
   const fill = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
   return (
     <View style={styles.npLine}>
-      <Text style={[label(8.5), { color: t.accent }]}>now playing</Text>
+      <Text style={[label(8.5), { color: t.accent }]}>Now playing</Text>
       <View style={[styles.npBar, { backgroundColor: t.line }]}>
         <Animated.View
           style={[styles.npFill, { backgroundColor: t.accent }, fill]}
@@ -535,7 +535,7 @@ const Row = React.memo(function Row({
                 : [
                     {
                       icon: 'arrow-up',
-                      label: 'move to top',
+                      label: 'Move to top',
                       onPress: () => onMoveTop(index),
                     },
                   ],
@@ -636,7 +636,7 @@ const RadioHead = React.memo(function RadioHead({
         onPress={onAdopt}
         hitSlop={8}
       >
-        <Text style={[label(9), { color: accent }]}>add to queue</Text>
+        <Text style={[label(9), { color: accent }]}>Add to queue</Text>
       </Pressable>
     </Animated.View>
   );
@@ -663,9 +663,9 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
   const confirmClear = async () => {
     if (
       await confirm({
-        title: 'clear queue?',
-        body: "we'll keep the currently playing track.",
-        action: 'clear',
+        title: 'Clear queue?',
+        body: "We'll keep the currently playing track.",
+        action: 'Clear',
       })
     ) {
       player.clearQueue();
@@ -700,7 +700,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
       onClose();
     } catch (err) {
       console.warn('[save-queue]', err?.message ?? err);
-      showToast("couldn't save.");
+      showToast("Couldn't save.");
       setBusy(false);
     }
   };
@@ -720,7 +720,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
         </Text>
         {busy ? (
           <Text style={[styles.menuState, { color: t.inkFaint }]}>
-            saving to {name.trim()}
+            Saving to {name.trim()}
           </Text>
         ) : (
           <>
@@ -730,7 +730,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
               value={name}
               onChangeText={setName}
               onSubmitEditing={saveQueue}
-              placeholder="playlist name"
+              placeholder="Playlist name"
               placeholderTextColor={t.inkFaint}
               cursorColor={t.accent}
               selectionColor={t.accent}
@@ -801,14 +801,14 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
       {tracks.length > 0 && (
         <SheetRow
           icon="plus"
-          label="save queue as playlist"
+          label="Save queue as playlist"
           onPress={() => setNaming(true)}
         />
       )}
       {tracks.length > 0 && (
         <SheetRow
           icon="queue-add"
-          label="add queue to playlist"
+          label="Add queue to playlist"
           onPress={act(() => openAddToPlaylist(tracks))}
         />
       )}
@@ -817,7 +817,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
       {(idx > 0 || hidePast) && (
         <SheetRow
           icon={hidePast ? 'eye' : 'eye-off'}
-          label={hidePast ? 'show past songs' : 'hide past songs'}
+          label={hidePast ? 'Show past songs' : 'Hide past songs'}
           onPress={act(onToggleHidePast)}
         />
       )}
@@ -827,7 +827,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
           <SheetRow
             icon="close"
             danger
-            label="clear queue"
+            label="Clear queue"
             onPress={act(confirmClear)}
           />
         </>
@@ -1477,7 +1477,7 @@ export function QueueSheet() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
-                  player.shuffleActive ? 'shuffle off' : 'shuffle'
+                  player.shuffleActive ? 'Shuffle off' : 'Shuffle'
                 }
                 onPress={doShuffle}
                 hitSlop={8}
@@ -1521,7 +1521,7 @@ export function QueueSheet() {
 
         {tracks.length === 0 ? (
           <Text style={[styles.empty, { color: t.inkFaint }]}>
-            nothing queued yet — play something first.
+            Nothing queued yet — play something first.
           </Text>
         ) : landed ? (
           <ListFade reduced={reduced}>

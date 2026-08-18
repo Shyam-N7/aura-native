@@ -65,8 +65,8 @@ const boostPct = mb => Math.round((10 ** (mb / 100 / 20) - 1) * 100);
 const boostText = mb => `+${boostPct(mb)}% · +${mb / 100} dB`;
 const BOOST_LEVELS = [0, 300, 600, 900, 1200].map(v => ({
   id: v,
-  label: v === 0 ? 'off' : boostText(v),
-  caption: v > 600 ? 'strong — watch your ears' : undefined,
+  label: v === 0 ? 'Off' : boostText(v),
+  caption: v > 600 ? 'Strong — watch your ears' : undefined,
 }));
 
 function hzLabel(hz) {
@@ -144,11 +144,11 @@ export function EqualizerPanel() {
       return;
     }
     if (mine.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      setSaveError('you already have one by that name.');
+      setSaveError('You already have one by that name.');
       return;
     }
     if (!saveEqUserPreset(name, eq.gains)) {
-      setSaveError("couldn't save that one.");
+      setSaveError("Couldn't save that one.");
       return;
     }
     // Feedback is the chip appearing right above, plus a tick.
@@ -161,7 +161,7 @@ export function EqualizerPanel() {
   const outputOptions = [
     {
       id: null,
-      label: 'automatic',
+      label: 'Automatic',
       caption: `follows what you're listening on — ${
         OUT_LABEL[eq.detectedOutput] ?? eq.detectedOutput
       } right now`,
@@ -171,8 +171,8 @@ export function EqualizerPanel() {
       label: OUT_LABEL[id] ?? id,
       caption:
         id === eq.detectedOutput
-          ? 'in use now'
-          : 'keeps its own settings',
+          ? 'In use now'
+          : 'Keeps its own settings',
     })),
   ];
 
@@ -185,7 +185,7 @@ export function EqualizerPanel() {
     return (
       <Text style={[styles.note, { color: t.inkSoft }]}>
         {eq.deviceEq
-          ? eq.unavailableReason ?? 'the equalizer isn’t available right now.'
+          ? eq.unavailableReason ?? 'The equalizer isn’t available right now.'
           : `this phone doesn't offer an equalizer${
               eq.unavailableReason ? ` — ${eq.unavailableReason}` : '.'
             }`}
@@ -263,10 +263,10 @@ export function EqualizerPanel() {
       >
         <View style={styles.rowMeta}>
           <Text style={[styles.rowTitle, { color: on ? t.accent : t.ink }]}>
-            equalizer
+            Equalizer
           </Text>
           <Text style={[styles.rowCaption, { color: t.inkSoft }]}>
-            {on ? 'shaping your sound.' : 'off — your music plays as-is.'}
+            {on ? 'Shaping your sound.' : 'Off — your music plays as-is.'}
           </Text>
         </View>
         <View
@@ -296,11 +296,11 @@ export function EqualizerPanel() {
       </Text>
 
       <View style={styles.btns}>
-        {pickBtn('presets', 'presets', presetName, 'presets')}
-        {pickBtn('bass', 'bass boost', bassLabel, 'bass')}
+        {pickBtn('presets', 'Presets', presetName, 'presets')}
+        {pickBtn('bass', 'Bass boost', bassLabel, 'bass')}
         {eq.boostMode !== 'none' &&
-          pickBtn('boost', 'volume boost', boostLabel, 'boost')}
-        {pickBtn('output', 'applies to', outputLabel, 'output')}
+          pickBtn('boost', 'Volume boost', boostLabel, 'boost')}
+        {pickBtn('output', 'Applies to', outputLabel, 'output')}
       </View>
 
       {/* presets: the mood presets and the user's own saved curves. Applying
@@ -332,7 +332,7 @@ export function EqualizerPanel() {
             onPress={() => {}}
           >
             <Text style={[label(9.5), styles.popLabel, { color: t.inkFaint }]}>
-              presets
+              Presets
             </Text>
             <View style={styles.chips}>
               {PRESETS.map(p =>
@@ -344,7 +344,7 @@ export function EqualizerPanel() {
             </View>
 
             <Text style={[label(9.5), styles.popHead, { color: t.inkFaint }]}>
-              your settings
+              Your settings
             </Text>
             {usable.length > 0 && (
               <View style={styles.chips}>
@@ -374,7 +374,7 @@ export function EqualizerPanel() {
                     }
                   }}
                   onSubmitEditing={saveCurrent}
-                  placeholder="name these settings"
+                  placeholder="Name these settings"
                   placeholderTextColor={t.inkFaint}
                   cursorColor={t.accent}
                   selectionColor={t.accent}
@@ -402,7 +402,7 @@ export function EqualizerPanel() {
                     hitSlop={8}
                   >
                     <Text style={[styles.saveBtn, { color: t.inkSoft }]}>
-                      cancel
+                      Cancel
                     </Text>
                   </PressScale>
                   <PressScale
@@ -411,7 +411,7 @@ export function EqualizerPanel() {
                     onPress={saveCurrent}
                     hitSlop={8}
                   >
-                    <Text style={[styles.saveBtn, { color: t.accent }]}>save</Text>
+                    <Text style={[styles.saveBtn, { color: t.accent }]}>Save</Text>
                   </PressScale>
                 </View>
               </View>
@@ -425,15 +425,15 @@ export function EqualizerPanel() {
                   <Icon name="plus" size={15} color={t.inkSoft} />
                   <Text style={[styles.chipText, { color: t.inkSoft }]}>
                     {usable.length
-                      ? 'save these settings'
-                      : 'save these settings to reuse later'}
+                      ? 'Save these settings'
+                      : 'Save these settings to reuse later'}
                   </Text>
                 </View>
               </PressScale>
             )}
             {usable.length > 0 && (
               <Text style={[styles.hint, styles.hintLeft, { color: t.inkFaint }]}>
-                hold one of yours to delete it
+                Hold one of yours to delete it
               </Text>
             )}
           </Pressable>
@@ -442,7 +442,7 @@ export function EqualizerPanel() {
 
       <PickerPopup
         visible={open === 'bass'}
-        title="bass boost"
+        title="Bass boost"
         options={BASS_LEVELS}
         selected={eq.bassBoost}
         onSelect={v => {
@@ -456,7 +456,7 @@ export function EqualizerPanel() {
           (LoudnessEnhancer) fallback only ever sees the ≤+6 dB stops. */}
       <PickerPopup
         visible={open === 'boost'}
-        title="volume boost"
+        title="Volume boost"
         options={
           eq.boostMode === 'plain'
             ? BOOST_LEVELS.filter(o => o.id <= 600)
@@ -476,9 +476,9 @@ export function EqualizerPanel() {
 
       <ConfirmPopup
         visible={warnBoost != null}
-        title="boost this much?"
-        body="above +6 dB some songs can sound strained, and it gets loud fast in earphones. take care of your ears."
-        action="boost it"
+        title="Boost this much?"
+        body="Above +6 dB some songs can sound strained, and it gets loud fast in earphones. Take care of your ears."
+        action="Boost it"
         onConfirm={() => {
           setBoost(warnBoost);
           setWarnBoost(null);
@@ -488,7 +488,7 @@ export function EqualizerPanel() {
 
       <PickerPopup
         visible={open === 'output'}
-        title="tune for"
+        title="Tune for"
         options={outputOptions}
         selected={eq.pinned ? eq.output : null}
         onSelect={pinOutput}
@@ -497,9 +497,9 @@ export function EqualizerPanel() {
 
       <ConfirmPopup
         visible={ask}
-        title="turn on the equalizer?"
-        body="it changes how your music sounds, and can reduce quality on some tracks. you can turn it off anytime."
-        action="turn on"
+        title="Turn on the equalizer?"
+        body="It changes how your music sounds, and can reduce quality on some tracks. You can turn it off anytime."
+        action="Turn on"
         onConfirm={confirmOn}
         onCancel={() => setAsk(false)}
         dontAsk={dontAsk}
@@ -508,9 +508,9 @@ export function EqualizerPanel() {
 
       <ConfirmPopup
         visible={!!confirmDelete}
-        title={`delete "${confirmDelete?.name ?? ''}"?`}
-        body="the saved settings go, your current sound stays as it is."
-        action="delete"
+        title={`Delete "${confirmDelete?.name ?? ''}"?`}
+        body="The saved settings go, your current sound stays as it is."
+        action="Delete"
         danger
         onConfirm={() => {
           deleteEqUserPreset(confirmDelete.id);

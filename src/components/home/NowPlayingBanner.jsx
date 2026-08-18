@@ -198,7 +198,7 @@ export function NowPlayingBanner({ track, dir = 0, playing = false, onOpen }) {
         <Animated.View style={[styles.inner, glide]}>
           <TrackArt track={track} size={64} radius={12} />
           <View style={styles.meta}>
-            <Text style={[label(9), { color: t.accent }]}>now playing</Text>
+            <Text style={[label(9), { color: t.accent }]}>Now playing</Text>
             <Text numberOfLines={1} style={[styles.title, { color: t.ink }]}>
               {cleanTitle(track.title)}
             </Text>

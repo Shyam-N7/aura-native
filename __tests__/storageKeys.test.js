@@ -98,8 +98,8 @@ test('both playlist screens read the same sort list', () => {
 });
 
 test('liked keeps its own list — default means recency there', () => {
-  expect(LIKED_SORTS.find(s => s.id === 'default').label).toBe('recent');
-  expect(PLAYLIST_SORTS.find(s => s.id === 'default').label).toBe('in order');
+  expect(LIKED_SORTS.find(s => s.id === 'default').label).toBe('Recent');
+  expect(PLAYLIST_SORTS.find(s => s.id === 'default').label).toBe('In order');
   // Same ids either way, so a row-sorting switch handles both.
   expect(LIKED_SORTS.map(s => s.id)).toEqual(PLAYLIST_SORTS.map(s => s.id));
 });

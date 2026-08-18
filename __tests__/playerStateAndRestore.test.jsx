@@ -268,7 +268,7 @@ describe('shuffle survives a restart', () => {
       await new Promise(r => setTimeout(r, 0));
     });
 
-    // The pill used to light and toast "shuffled." over a no-op, and because
+    // The pill used to light and toast "Shuffled." over a no-op, and because
     // nothing resets it when tracks arrive later, the NEXT press took the
     // off-branch and did nothing visible: two presses to shuffle.
     expect(api.shuffleActive).toBe(false);

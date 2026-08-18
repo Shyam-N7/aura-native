@@ -17,28 +17,28 @@ import { fonts, label } from '../theme/tokens';
 const FEATURES = [
   {
     icon: 'heart',
-    title: 'double-tap to like',
-    line: 'tap the cover twice on the player.',
+    title: 'Double-tap to like',
+    line: 'Tap the cover twice on the player.',
   },
   {
     icon: 'next',
-    title: 'swipe to change song',
-    line: 'flick the cover left for next, right to go back.',
+    title: 'Swipe to change song',
+    line: 'Flick the cover left for next, right to go back.',
   },
   {
     icon: 'lyrics',
-    title: 'karaoke',
-    line: 'open lyrics and tap karaoke to sing along.',
+    title: 'Karaoke',
+    line: 'Open lyrics and tap karaoke to sing along.',
   },
   {
     icon: 'quality',
-    title: 'auto quality',
-    line: 'picks the right stream for your signal — in the quality picker.',
+    title: 'Auto quality',
+    line: 'Picks the right stream for your signal — in the quality picker.',
   },
   {
     icon: 'cog',
-    title: 'volume leveling',
-    line: 'keeps songs at an even loudness — in you, under settings.',
+    title: 'Volume leveling',
+    line: 'Keeps songs at an even loudness — in You, under Settings.',
   },
 ];
 
@@ -67,9 +67,9 @@ export function WhatsNewSheet() {
 
   return (
     <Sheet onClose={closeWhatsNew} closeLabel="close what's new">
-      <Text style={[styles.title, { color: t.ink }]}>what's new</Text>
+      <Text style={[styles.title, { color: t.ink }]}>What's new</Text>
       <Text style={[label(9.5), styles.sub, { color: t.inkFaint }]}>
-        fresh in this update
+        Fresh in this update
       </Text>
       {FEATURES.map(f => (
         <View key={f.title} style={styles.row}>
@@ -94,7 +94,7 @@ export function WhatsNewSheet() {
           pressed && styles.pressed,
         ]}
       >
-        <Text style={[styles.gotItText, { color: t.bg }]}>got it</Text>
+        <Text style={[styles.gotItText, { color: t.bg }]}>Got it</Text>
       </Pressable>
     </Sheet>
   );

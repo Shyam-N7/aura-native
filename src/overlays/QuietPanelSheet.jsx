@@ -75,10 +75,10 @@ export function QuietPanelSheet() {
 
   return (
     <Sheet onClose={closeQuietPanel} closeLabel="close notifications">
-      <Text style={[styles.title, { color: t.ink }]}>for you</Text>
+      <Text style={[styles.title, { color: t.ink }]}>For you</Text>
       {quiet && (
         <Text style={[styles.empty, { color: t.inkSoft }]}>
-          quiet for now.
+          Quiet for now.
         </Text>
       )}
       {feed.resume && (

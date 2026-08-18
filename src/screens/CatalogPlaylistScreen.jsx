@@ -56,7 +56,7 @@ const CatalogRow = React.memo(function CatalogRow({
             extras: [
               {
                 icon: 'eye-off',
-                label: "don't show this again",
+                label: "Don't show this again",
                 danger: true,
                 onPress: () => onHide(track),
               },
@@ -147,9 +147,9 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
       );
       // Home must not serve it again this session.
       invalidateHomeCache('autoPlaylists', 'quickPicks');
-      showToast("hidden — aura won't pick this for you again. undo in settings.");
+      showToast("Hidden — AURA won't pick this for you again. Undo in settings.");
     } catch {
-      showToast("couldn't hide that — try again.");
+      showToast("Couldn't hide that — try again.");
     }
   }, []);
 
@@ -209,10 +209,10 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
           <View style={styles.head}>
             <CrumbBack onPress={() => navigation.goBack()} />
 
-        {status === 'loading' && <AuraLoader label="loading playlist" />}
+        {status === 'loading' && <AuraLoader label="Loading playlist" />}
         {status === 'error' && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            couldn't load — {hit.error}
+            Couldn't load — {hit.error}
           </Text>
         )}
 
@@ -220,7 +220,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
           <>
             {!!ownerName && (
               <Text style={[label(10), { color: t.inkFaint }]}>
-                shared by {ownerName}
+                Shared by {ownerName}
               </Text>
             )}
             <Text style={[type.queueHero, { color: t.ink }]}>

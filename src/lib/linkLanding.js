@@ -80,13 +80,13 @@ export function classifyLink(url) {
 export function landingLabel(ev) {
   switch (ev?.kind) {
     case 'moment':
-      return `starting from ${fmtTime(ev.at)}`;
+      return `Starting from ${fmtTime(ev.at)}`;
     case 'song':
-      return 'opening the song';
+      return 'Opening the song';
     case 'playlist':
-      return 'opening the playlist';
+      return 'Opening the playlist';
     case 'invite':
-      return 'joining the playlist';
+      return 'Joining the playlist';
     default:
       return '';
   }

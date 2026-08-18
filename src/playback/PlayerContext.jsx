@@ -224,7 +224,7 @@ export function PlayerProvider({ children }) {
             // staring at.
             report(err2, 'player.play-op-failed');
             setIsPlaying(false);
-            showToast("couldn't play — tap play to try again.");
+            showToast("Couldn't play — tap play to try again.");
           }
         }
       }),
@@ -582,7 +582,7 @@ export function PlayerProvider({ children }) {
             if (pauseOnFail) {
               setIsPlaying(false);
               enqueueOp(() => engine.pause());
-              showToast("couldn't find the next song.");
+              showToast("Couldn't find the next song.");
             } else {
               // A next-press already flipped isPlaying on — resume the current
               // (paused) track so state and audio agree, like web's play/pause
@@ -871,7 +871,7 @@ export function PlayerProvider({ children }) {
     }
     setShuffleActive(false);
     preShuffleRef.current = null;
-    showToast('queue cleared.');
+    showToast('Queue cleared.');
   }, [applyAndSync]);
 
   // Context-menu "play next" / "add to queue" (web enqueueNext/enqueueLast).
@@ -932,7 +932,7 @@ export function PlayerProvider({ children }) {
       if (restored) {
         preShuffleRef.current = null;
         setShuffleActive(false);
-        showToast('back in order.');
+        showToast('Back in order.');
         return;
       }
       // Nothing to restore TO — the queue was replaced or shrank below two
@@ -947,7 +947,7 @@ export function PlayerProvider({ children }) {
       // which left the queue shuffled, the pill reading off, and the original
       // order gone for good. Keep both so the next press can try again, and
       // say so rather than looking like a dead button.
-      showToast("couldn't put the queue back just now.");
+      showToast("Couldn't put the queue back just now.");
       return;
     }
     const q = queueRef.current;
@@ -972,7 +972,7 @@ export function PlayerProvider({ children }) {
     if (applyAndSync(q, base => model.shuffleUpcoming(base, deal()))) {
       preShuffleRef.current = q.tracks;
       setShuffleActive(true);
-      showToast('shuffled.');
+      showToast('Shuffled.');
     }
   }, [applyAndSync, shuffleActive]);
 
@@ -1100,7 +1100,7 @@ export function PlayerProvider({ children }) {
     engine.setAltClearedListener(() => {
       musicOnlyRef.current = false;
       setMusicOnlyState(false);
-      showToast('back to the full song.');
+      showToast('Back to the full song.');
     });
     return () => engine.setAltClearedListener(null);
   }, []);
@@ -1299,7 +1299,7 @@ export function PlayerProvider({ children }) {
         flushPosition();
         enqueueOp(() => engine.pause());
         showToast(
-          kind === 'end-of-set' ? 'set ended · sleeping.' : 'sleep timer · paused.',
+          kind === 'end-of-set' ? 'Set ended · sleeping.' : 'Sleep timer · paused.',
         );
       }),
     [enqueueOp, flushPosition],
