@@ -766,14 +766,17 @@ const styles = StyleSheet.create({
   emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
   menuScrim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    // The popup family's one scrim + one radius — the same pair ConfirmPopup
+    // and PickerPopup wear, so a menu and the question it leads to are
+    // visibly the same kind of surface.
+    backgroundColor: 'rgba(10, 8, 6, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 28,
   },
   menuCard: {
     alignSelf: 'stretch',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     padding: 16,
     gap: 2,

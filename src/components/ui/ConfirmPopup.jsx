@@ -8,6 +8,17 @@ import { ConfirmCard } from './ConfirmCard';
 // same one ConfirmSheet renders; this file owns only the container — a card
 // floated over a scrim, on a plain RN Modal fade (no reanimated
 // entering/exiting: the documented 4.2.3/Fabric abort class).
+//
+// The house rule the two confirm motions now split on: a centered fade means
+// STOP AND DECIDE (a destructive ask — the surface arrives where the eye
+// already is and blocks), a bottom sheet means CHOOSE AMONG OPTIONS (it rises
+// under the thumb and can be flicked away). This file is the fade half, so it
+// keeps the Modal's plain fade; the sheet half is ConfirmSheet via
+// lib/confirm.
+//
+// The scrim/radius here are the popup family's shared chrome — ConfirmPopup,
+// PickerPopup and PlaylistsScreen's MenuPopup all wear rgba(10,8,6,0.45) and
+// radius 20.
 export function ConfirmPopup({
   visible,
   title,

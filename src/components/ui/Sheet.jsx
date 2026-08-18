@@ -111,8 +111,8 @@ export function Sheet({
     closing.current = true;
     // The rise must not fight the fall if the sheet is dismissed mid-open.
     cancelAnimation(p);
-    out.value = withTiming(1, { duration: DUR.dot, easing: EASE.exit });
-    closeTimer.current = setTimeout(onClose, DUR.dot);
+    out.value = withTiming(1, { duration: DUR.cardOut, easing: EASE.exit });
+    closeTimer.current = setTimeout(onClose, DUR.cardOut);
   }, [animated, reduced, onClose, out, p]);
 
   // Nothing outlives the unmount: every value is cancelled where it stands
