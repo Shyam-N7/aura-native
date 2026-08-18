@@ -9,12 +9,18 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { Keyframe } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { fonts, radii } from '../theme/tokens';
-import { DUR } from '../theme/motion';
+import { DUR, EASE } from '../theme/motion';
 import { showToast } from '../lib/toast';
 import { relTime } from '../lib/time';
 import {
@@ -72,15 +78,23 @@ function Head({ kicker, title, sub }) {
   );
 }
 
-function LinkText({ onPress, testID, children }) {
+// A real Pressable, not a bare <Text onPress>: only a view honours hitSlop on
+// Android, and the padding (cancelled by the matching negative margin, so the
+// link sits exactly where it did) carries the touch box past 48dp.
+function LinkText({ onPress, testID, small, children }) {
   const { t } = useTheme();
   return (
-    <Text
+    <Pressable
+      accessibilityRole="link"
+      hitSlop={8}
       onPress={onPress}
       testID={testID}
-      style={[styles.link, { color: t.accent }]}>
-      {children}
-    </Text>
+      style={({ pressed }) => [styles.linkHit, pressed && styles.pressed]}>
+      <Text
+        style={[styles.link, small && styles.linkSmall, { color: t.accent }]}>
+        {children}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -131,6 +145,33 @@ function Strength({ score }) {
 /*  'forgot-code' / 'forgot-newpw'. Success needs no callback — the auth   */
 /*  lib persists the session and notifies App via subscribeAuth.           */
 /* ══════════════════════════════════════════════════════════════════════ */
+// The web's auth-rise, verbatim: the card settles up into place over 600ms —
+// opacity, an 18px lift and a hair of scale on one shared value, cancelled on
+// unmount. Never the Keyframe entering= it replaces: entering=/exiting= is the
+// pair reanimated 4.2.3/Fabric aborts natively on when a view is removed
+// mid-flight (the house rule documented across the churny views). The curve is
+// the house aura-rise settle the Keyframe could only interpolate flatly.
+function AuthRise({ children }) {
+  const reduced = useReducedMotion();
+  const p = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) {
+      p.value = 1;
+      return undefined;
+    }
+    p.value = withTiming(1, { duration: DUR.authRise, easing: EASE.settle });
+    return () => cancelAnimation(p);
+  }, [reduced, p]);
+  const style = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: [
+      { translateY: (1 - p.value) * 18 },
+      { scale: 0.985 + p.value * 0.015 },
+    ],
+  }));
+  return <Animated.View style={[styles.card, style]}>{children}</Animated.View>;
+}
+
 export default function AuthScreen() {
   const { t } = useTheme();
   const [mode, setMode] = useState('signin');
@@ -455,12 +496,14 @@ export default function AuthScreen() {
           Resend code in {resendCooldown}s
         </Text>
       ) : (
-        <Text style={[styles.footText, { color: t.inkFaint }]}>
-          Didn’t get it?{' '}
-          <LinkText testID="auth-resend" onPress={handleResendCode}>
+        <View style={styles.footLine}>
+          <Text style={[styles.footText, { color: t.inkFaint }]}>
+            Didn’t get it?
+          </Text>
+          <LinkText small testID="auth-resend" onPress={handleResendCode}>
             Resend code.
           </LinkText>
-        </Text>
+        </View>
       )}
     </View>
   );
@@ -491,7 +534,7 @@ export default function AuthScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled">
           <Text style={styles.wordmark}>AURA</Text>
-          <Animated.View entering={authRise} style={styles.card}>
+          <AuthRise>
             <Glass radius={radii.auth} style={styles.cardGlass}>
             <View style={styles.cardInner}>
             {/* ──────────── Sign in / sign up ──────────── */}
@@ -562,15 +605,16 @@ export default function AuthScreen() {
                   disabled={pending}
                   onPress={handleSubmit}
                 />
-                <View style={styles.foot}>
+                <View style={[styles.foot, styles.footLine]}>
                   <Text style={[styles.footText, { color: t.inkFaint }]}>
-                    {isSignup ? 'Have an account? ' : 'New to AURA? '}
-                    <LinkText
-                      testID="auth-switch-mode"
-                      onPress={() => switchMode(isSignup ? 'signin' : 'signup')}>
-                      {isSignup ? 'Sign in instead.' : 'Create an account.'}
-                    </LinkText>
+                    {isSignup ? 'Have an account?' : 'New to AURA?'}
                   </Text>
+                  <LinkText
+                    small
+                    testID="auth-switch-mode"
+                    onPress={() => switchMode(isSignup ? 'signin' : 'signup')}>
+                    {isSignup ? 'Sign in instead.' : 'Create an account.'}
+                  </LinkText>
                 </View>
               </>
             )}
@@ -779,18 +823,12 @@ export default function AuthScreen() {
             )}
             </View>
             </Glass>
-          </Animated.View>
+          </AuthRise>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-// Web auth-rise: 600ms settle up into place.
-const authRise = new Keyframe({
-  0: { opacity: 0, transform: [{ translateY: 18 }, { scale: 0.985 }] },
-  100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
-}).duration(DUR.authRise);
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -831,7 +869,26 @@ const styles = StyleSheet.create({
   },
   submitText: { fontFamily: fonts.semibold, fontSize: 15 },
   link: { fontFamily: fonts.semibold },
+  linkSmall: { fontSize: 13 },
+  // Padding widens the touch box; the equal negative margin hands the space
+  // back to the layout, so nothing moves.
+  linkHit: {
+    marginHorizontal: -10,
+    marginVertical: -10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  pressed: { opacity: 0.6 },
   foot: { alignItems: 'center', marginTop: 16 },
+  // The sentence that used to nest the link inline: a row keeps the same line
+  // while letting the link be its own (touchable) view.
+  footLine: {
+    alignItems: 'center',
+    columnGap: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
   footText: { fontFamily: fonts.regular, fontSize: 13 },
   strength: {
     alignItems: 'center',

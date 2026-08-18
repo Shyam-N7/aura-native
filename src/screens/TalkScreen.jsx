@@ -296,6 +296,7 @@ export default function TalkScreen() {
             accessibilityLabel={s}
             onPress={() => send(s)}
             disabled={thinking}
+            hitSlop={CHIP_HIT}
             style={[
               styles.chip,
               { borderColor: t.line },
@@ -337,6 +338,12 @@ export default function TalkScreen() {
     </View>
   );
 }
+
+// The chips are the smallest control in the app: 10dp of text inside 5dp of
+// padding is ~22dp tall. Growing the padding would fatten a bordered pill the
+// design deliberately keeps small, so the extra reach is pure hitSlop —
+// 22 + 28 vertical = ~50dp, 20dp wider than the pill horizontally.
+const CHIP_HIT = { top: 14, bottom: 14, left: 10, right: 10 };
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

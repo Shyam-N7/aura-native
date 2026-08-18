@@ -130,7 +130,7 @@ function PlayerMenuSheet({
     return (
       <Sheet animated={false} onClose={onClose} closeLabel="close player menu">
         <Text style={[styles.menuTitle, { color: t.ink }]}>
-          how gestures work
+          How gestures work
         </Text>
         {GUIDE.map(g => (
           <View key={g.how} style={styles.guideRow}>
@@ -1172,7 +1172,8 @@ export function PlayerSheet() {
                   player.shuffleActive ? 'Shuffle off' : 'Shuffle'
                 }
                 onPress={player.toggleShuffle}
-                hitSlop={8}
+                hitSlop={10}
+                style={styles.modBtn}
               >
                 <Icon
                   name="shuffle"
@@ -1184,7 +1185,8 @@ export function PlayerSheet() {
                 accessibilityRole="button"
                 accessibilityLabel={`repeat ${player.repeat}`}
                 onPress={player.cycleRepeat}
-                hitSlop={8}
+                hitSlop={10}
+                style={styles.modBtn}
               >
                 <Icon
                   name={player.repeat === 'one' ? 'repeat-one' : 'repeat'}
@@ -1196,7 +1198,8 @@ export function PlayerSheet() {
                 accessibilityRole="button"
                 accessibilityLabel="sleep timer"
                 onPress={openSleepTimer}
-                hitSlop={8}
+                hitSlop={10}
+                style={styles.modBtn}
               >
                 <Icon
                   name="moon"
@@ -1208,7 +1211,8 @@ export function PlayerSheet() {
                 accessibilityRole="button"
                 accessibilityLabel="lyrics"
                 onPress={() => player.ui?.openLyrics?.()}
-                hitSlop={8}
+                hitSlop={10}
+                style={styles.modBtn}
               >
                 <Icon name="lyrics" size={19} color={t.inkFaint} />
               </PressScale>
@@ -1417,6 +1421,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 4,
   },
+  // The four modifier icons are 19-20dp of glyph. `padding` grows the touch
+  // box and the equal negative `margin` gives the space straight back, so the
+  // row lays out exactly as before: 20 + 16 padding + 20 hitSlop = 56dp.
+  modBtn: { padding: 8, margin: -8 },
   qualityPill: {
     flexDirection: 'row',
     alignItems: 'center',

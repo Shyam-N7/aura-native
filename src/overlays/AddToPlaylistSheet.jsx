@@ -169,7 +169,8 @@ function PickerBody({ tracks, onPicked }) {
                 setCreating(false);
                 setNewName('');
               }}
-              style={({ pressed }) => pressed && styles.pressed}
+              hitSlop={10}
+              style={({ pressed }) => [styles.createHit, pressed && styles.pressed]}
             >
               <Text style={[styles.createBtn, { color: t.inkSoft }]}>
                 Cancel
@@ -180,7 +181,8 @@ function PickerBody({ tracks, onPicked }) {
               accessibilityLabel="create"
               disabled={!newName.trim()}
               onPress={submitNew}
-              style={({ pressed }) => pressed && styles.pressed}
+              hitSlop={10}
+              style={({ pressed }) => [styles.createHit, pressed && styles.pressed]}
             >
               <Text
                 style={[
@@ -331,5 +333,9 @@ const styles = StyleSheet.create({
     gap: 22,
     paddingVertical: 4,
   },
+  // ~17dp of text is not a button. Padding grows the touch box and the equal
+  // negative margin returns the space, so the create row keeps its height:
+  // 17 + 20 padding + 20 hitSlop = 57dp.
+  createHit: { paddingVertical: 10, marginVertical: -10 },
   createBtn: { fontFamily: fonts.medium, fontSize: 14.5 },
 });

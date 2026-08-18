@@ -318,8 +318,8 @@ export default function YouTubeImportScreen({ navigation }) {
               accessibilityRole="button"
               accessibilityLabel={COPY.cancel.action}
               onPress={abandon}
-              hitSlop={8}
-              style={({ pressed }) => pressed && styles.pressed}
+              hitSlop={10}
+              style={({ pressed }) => [styles.textHit, pressed && styles.pressed]}
             >
               <Text style={[styles.quietAction, { color: t.inkSoft }]}>
                 {COPY.cancel.action}
@@ -564,8 +564,8 @@ function ConfirmState({ preview, starting, linkError, onBack, onStart }) {
           accessibilityRole="button"
           accessibilityLabel={COPY.confirm.exactMixTitle}
           onPress={() => setExactOpen(o => !o)}
-          hitSlop={6}
-          style={({ pressed }) => pressed && styles.pressed}
+          hitSlop={10}
+          style={({ pressed }) => [styles.textHit, pressed && styles.pressed]}
         >
           <Text style={[label(9.5), { color: t.accent }]}>
             {COPY.confirm.exactMixTitle}
@@ -582,7 +582,8 @@ function ConfirmState({ preview, starting, linkError, onBack, onStart }) {
           accessibilityLabel={COPY.confirm.cancel}
           disabled={starting}
           onPress={onBack}
-          style={({ pressed }) => pressed && styles.pressed}
+          hitSlop={10}
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
         >
           <Text style={[styles.quietAction, { color: t.inkSoft }]}>
             {COPY.confirm.cancel}
@@ -593,7 +594,8 @@ function ConfirmState({ preview, starting, linkError, onBack, onStart }) {
           accessibilityLabel={COPY.confirm.action}
           disabled={starting}
           onPress={onStart}
-          style={({ pressed }) => pressed && styles.pressed}
+          hitSlop={10}
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
         >
           <Text
             style={[
@@ -1062,7 +1064,8 @@ function ProgressState({ job, pollError, stalled, onResume, pill }) {
               accessibilityRole="button"
               accessibilityLabel={COPY.progress.resume}
               onPress={onResume}
-              style={({ pressed }) => pressed && styles.pressed}
+              hitSlop={10}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
             >
               <Text style={[styles.goAction, { color: t.accent }]}>
                 {COPY.progress.resume}
@@ -1086,7 +1089,8 @@ function FailedState({ job, onRetry, onClose }) {
           accessibilityRole="button"
           accessibilityLabel={COPY.done.later}
           onPress={onClose}
-          style={({ pressed }) => pressed && styles.pressed}
+          hitSlop={10}
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
         >
           <Text style={[styles.quietAction, { color: t.inkSoft }]}>
             {COPY.done.later}
@@ -1099,7 +1103,8 @@ function FailedState({ job, onRetry, onClose }) {
             accessibilityRole="button"
             accessibilityLabel={COPY.confirm.action}
             onPress={onRetry}
-            style={({ pressed }) => pressed && styles.pressed}
+            hitSlop={10}
+            style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
           >
             <Text style={[styles.goAction, { color: t.accent }]}>
               {COPY.confirm.action}
@@ -1197,7 +1202,8 @@ function DoneState({ job, onReview, onOpen, onLater }) {
             accessibilityRole="button"
             accessibilityLabel={COPY.done.later}
             onPress={onLater}
-            style={({ pressed }) => pressed && styles.pressed}
+            hitSlop={10}
+            style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
           >
             <Text style={[styles.goAction, { color: t.accent }]}>
               {COPY.done.later}
@@ -1209,7 +1215,8 @@ function DoneState({ job, onReview, onOpen, onLater }) {
               accessibilityRole="button"
               accessibilityLabel={COPY.done.open}
               onPress={onOpen}
-              style={({ pressed }) => pressed && styles.pressed}
+              hitSlop={10}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
             >
               <Text style={[styles.quietAction, { color: t.inkSoft }]}>
                 {COPY.done.open}
@@ -1220,7 +1227,8 @@ function DoneState({ job, onReview, onOpen, onLater }) {
                 accessibilityRole="button"
                 accessibilityLabel={COPY.done.reviewAction}
                 onPress={onReview}
-                style={({ pressed }) => pressed && styles.pressed}
+                hitSlop={10}
+                style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
               >
                 <Text style={[styles.goAction, { color: t.accent }]}>
                   {COPY.done.reviewAction}
@@ -1346,8 +1354,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 22,
-    paddingVertical: 10,
   },
+  // The row's paddingVertical moved onto the buttons themselves — same 10dp of
+  // space, same row height, but now it belongs to the touch target:
+  // 17 + 20 padding + 20 hitSlop = 57dp.
+  actionBtn: { paddingVertical: 10 },
+  // Same idea where the padding cannot come from a parent: the negative margin
+  // hands the space back so nothing reflows.
+  textHit: { paddingVertical: 10, marginVertical: -10 },
   quietAction: { fontFamily: fonts.medium, fontSize: 14.5 },
   goAction: { fontFamily: fonts.medium, fontSize: 14.5 },
 });

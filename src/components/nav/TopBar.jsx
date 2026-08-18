@@ -299,6 +299,7 @@ export function TopBar({ activeTab, goTab }) {
             accessibilityLabel="switch theme"
             accessibilityState={pref === 'auto' ? { selected: true } : {}}
             onPress={cycleTheme}
+            hitSlop={8}
             style={[
               styles.chip,
               { borderColor: pref === 'auto' ? t.accent : t.line },
@@ -310,6 +311,7 @@ export function TopBar({ activeTab, goTab }) {
             accessibilityRole="button"
             accessibilityLabel="open search"
             onPress={onSearchPress}
+            hitSlop={8}
             style={[styles.chip, { borderColor: t.line }]}
           >
             <Icon name="search" size={16} color={t.inkSoft} />
@@ -318,6 +320,7 @@ export function TopBar({ activeTab, goTab }) {
             accessibilityRole="button"
             accessibilityLabel="open profile"
             onPress={() => goTab?.('You')}
+            hitSlop={8}
             style={[styles.profile, { backgroundColor: t.accentSoft }]}
           >
             <Text style={[styles.profileText, { color: t.accent }]}>
@@ -416,6 +419,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // 32dp of chip + 8dp hitSlop on every side = the 48dp Android minimum,
+  // without the pixel-shifting a padding bump would cause in this fixed row.
   chip: {
     width: 32,
     height: 32,
