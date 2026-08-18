@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceFlatList } from '../components/ui/Bounce';
+import { ROW_LAYOUT } from '../components/ui/RowArrive';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -32,10 +32,6 @@ import { countRender } from '../lib/renderCount';
 // plus find-in-list + sort (the chosen sort is remembered).
 const SORT_KEY = LIKED_SORT_KEY;
 const SORTS = LIKED_SORTS;
-
-const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
-  ReduceMotion.System,
-);
 
 // One liked row, memoized.
 //
@@ -268,6 +264,8 @@ export default function LikedScreen({ navigation }) {
         data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}
+        // The list mutates in place — an unlike drops a row and a re-sort
+        // shuffles them — so the survivors slide to their new slots.
         itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
         refreshControl={pull.control}

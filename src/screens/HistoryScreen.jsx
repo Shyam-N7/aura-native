@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceSectionList } from '../components/ui/Bounce';
+import { ROW_LAYOUT } from '../components/ui/RowArrive';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -389,6 +390,11 @@ export default function HistoryScreen({ navigation }) {
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         stickySectionHeadersEnabled={false}
+        // Load-more appends a page onto the same list rather than replacing
+        // it, so the rows already on screen settle instead of jumping when the
+        // next 80 plays land. (No arrive animation: the appended page is
+        // requested, not streamed — it is already where the user is looking.)
+        itemLayoutAnimation={ROW_LAYOUT}
         refreshControl={pull.control}
         {...LONG_LIST}
         contentContainerStyle={[

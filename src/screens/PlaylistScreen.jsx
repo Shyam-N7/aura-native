@@ -8,20 +8,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, {
-  LinearTransition,
-  ReduceMotion,
-  cancelAnimation,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { BounceFlatList } from '../components/ui/Bounce';
 import { LONG_LIST } from '../lib/listWindow';
+import { ROW_LAYOUT, RowArrive } from '../components/ui/RowArrive';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -68,7 +59,6 @@ import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
-import { EASE } from '../theme/motion';
 import { useBackToTop } from '../hooks/useBackToTop';
 import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
@@ -94,44 +84,6 @@ const SORT_KEY = PLAYLIST_SORT_KEY;
 const SORTS = PLAYLIST_SORTS;
 
 const POLL_MS = 15000;
-
-// Row settling while the stream is live — LikedScreen's exact recipe. Armed
-// ONLY while streaming: the layout-animation machinery runs a per-cell pass
-// every frame while enabled (the QueueSheet drag jitter finding), and a
-// static playlist should pay nothing.
-const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
-  ReduceMotion.System,
-);
-
-// One arriving row's materialization: the Arrive idiom (YouScreen.jsx) — a
-// shared value cancelled on unmount, never an entering= animation (the
-// reanimated 4.2.3/Fabric abort class). Stagger capped so a big batch reads
-// as a quick cascade, not a minute of drip.
-function RowArrive({ animate, i = 0, children }) {
-  const reduced = useReducedMotion();
-  const on = animate && !reduced;
-  const v = useSharedValue(on ? 0 : 1);
-  useEffect(() => {
-    if (!on) {
-      v.value = 1;
-      return undefined;
-    }
-    v.value = 0;
-    v.value = withDelay(
-      70 * Math.min(i, 6),
-      withTiming(1, { duration: 380, easing: EASE.enter }),
-    );
-    return () => cancelAnimation(v);
-  }, [on, i, v]);
-  const style = useAnimatedStyle(() => ({
-    opacity: v.value,
-    transform: [{ translateY: (1 - v.value) * 14 }],
-  }));
-  // Always the same tree shape: an `animate` flip must restyle, never remount
-  // the row underneath (a remount would blink every settled row when the
-  // stream ends).
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
 
 // Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
 // (`onPress={() => playFrom(i)}`), a fresh object (the `menu={{extras: …}}`
@@ -843,6 +795,9 @@ export default function PlaylistScreen({ route, navigation }) {
         renderItem={renderRow}
         keyExtractor={item => item.id}
         {...LONG_LIST}
+        // Armed ONLY while streaming: ROW_LAYOUT costs a per-cell pass every
+        // frame while enabled (see components/ui/RowArrive), and a settled
+        // playlist never reorders under the user.
         itemLayoutAnimation={streaming ? ROW_LAYOUT : undefined}
         ListFooterComponent={footer}
         refreshControl={pull.control}

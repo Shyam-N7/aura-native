@@ -8,16 +8,11 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  cancelAnimation,
   LinearTransition,
   ReduceMotion,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withDelay,
-  withTiming,
 } from 'react-native-reanimated';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { RowArrive } from '../components/ui/RowArrive';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
@@ -67,7 +62,6 @@ import { CountUp } from '../components/ui/CountUp';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label } from '../theme/tokens';
-import { EASE } from '../theme/motion';
 import { cleanTitle } from '../utils/title';
 import { PRIMARY_LANGUAGES } from '../data/languages';
 import { useBackToTop } from '../hooks/useBackToTop';
@@ -91,34 +85,6 @@ let sessionShelf = null;
 const CHIP_LAYOUT = LinearTransition.duration(280).reduceMotion(
   ReduceMotion.System,
 );
-
-// Staggered rise-in for the cards below — each waits its turn, so opening
-// the tab reads as the library composing itself rather than popping on.
-// Driven by a plain animated style, NOT an `entering` layout animation: a
-// session that expires under us tears the whole navigator down (auth 401 →
-// clearSession → Shell swaps to the sign-in screen), and reanimated 4.2.3 on
-// Fabric aborts natively when a view is removed mid-entering. A shared value
-// is simply cancelled on unmount.
-function Arrive({ i = 0, children }) {
-  const reduced = useReducedMotion();
-  const p = useSharedValue(reduced ? 1 : 0);
-  useEffect(() => {
-    if (reduced) {
-      p.value = 1;
-      return undefined;
-    }
-    p.value = withDelay(
-      70 * i,
-      withTiming(1, { duration: 380, easing: EASE.enter }),
-    );
-    return () => cancelAnimation(p);
-  }, [i, p, reduced]);
-  const style = useAnimatedStyle(() => ({
-    opacity: p.value,
-    transform: [{ translateY: (1 - p.value) * 14 }],
-  }));
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
 
 // Overlapping cover fan — the closed-shelf "peek" (three 26px arts).
 function PeekFan({ tracks }) {
@@ -571,9 +537,12 @@ export default function YouScreen({ navigation }) {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* The cards below rise in one after another (the shared RowArrive,
+              same stagger as an importing playlist's rows), so opening the tab
+              reads as the library composing itself rather than popping on. */}
           {/* Your year — pinned open at the top: the listener's data is just
               there on arrival, no action needed. */}
-          <Arrive i={0}>
+          <RowArrive i={0}>
           <View
             style={[
               styles.yearCard,
@@ -598,7 +567,7 @@ export default function YouScreen({ navigation }) {
               </>
             )}
           </View>
-          </Arrive>
+          </RowArrive>
 
           {loaded && summary && summary.tracksPlayed === 0 && (
             <Text style={[styles.allEmpty, { color: t.inkSoft }]}>
@@ -607,7 +576,7 @@ export default function YouScreen({ navigation }) {
           )}
 
           {/* The written-about-you pair: journal + sonic dna. */}
-          <Arrive i={1}>
+          <RowArrive i={1}>
           <View style={styles.duoRow}>
             <PressScale
               accessibilityRole="button"
@@ -640,10 +609,10 @@ export default function YouScreen({ navigation }) {
               </Text>
             </PressScale>
           </View>
-          </Arrive>
+          </RowArrive>
 
           {/* Mood bridges — gradual paths between feelings. */}
-          <Arrive i={2}>
+          <RowArrive i={2}>
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="mood bridges"
@@ -662,14 +631,14 @@ export default function YouScreen({ navigation }) {
               read you.
             </Text>
           </PressScale>
-          </Arrive>
+          </RowArrive>
 
           {!loaded ? (
             <View style={styles.shelvesLoading}>
               <AuraLoader label="Opening your library" />
             </View>
           ) : (
-            <Arrive i={3}>
+            <RowArrive i={3}>
             <View style={styles.shelves}>
               <Shelf
                 title="Liked songs"
@@ -1438,7 +1407,7 @@ export default function YouScreen({ navigation }) {
                 </Text>
               </Shelf>
             </View>
-            </Arrive>
+            </RowArrive>
           )}
 
           {/* Identity chip — you sign the corner of your own screen.
