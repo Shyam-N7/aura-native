@@ -17,7 +17,7 @@ import { useAppActive } from '../../hooks/useAppActive';
 import { useNavFocused } from '../../hooks/useNavFocused';
 import { Goo } from '../ui/Goo';
 import { Icon } from '../Icon';
-import { fonts, label } from '../../theme/tokens';
+import { label, radii, type } from '../../theme/tokens';
 
 // Find-in-list + sort for track collections (liked songs, playlist details).
 // One morphing row: the sort options live in a gooey segmented slider — the
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   },
   track: {
     flex: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -299,15 +299,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 9,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
   },
-  input: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    paddingVertical: 0,
-  },
+  input: { ...type.body, flex: 1, paddingVertical: 0 },
   // 32dp of button + 8dp hitSlop on every side = the 48dp floor, without
   // growing the 44dp row the field sits in.
   clearBtn: {

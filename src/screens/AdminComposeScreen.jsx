@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import { RULE_WIDTH } from '../components/ui/Rule';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { PageHeader } from '../components/detail/DetailChassis';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { adminPushReach, adminPushSend } from '../lib/push';
 import { API_BASE, getUser, subscribeAuth } from '../lib/auth';
 import { showToast } from '../lib/toast';
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
   fields: { paddingHorizontal: 22, paddingBottom: 16 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontFamily: fonts.regular,
@@ -485,11 +486,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   rowMeta: { flex: 1, paddingRight: 12, gap: 2 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   rowCaption: { fontFamily: fonts.regular, fontSize: 12 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
   sendBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: RULE_WIDTH,
     paddingHorizontal: 22,
     paddingTop: 10,
     paddingBottom: DOCK_CLEARANCE + 8,
@@ -497,7 +498,7 @@ const styles = StyleSheet.create({
   },
   send: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     alignItems: 'center',
     paddingVertical: 11,
   },

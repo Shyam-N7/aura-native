@@ -10,7 +10,7 @@ import {
 import { showToast } from '../lib/toast';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, type } from '../theme/tokens';
 
 // The listening-mode picker. Modes come from the server (user.modes: each
 // { key, label, explicitOff }); switching reseeds the home pool and retags
@@ -88,11 +88,7 @@ export function ModeSheet() {
 const styles = StyleSheet.create({
   title: { fontFamily: fonts.semibold, fontSize: 18 },
   sub: { marginTop: 3, marginBottom: 8 },
-  empty: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingVertical: 12,
-  },
+  empty: { ...type.caption, paddingVertical: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

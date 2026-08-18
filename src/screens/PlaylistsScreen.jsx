@@ -32,10 +32,11 @@ import { showToast } from '../lib/toast';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
+import { Rule } from '../components/ui/Rule';
 import { SheetRow } from '../components/ui/SheetRow';
 import { Icon } from '../components/Icon';
 import { usePullRefresh } from '../hooks/usePullRefresh';
-import { fonts, label, type } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // The playlists library, ported from web PlaylistsScreen: made-for-you mixes
 // (read-only, full suite), made by you (+ create), shared with you, and
@@ -722,7 +723,7 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
             </View>
           </View>
 
-          <View style={[styles.menuRule, { backgroundColor: t.line }]} />
+          <Rule style={styles.menuRule} />
 
           <SheetRow icon="play" label={playBusy ? 'Starting…' : 'Play'} disabled={playBusy} onPress={onPlay} />
           <SheetRow icon="arrow-right" label="Open playlist" onPress={onOpen} />
@@ -754,16 +755,16 @@ const styles = StyleSheet.create({
   },
   more: { paddingVertical: 10, paddingLeft: 8 },
   pressed: { opacity: 0.6 },
-  cover: { width: 50, height: 50, borderRadius: 8 },
+  cover: { width: 50, height: 50, borderRadius: radii.coverMd },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
   coverLetter: { fontFamily: fonts.semibold, fontSize: 20 },
   rowMeta: { flex: 1, minWidth: 0, gap: 3 },
-  rowName: { fontFamily: fonts.medium, fontSize: 15 },
+  rowName: type.rowTitle,
   hint: { paddingLeft: 62, marginTop: -4 },
   errorBlock: { paddingVertical: 10 },
   empty: { paddingVertical: 14, gap: 4 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
   menuScrim: {
     flex: 1,
     // The popup family's one scrim + one radius — the same pair ConfirmPopup
@@ -782,11 +783,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   menuHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12 },
-  menuRule: { height: 1, marginBottom: 6 },
-  create: { borderRadius: 12, padding: 14, gap: 9 },
+  menuRule: { marginBottom: 6 },
+  create: { borderRadius: radii.card, padding: 14, gap: 9 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontFamily: fonts.regular,

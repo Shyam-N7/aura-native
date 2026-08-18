@@ -39,7 +39,7 @@ import { useImportJob, progressOf } from '../hooks/useImportJob';
 import { COPY, copyForCode, isRetryable } from '../lib/ytImportCopy';
 import { YouTubeReview } from '../overlays/YouTubeReview';
 import { confirm } from '../lib/confirm';
-import { fonts, label, type } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // Paste a YouTube link, get an AURA playlist.
 // Ported from web src/screens/YouTubeImportScreen.jsx.
@@ -1275,31 +1275,31 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontFamily: fonts.regular,
     fontSize: 15,
   },
   hint: { fontFamily: fonts.regular, fontSize: 13 },
-  note: { borderRadius: 12, padding: 14, gap: 5 },
+  note: { borderRadius: radii.card, padding: 14, gap: 5 },
   noteWarn: { borderLeftWidth: 2 },
   noteTitle: { fontFamily: fonts.semibold, fontSize: 15 },
-  noteBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  noteBody: type.caption,
   summaryHead: { fontFamily: fonts.semibold, fontSize: 19 },
   ghosts: { gap: 9, paddingTop: 10 },
   ghost: { height: 42, borderRadius: 8 },
-  track: { height: 3, borderRadius: 999, overflow: 'hidden', marginTop: 6 },
+  track: { height: 3, borderRadius: radii.pill, overflow: 'hidden', marginTop: 6 },
   // Full width, scaled from the left — scaleX runs on the UI thread where a
   // percentage width cannot.
-  fill: { height: 3, borderRadius: 999, width: '100%', transformOrigin: 'left' },
+  fill: { height: 3, borderRadius: radii.pill, width: '100%', transformOrigin: 'left' },
   stage: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: 12,
   },
-  progressLine: { flex: 1, fontFamily: fonts.medium, fontSize: 15 },
+  progressLine: { ...type.rowTitle, flex: 1 },
   // Prose, not a MonoLabel: these strings run to 36 characters and the
   // uppercase label() register would make them shout over the line above.
   word: { fontFamily: fonts.regular, fontSize: 12.5, marginTop: -3 },
@@ -1314,18 +1314,18 @@ const styles = StyleSheet.create({
   phaseBody: { gap: 9 },
   // Wide enough for the 22px art disc; dots simply centre in the same space.
   gutter: { width: 24, alignItems: 'center', justifyContent: 'center' },
-  rowArt: { width: 22, height: 22, borderRadius: 999 },
+  rowArt: { width: 22, height: 22, borderRadius: radii.pill },
   reveal: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderRadius: 12,
+    borderRadius: radii.card,
     padding: 12,
   },
   pillWrap: { alignItems: 'center', gap: 6, marginVertical: 4 },
   openPill: {
     borderWidth: 1.5,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 12,
     paddingHorizontal: 26,
     overflow: 'hidden',
@@ -1336,24 +1336,24 @@ const styles = StyleSheet.create({
   },
   openPillText: { fontFamily: fonts.semibold, fontSize: 15 },
   pillHint: { textAlign: 'center' },
-  revealArt: { width: 48, height: 48, borderRadius: 8 },
+  revealArt: { width: 48, height: 48, borderRadius: radii.coverMd },
   revealRing: {
     position: 'absolute',
     left: -6,
     top: -6,
     width: 60,
     height: 60,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1.5,
   },
   revealWash: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 12,
+    borderRadius: radii.card,
   },
   revealArtFallback: { alignItems: 'center', justifyContent: 'center' },
   revealLetter: { fontFamily: fonts.semibold, fontSize: 19 },
   revealMeta: { flex: 1, minWidth: 0, gap: 1 },
-  revealTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  revealTitle: type.rowTitle,
   revealArtist: { fontFamily: fonts.regular, fontSize: 12.5 },
   revealWas: { fontFamily: fonts.regular, fontSize: 11, marginTop: 3 },
   fan: {
@@ -1364,12 +1364,12 @@ const styles = StyleSheet.create({
   },
   fanArt: { width: 64, height: 64, borderRadius: 10 },
   fanArtOverlap: { marginLeft: -26 },
-  dotDone: { width: 3, height: 3, borderRadius: 999 },
-  dotNow: { width: 5, height: 5, borderRadius: 999 },
+  dotDone: { width: 3, height: 3, borderRadius: radii.pill },
+  dotNow: { width: 5, height: 5, borderRadius: radii.pill },
   // Songs the drain has not reached yet, dimmed so the eye lands on the one
   // being worked rather than on the queue behind it.
   rowWaiting: { opacity: 0.45 },
-  rowTitle: { flex: 1, minWidth: 0, fontFamily: fonts.regular, fontSize: 13.5 },
+  rowTitle: { ...type.caption, flex: 1, minWidth: 0 },
   rowStatus: { flexShrink: 0 },
   actions: {
     flexDirection: 'row',

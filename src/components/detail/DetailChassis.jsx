@@ -6,7 +6,7 @@ import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
 import { openTrackActions } from '../../lib/trackActionsSheet';
 import { splitMatch } from '../../lib/listFilter';
-import { fonts, label, type } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 import { fmtTime, fmtRuntime } from '../../utils/fmtTime';
 import { countRender } from '../../lib/renderCount';
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 9,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingLeft: 7,
     paddingRight: 18,
     paddingVertical: 7,
@@ -266,13 +266,7 @@ const styles = StyleSheet.create({
     paddingVertical: ROW_PAD_V,
   },
   pressed: { opacity: 0.6 },
-  idx: {
-    width: 22,
-    fontSize: 11,
-    textAlign: 'center',
-    fontFamily: fonts.regular,
-    fontVariant: ['tabular-nums'],
-  },
+  idx: { ...type.time, width: 22, textAlign: 'center' },
   main: {
     flex: 1,
     flexDirection: 'row',
@@ -280,6 +274,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   meta: { flex: 1, minWidth: 0, gap: 3 },
-  title: { fontFamily: fonts.medium, fontSize: 15 },
+  title: type.rowTitle,
   more: { paddingVertical: 8, paddingLeft: 2 },
 });

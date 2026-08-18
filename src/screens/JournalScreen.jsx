@@ -11,9 +11,10 @@ import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PressScale } from '../components/ui/PressScale';
+import { RULE_WIDTH } from '../components/ui/Rule';
 import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii } from '../theme/tokens';
 
 // Ported from web DesktopJournal.jsx: the private listening journal — one
 // auto-written entry per listening day. The web renders entry.tracks as track
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   entry: {
-    borderTopWidth: 1,
+    borderTopWidth: RULE_WIDTH,
     paddingVertical: 18,
     gap: 8,
   },
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tag: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },

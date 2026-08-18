@@ -14,7 +14,7 @@ import { PickerPopup } from '../ui/PickerPopup';
 import { EqFader } from '../ui/EqFader';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 import { storage } from '../../storage/mmkv';
 import {
   OUTPUTS,
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   note: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, marginTop: 14 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   rowMeta: { flex: 1, paddingRight: 12, gap: 2 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   rowCaption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
   faders: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderStyle: 'dashed',
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
   save: { marginTop: 8, gap: 10 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontFamily: fonts.regular,

@@ -2,15 +2,16 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts } from '../../theme/tokens';
+import { fonts, semantic, space, type } from '../../theme/tokens';
 
 // One menu row inside a sheet or a menu popup: leading icon + label, with an
 // optional second line, an `on` (currently-active) accent state, a `disabled`
 // dimming and a `danger` red. Every sheet menu in the app renders through this
 // — the track-actions and queue-options sheets, the playlists ⋯ popup and the
 // playlist sharing sheet — so they read identically. Reads on every theme;
-// there is no danger token.
-export const SHEET_DANGER = '#b3402e';
+// the danger red is an app-wide semantic token (tokens.js), re-exported here
+// under its original name so every existing import keeps working.
+export const SHEET_DANGER = semantic.danger;
 
 // One icon size for every menu row. 19 is the primitive's own, and the size
 // the majority of rendered rows already used.
@@ -66,11 +67,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: 12,
+    paddingVertical: space.s12,
   },
   pressed: { opacity: 0.6 },
   iconGap: { width: ICON },
-  meta: { flex: 1, minWidth: 0, gap: 2 },
-  itemLabel: { fontFamily: fonts.medium, fontSize: 15 },
+  meta: { flex: 1, minWidth: 0, gap: space.s2 },
+  itemLabel: type.rowTitle,
   itemNote: { fontFamily: fonts.regular, fontSize: 12 },
 });

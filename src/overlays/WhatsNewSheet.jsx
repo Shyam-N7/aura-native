@@ -9,7 +9,7 @@ import {
 } from '../lib/whatsNew';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // The guide to what just shipped. Static rows — each one names the feature
 // and where to find it, in plain words. Auto-opens once per batch (the mount
@@ -117,12 +117,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowMeta: { flex: 1, minWidth: 0, gap: 1 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   rowLine: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17 },
   gotIt: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 12,
     marginTop: 12,
   },

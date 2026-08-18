@@ -11,7 +11,7 @@ import { subscribeSleepTimerSheet } from '../lib/sleepTimerSheet';
 import { showToast } from '../lib/toast';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, type } from '../theme/tokens';
 import { fmtTime } from '../utils/fmtTime';
 
 // Sleep-timer picker, ported from web SleepTimerSheet: presets + end of set
@@ -108,5 +108,5 @@ const styles = StyleSheet.create({
   countdown: { marginTop: 6 },
   item: { paddingVertical: 12 },
   pressed: { opacity: 0.6 },
-  itemLabel: { fontFamily: fonts.medium, fontSize: 15 },
+  itemLabel: type.rowTitle,
 });

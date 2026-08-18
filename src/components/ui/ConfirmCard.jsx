@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../Icon';
 import { SHEET_DANGER } from './SheetRow';
-import { fonts } from '../../theme/tokens';
+import { fonts, radii, space } from '../../theme/tokens';
 
 // The house confirm's CARD — title, body, the optional "don't ask again"
 // checkbox, and the Cancel/action pair. Only the container differs between the
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 13.5,
     lineHeight: 19,
-    marginTop: 6,
+    marginTop: space.s6,
   },
   checkRow: {
     flexDirection: 'row',
@@ -132,16 +132,16 @@ const styles = StyleSheet.create({
     // that a bare text cancel beside a filled pill read as fine print, not as
     // an equal choice. Border only, so the filled action still leads.
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: space.s20,
   },
   cancelText: {
     fontFamily: fonts.medium,
     fontSize: 14.5,
   },
   action: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 11,
     paddingHorizontal: 22,
   },

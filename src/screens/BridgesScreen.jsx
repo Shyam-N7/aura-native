@@ -20,7 +20,7 @@ import { PressScale } from '../components/ui/PressScale';
 import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { BridgeItinerary } from '../components/bridges/BridgeItinerary';
-import { fonts, label, radii } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // Ported from web DesktopBridges.jsx: gradual paths between feelings. A
 // clairvoyant hero reads your mood + proposes tonight's journey, a builder
@@ -513,10 +513,10 @@ const styles = StyleSheet.create({
     minWidth: 96,
   },
   moodchipHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  moodchipKey: { fontFamily: fonts.medium, fontSize: 15 },
+  moodchipKey: type.rowTitle,
   moodchipHint: { fontFamily: fonts.regular, fontSize: 11.5 },
   badge: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   langrow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   langchip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepSign: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 22 },
-  stepVal: { fontFamily: fonts.medium, fontSize: 15, minWidth: 74 },
+  stepVal: { ...type.rowTitle, minWidth: 74 },
   dim: { opacity: 0.4 },
   hint: {
     fontFamily: fonts.regular,

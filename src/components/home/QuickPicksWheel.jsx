@@ -21,7 +21,7 @@ import { TrackArt } from '../TrackRow';
 import { useAppActive } from '../../hooks/useAppActive';
 import { useNavFocused } from '../../hooks/useNavFocused';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, radii } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 
 // The web QuickPicksSpinner rebuilt as a native fidget wheel: discs on a ring
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 11.5,
   },
-  playingRing: { borderWidth: 2, borderRadius: 999 },
+  playingRing: { borderWidth: 2, borderRadius: radii.pill },
   reason: {
     fontFamily: fonts.regular,
     fontSize: 12,

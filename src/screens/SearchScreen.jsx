@@ -19,7 +19,7 @@ import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { useTheme } from '../theme/ThemeContext';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   pill: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -559,11 +559,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginBottom: 4,
   },
-  hint: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    marginTop: 12,
-  },
+  hint: { ...type.caption, marginTop: 12 },
   errorBlock: { marginTop: 12 },
   recentHead: {
     flexDirection: 'row',
@@ -604,10 +600,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  entityName: {
-    fontFamily: fonts.medium,
-    fontSize: 15,
-  },
+  entityName: type.rowTitle,
   entitySub: {
     fontFamily: fonts.regular,
     fontSize: 12.5,
@@ -620,7 +613,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
@@ -632,7 +625,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    borderRadius: 14,
+    borderRadius: radii.hero,
     padding: 14,
   },
   heroName: {

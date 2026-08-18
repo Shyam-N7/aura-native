@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
 import { TrackArt } from '../TrackRow';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 
 // "Recently played" memory tiles (web shows the first 3 as a horizontal rail).
@@ -61,6 +61,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   meta: { flex: 1, gap: 3 },
-  title: { fontFamily: fonts.semibold, fontSize: 17 },
+  title: type.blockTitle,
   album: { fontFamily: fonts.regular, fontSize: 12 },
 });

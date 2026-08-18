@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts } from '../../theme/tokens';
+import { fonts, radii } from '../../theme/tokens';
 
 // Labelled text input with an inline error line — the auth form's field unit.
 // `labelRight` renders on the label row (e.g. the "forgot?" link).
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   },
   label: { fontFamily: fonts.medium, fontSize: 13 },
   input: {
-    borderRadius: 12,
+    borderRadius: radii.input,
     borderWidth: 1,
     fontFamily: fonts.regular,
     fontSize: 15,

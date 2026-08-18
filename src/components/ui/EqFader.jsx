@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts } from '../../theme/tokens';
+import { fonts, space } from '../../theme/tokens';
 import { EASE } from '../../theme/motion';
 
 // One equalizer band, as a vertical fader. Same machinery as the player's
@@ -215,7 +215,7 @@ export function EqFader({
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 8, flex: 1 },
+  wrap: { alignItems: 'center', gap: space.s8, flex: 1 },
   track: {
     width: 34,
     height: TRACK_H,

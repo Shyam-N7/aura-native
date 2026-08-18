@@ -903,7 +903,7 @@ const styles = StyleSheet.create({
   devices: { marginBottom: 4, rowGap: 10 },
   device: {
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: radii.card,
     borderWidth: 1,
     columnGap: 12,
     flexDirection: 'row',

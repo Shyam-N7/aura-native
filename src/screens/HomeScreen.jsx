@@ -48,7 +48,7 @@ import { PressScale } from '../components/ui/PressScale';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
 import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
 import { storage } from '../storage/mmkv';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
 import { partOfDay } from '../utils/daypart';
@@ -899,14 +899,14 @@ const styles = StyleSheet.create({
   headActions: { width: 36, alignItems: 'center', gap: 10 },
   bgStatus: { marginTop: 10 },
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
-  tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
+  tagline: type.caption,
   wheelWrap: { alignItems: 'center', paddingTop: 6 },
   blank: { alignItems: 'center', gap: 8, paddingVertical: 28 },
-  blankLine: { fontFamily: fonts.semibold, fontSize: 17 },
-  blankSub: { fontFamily: fonts.regular, fontSize: 13.5, textAlign: 'center' },
+  blankLine: type.blockTitle,
+  blankSub: { ...type.caption, textAlign: 'center' },
   blankRetry: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 16,
     paddingVertical: 9,
     marginTop: 4,

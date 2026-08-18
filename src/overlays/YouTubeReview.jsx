@@ -15,7 +15,7 @@ import { resolveItem, pollImport } from '../api/ytImport';
 import { COPY, copyForCode } from '../lib/ytImportCopy';
 import { showToast } from '../lib/toast';
 import { artUrl } from '../utils/artUrl';
-import { fonts, label, type } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // The review screen, ported from web src/screens/YouTubeReviewScreen.jsx.
 //
@@ -348,19 +348,19 @@ const styles = StyleSheet.create({
   },
   hero: { marginTop: 4, marginBottom: 6 },
   pressed: { opacity: 0.6 },
-  source: { borderRadius: 12, padding: 14, gap: 5 },
+  source: { borderRadius: radii.card, padding: 14, gap: 5 },
   sourceTitle: { fontFamily: fonts.medium, fontSize: 15.5 },
   sourceRead: { fontFamily: fonts.regular, fontSize: 13 },
   cand: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
-  cover: { width: 48, height: 48, borderRadius: 8 },
+  cover: { width: 48, height: 48, borderRadius: radii.coverMd },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
   coverLetter: { fontFamily: fonts.semibold, fontSize: 19 },
   candMeta: { flex: 1, minWidth: 0, gap: 3 },
-  candTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  candTitle: type.rowTitle,
   candSub: { fontFamily: fonts.regular, fontSize: 12.5 },
-  note: { borderRadius: 12, padding: 14, gap: 5 },
+  note: { borderRadius: radii.card, padding: 14, gap: 5 },
   noteTitle: { fontFamily: fonts.semibold, fontSize: 15 },
-  noteBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  noteBody: type.caption,
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

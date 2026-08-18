@@ -46,12 +46,13 @@ import { showToast } from '../lib/toast';
 import { confirm } from '../lib/confirm';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
+import { Rule } from '../components/ui/Rule';
 import { Sheet } from '../components/ui/Sheet';
 import { SheetRow } from '../components/ui/SheetRow';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
 import { LONG_LIST } from '../lib/listWindow';
-import { fonts, label, radii } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 import { countRender } from '../lib/renderCount';
 
@@ -825,7 +826,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
       )}
       {tracks.length > 1 && (
         <>
-          <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+          <Rule style={styles.menuSeparator} />
           <SheetRow
             icon="close"
             danger
@@ -1635,10 +1636,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
   },
-  source: {
-    fontFamily: fonts.semibold,
-    fontSize: 17,
-  },
+  source: type.blockTitle,
   count: {
     fontFamily: fonts.regular,
     fontSize: 12,
@@ -1699,13 +1697,7 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
-  idx: {
-    width: 22,
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
+  idx: { ...type.time, width: 22, textAlign: 'center' },
   meta: {
     flex: 1,
     gap: 2,
@@ -1728,12 +1720,12 @@ const styles = StyleSheet.create({
     height: 3,
     // Radius past half-height clamps to a true pill, so the caps render
     // round even at this size (1.5 came out visibly squared-off on device).
-    borderRadius: 999,
+    borderRadius: radii.pill,
     overflow: 'hidden',
   },
   npFill: {
     height: 3,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   time: {
     fontFamily: fonts.regular,
@@ -1744,12 +1736,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
   },
-  empty: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingHorizontal: 20,
-    marginTop: 16,
-  },
+  empty: { ...type.caption, paddingHorizontal: 20, marginTop: 16 },
   // Overflow menu (QueueOptionsSheet) — SleepTimerSheet's row register plus
   // AddToPlaylistSheet's inline name-input recipe.
   menuTitle: { fontFamily: fonts.semibold, fontSize: 18 },
@@ -1761,14 +1748,10 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   menuHeadMeta: { flex: 1, minWidth: 0, gap: 2 },
-  menuHeadTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  menuHeadTitle: type.rowTitle,
   menuHeadSub: { fontFamily: fonts.regular, fontSize: 12.5 },
-  menuSeparator: { height: 1, marginVertical: 6 },
-  menuState: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingVertical: 12,
-  },
+  menuSeparator: { marginVertical: 6 },
+  menuState: { ...type.caption, paddingVertical: 12 },
   nameInput: {
     borderWidth: 1,
     borderRadius: radii.input,
