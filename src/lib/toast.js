@@ -2,7 +2,8 @@ import { onSessionReset } from './sessionReset';
 
 // Tiny pub-sub for ephemeral toasts, ported from web src/lib/toast.js
 // (renamed toast -> showToast, subscribe -> subscribeToast per the native
-// contract). One toast at a time; firing again replaces the current one.
+// contract). One toast at a time; firing again replaces the current one —
+// except over a live undo, which the view holds (see Toast.jsx).
 const subscribers = new Set();
 let counter = 0;
 // A toast fired before any host mounts is held and replayed to the first
@@ -26,11 +27,24 @@ let pending = null;
 
 // opts.tick renders the toast with an animated green check — for successes
 // worth celebrating (added to playlist, queue saved), not every message.
+//
+// opts.action attaches ONE inline control, { label, onPress } — the undo
+// affordance for work that just destroyed something. Same contract as tick:
+// pass it and the pill grows a button, leave it off and nothing about the
+// toast changes. BOTH halves are required, so a half-built action (a label
+// with no handler, a handler with no label) can never render a dead button;
+// it degrades to the plain toast the caller would otherwise have shown.
+//
+// The handler runs at most once, and the view — not the caller — dismisses
+// the pill on tap.
 export function showToast(message, opts = {}) {
   if (!message) {
     return;
   }
-  const event = { id: ++counter, message, tick: !!opts.tick };
+  const { label, onPress } = opts.action ?? {};
+  const action =
+    label && typeof onPress === 'function' ? { label, onPress } : null;
+  const event = { id: ++counter, message, tick: !!opts.tick, action };
   if (subscribers.size === 0) {
     pending = { event, at: Date.now() };
     return;

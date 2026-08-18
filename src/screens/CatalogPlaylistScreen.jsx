@@ -7,7 +7,7 @@ import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getCatalogPlaylist } from '../api/discover';
-import { hideTrack } from '../api/hidden';
+import { hideTrack, unhideTrack } from '../api/hidden';
 import { invalidateHomeCache } from '../lib/homeCache';
 import { showToast } from '../lib/toast';
 import { storage } from '../storage/mmkv';
@@ -161,30 +161,93 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   );
 
   // "Don't show this again" — only on the made-for-you mixes (a catalog list
-  // isn't a pick of ours to apologise for). Removes the row immediately; the
-  // undo lives in the library's settings shelf.
+  // isn't a pick of ours to apologise for). Removes the row immediately, with
+  // the undo ON the toast. The hidden list is still in settings and still the
+  // place to change your mind later, but the pointer is out of the copy: it
+  // was there because there was nowhere else to undo, and telling someone to
+  // go find a settings screen is a worse answer than the button in front of
+  // them. hideTrack has an exact inverse (unhideTrack), so this undo is real:
+  // it puts the row back at its own index, and the mix's order is the
+  // server's and untouched by hiding, so that IS its original position.
   const isAutoMix = initialData?.kind === 'auto';
-  const hideOne = useCallback(async track => {
-    try {
-      await hideTrack(track.id);
-      setHit(h =>
-        h.data
-          ? {
-              ...h,
-              data: {
-                ...h.data,
-                tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
-              },
-            }
-          : h,
+
+  // The row index has to come off a ref, not the deps: hideOne reaches every
+  // mounted row through renderRow, and a handler that took a new identity on
+  // every data change would hand all of them a new menu (the memo note at the
+  // top of this file). Same shape as PlaylistScreen's hitRef.
+  const hitRef = useRef(hit);
+  hitRef.current = hit;
+
+  const putRowBack = useCallback(
+    (track, at) =>
+      setHit(h => {
+        const rows = h.data?.tracks;
+        if (!rows || rows.some(x => x.id === track.id)) {
+          return h;
+        }
+        const next = rows.slice();
+        next.splice(Math.min(at, next.length), 0, track);
+        return { ...h, data: { ...h.data, tracks: next } };
+      }),
+    [],
+  );
+
+  const unhideOne = useCallback(
+    async (track, at) => {
+      putRowBack(track, at);
+      try {
+        await unhideTrack(track.id);
+        // Home cached a mix built WITHOUT this track; drop it again.
+        invalidateHomeCache('autoPlaylists', 'quickPicks');
+        showToast('Back in your mixes.');
+      } catch {
+        setHit(h =>
+          h.data
+            ? {
+                ...h,
+                data: {
+                  ...h.data,
+                  tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
+                },
+              }
+            : h,
+        );
+        showToast("Couldn't undo that — try again.");
+      }
+    },
+    [putRowBack],
+  );
+
+  const hideOne = useCallback(
+    async track => {
+      const at = Math.max(
+        0,
+        (hitRef.current.data?.tracks ?? []).findIndex(x => x.id === track.id),
       );
-      // Home must not serve it again this session.
-      invalidateHomeCache('autoPlaylists', 'quickPicks');
-      showToast("Hidden — AURA won't pick this for you again. Undo in settings.");
-    } catch {
-      showToast("Couldn't hide that — try again.");
-    }
-  }, []);
+      try {
+        await hideTrack(track.id);
+        setHit(h =>
+          h.data
+            ? {
+                ...h,
+                data: {
+                  ...h.data,
+                  tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
+                },
+              }
+            : h,
+        );
+        // Home must not serve it again this session.
+        invalidateHomeCache('autoPlaylists', 'quickPicks');
+        showToast("Hidden — AURA won't pick this for you again.", {
+          action: { label: 'Undo', onPress: () => unhideOne(track, at) },
+        });
+      } catch {
+        showToast("Couldn't hide that — try again.");
+      }
+    },
+    [unhideOne],
+  );
 
   // Play what's on screen: a filtered or re-sorted view queues in that order.
   //
