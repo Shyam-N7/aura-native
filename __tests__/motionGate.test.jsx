@@ -21,6 +21,7 @@ import { storage } from '../src/storage/mmkv';
 global.__gateReduced = false;
 global.__gateRepeats = [];
 global.__gateTimings = [];
+global.__gateShared = [];
 jest.mock('react-native-reanimated', () => {
   const actual = jest.requireActual('react-native-reanimated');
   return {
@@ -32,6 +33,15 @@ jest.mock('react-native-reanimated', () => {
     withRepeat: (...args) => {
       global.__gateRepeats.push(args);
       return actual.withRepeat(...args);
+    },
+    // getAnimatedStyle only reflects ANIMATED updates, so a value the gate
+    // assigns directly (the reduced-motion path) is invisible to it. Record
+    // the shared values themselves — that is the only channel that sees a
+    // plain assignment, and it is what 'parks on its final value' means.
+    useSharedValue: init => {
+      const sv = actual.useSharedValue(init);
+      if (!global.__gateShared.includes(sv)) global.__gateShared.push(sv);
+      return sv;
     },
     withTiming: (...args) => {
       global.__gateTimings.push(args);
@@ -91,9 +101,12 @@ test('reduced motion stops the EQ loop and parks the bars on their final value',
     n => typeof n.type === 'string' && n.props.style?.[0]?.height === 2.5,
   );
   expect(bars).toHaveLength(9);
-  for (const bar of bars) {
-    expect(getAnimatedStyle(bar).transform).toEqual([{ scaleX: 1 }]);
-  }
+  // Nine bars, nine shared values, every one sitting at full extension —
+  // the switch is on, so 1 is the resting value, not a hidden or half-drawn
+  // one. Read off the shared values rather than getAnimatedStyle, which only
+  // reports animated updates and cannot see an assignment.
+  const parked = global.__gateShared.filter(sv => sv.value === 1);
+  expect(parked).toHaveLength(9);
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
