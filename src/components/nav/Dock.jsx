@@ -83,7 +83,7 @@ function DockTab({ route, focused, label: tabLabel, tint, accent, onPress, index
       onLayout={e => setW(e.nativeEvent.layout.width)}
     >
       <PressScale
-        accessibilityRole="button"
+        accessibilityRole="tab"
         accessibilityState={focused ? { selected: true } : {}}
         accessibilityLabel={tabLabel}
         onPress={onPress}
@@ -435,6 +435,7 @@ export function Dock({ navRef }) {
           <Glass radius={radii.dock} solid={gooActive} soft blur style={styles.capsule}>
             <GestureDetector gesture={tabSwipe}>
               <Animated.View
+                accessibilityRole="tablist"
                 pointerEvents={btt ? 'none' : 'auto'}
                 style={[styles.row, rowStyle, rowMeltStyle]}
                 onLayout={(e) => setRowW(e.nativeEvent.layout.width)}

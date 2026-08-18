@@ -58,7 +58,12 @@ export function PageHeader({ title, titleStyle, eyebrow, eyebrowSize = 10, onBac
       {!!eyebrow && (
         <Text style={[label(eyebrowSize), { color: t.inkFaint }]}>{eyebrow}</Text>
       )}
-      <Text style={[type.pageTitle, titleStyle, { color: t.ink }]}>{title}</Text>
+      <Text
+        accessibilityRole="header"
+        style={[type.pageTitle, titleStyle, { color: t.ink }]}
+      >
+        {title}
+      </Text>
     </>
   );
 }
@@ -96,7 +101,9 @@ export function DetailSection({ title, sub }) {
   const { t } = useTheme();
   return (
     <View style={styles.section}>
-      <Text style={[type.sectionTitle, { color: t.ink }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[type.sectionTitle, { color: t.ink }]}>
+        {title}
+      </Text>
       {!!sub && (
         <Text style={[label(9.5), { color: t.inkFaint }]} numberOfLines={1}>
           {sub}
