@@ -238,6 +238,7 @@ export default function SearchScreen({ navigation }) {
                 accessibilityRole="button"
                 accessibilityLabel={`language ${L}`}
                 onPress={() => pickLang(L)}
+                hitSlop={PILL_SLOP}
                 style={[
                   styles.pill,
                   on
@@ -269,7 +270,8 @@ export default function SearchScreen({ navigation }) {
                     accessibilityRole="button"
                     accessibilityLabel="clear recent searches"
                     onPress={recents.clear}
-                    hitSlop={8}>
+                    hitSlop={8}
+                    style={styles.clearBtn}>
                     <Text style={[styles.clear, { color: t.accent }]}>
                       Clear
                     </Text>
@@ -307,6 +309,7 @@ export default function SearchScreen({ navigation }) {
                     accessibilityRole="button"
                     accessibilityLabel={`search ${item}`}
                     onPress={() => setQ(item)}
+                    hitSlop={CHIP_SLOP}
                     style={({ pressed }) => [
                       styles.chip,
                       { borderColor: t.line },
@@ -481,6 +484,16 @@ export default function SearchScreen({ navigation }) {
   );
 }
 
+// Both chip rows are bordered pills, so their touch area can only grow through
+// hitSlop — padding would redraw the border somewhere else. Language pills sit
+// in a single scrolling row (13.2dp of label(11) + 12 padding = 25.2dp, + 24 =
+// 49.2dp) and the trending chips wrap (15dp of 12.5 text + 14 padding = 29dp,
+// + 20 = 49dp). Sideways the slop is half the 8dp gap, so neighbours never
+// overlap; on the wrapped chips the top is held to the full 8dp gutter and the
+// remainder goes downward, where the row below already wins the overlap.
+const PILL_SLOP = { top: 12, bottom: 12, left: 4, right: 4 };
+const CHIP_SLOP = { top: 8, bottom: 12, left: 4, right: 4 };
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -531,6 +544,15 @@ const styles = StyleSheet.create({
   clear: {
     fontFamily: fonts.medium,
     fontSize: 12.5,
+  },
+  // 15dp of text is not a target. Padding grows the touch box and the equal
+  // negative margin hands the space straight back, so the heading row keeps its
+  // height and "Clear" stays on the same right edge: 15 + 20 + 16 slop = 51dp.
+  clearBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: -10,
+    marginHorizontal: -12,
   },
   recentRow: {
     paddingVertical: 9,

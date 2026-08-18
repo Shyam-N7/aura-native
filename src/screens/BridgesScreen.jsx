@@ -336,6 +336,7 @@ export default function BridgesScreen({ navigation }) {
               accessibilityRole="button"
               accessibilityLabel="your mix"
               onPress={() => toggleLang('mix')}
+              hitSlop={LANG_SLOP}
               style={[
                 styles.langchip,
                 { borderColor: cfg.langs.length === 0 ? t.accent : t.line },
@@ -360,6 +361,7 @@ export default function BridgesScreen({ navigation }) {
                   accessibilityLabel={l}
                   accessibilityState={{ selected: on }}
                   onPress={() => toggleLang(l)}
+                  hitSlop={LANG_SLOP}
                   style={[
                     styles.langchip,
                     { borderColor: on ? t.accent : t.line },
@@ -381,6 +383,7 @@ export default function BridgesScreen({ navigation }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="fewer tracks"
+              hitSlop={8}
               disabled={cfg.steps <= MIN_STEPS}
               onPress={() =>
                 updateCfg({ steps: Math.max(MIN_STEPS, cfg.steps - 1) })
@@ -399,6 +402,7 @@ export default function BridgesScreen({ navigation }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="more tracks"
+              hitSlop={8}
               disabled={cfg.steps >= MAX_STEPS}
               onPress={() =>
                 updateCfg({ steps: Math.min(MAX_STEPS, cfg.steps + 1) })
@@ -478,6 +482,12 @@ export default function BridgesScreen({ navigation }) {
   );
 }
 
+// Bordered pills again, so hitSlop is the only tool that leaves the border
+// where it is: 14.4dp of 12pt text + 12 padding = 26.4dp, + 22 = 48.4dp tall.
+// Sideways it takes half the row's 8dp gap, and the top is held to the full
+// gutter so a chip never sits on the visible edge of the one above it.
+const LANG_SLOP = { top: 8, bottom: 14, left: 4, right: 4 };
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 22 },
@@ -553,6 +563,9 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 22,
   },
+  // 34dp of button + 8dp hitSlop on every side = 50dp, comfortably past the
+  // 48dp minimum, and it fits inside the row's 14dp gaps without touching the
+  // count beside it. Growing the circle itself would be a visible change.
   stepBtn: {
     width: 34,
     height: 34,
