@@ -55,6 +55,7 @@ const CatalogRow = React.memo(function CatalogRow({
         ? {
             extras: [
               {
+                icon: 'eye-off',
                 label: "don't show this again",
                 danger: true,
                 onPress: () => onHide(track),

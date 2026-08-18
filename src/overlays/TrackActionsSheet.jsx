@@ -191,6 +191,7 @@ export function TrackActionsSheet() {
       {extras.map(extra => (
         <SheetRow
           key={extra.label}
+          icon={extra.icon}
           label={extra.label}
           danger={extra.danger}
           onPress={act(extra.onPress)}
