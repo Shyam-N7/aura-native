@@ -70,6 +70,15 @@ export const type = {
     lineHeight: 43,
     letterSpacing: -1.32,
   },
+  // The standalone screens' page title (dna, journal, bridges, equalizer,
+  // admin compose) — the queueHero register one step down. Vertical spacing is
+  // deliberately NOT in here: every screen sets its own margins around it.
+  pageTitle: {
+    fontFamily: fonts.regular,
+    fontSize: 34,
+    lineHeight: 36,
+    letterSpacing: -1.02,
+  },
   searchInput: {
     fontFamily: fonts.regular,
     fontSize: 24,
