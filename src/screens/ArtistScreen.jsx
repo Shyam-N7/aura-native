@@ -97,6 +97,21 @@ export default function ArtistScreen({ route, navigation }) {
               <PlayAllPill text="Play top tracks" onPress={() => playTop(0)} />
             )}
 
+            {/* A successful load with nothing of this artist's own used to
+                render the hero and then nothing at all, which reads as a
+                broken screen. Same shape as liked/playlist. */}
+            {tracks.length === 0 && albums.length === 0 && (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyTitle, { color: t.ink }]}>
+                  Nothing from this artist yet.
+                </Text>
+                <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
+                  No songs or albums in the catalogue — try searching for a
+                  track name.
+                </Text>
+              </View>
+            )}
+
             {tracks.length > 0 && (
               <>
                 <DetailSection
@@ -206,6 +221,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   heroName: { flexShrink: 1 },
+  empty: { marginTop: 18, gap: 5 },
+  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
+  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
   gridFlush: { paddingHorizontal: 0 },
   similarRail: { gap: 14 },
   similarTile: { width: 96, alignItems: 'center', gap: 5 },

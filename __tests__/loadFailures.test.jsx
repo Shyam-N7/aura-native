@@ -177,3 +177,41 @@ test('a failed history page says so instead of reading as the end of history', a
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
+
+// Q3: page two got a "Try again"; page one got a full stop. A first-page
+// failure is the one you are most likely to hit (open the screen offline) and
+// was the one with no way out.
+test('a failed first history page can be retried, like the second one can', async () => {
+  getHistory.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
+    plays: [
+      {
+        id: 't1',
+        title: 'Song t1',
+        artist: 'a',
+        language: 'tamil',
+        playedAt: new Date(2026, 6, 15, 9).getTime(),
+      },
+    ],
+    nextBefore: null,
+  });
+
+  const tree = await render(
+    <HistoryScreen navigation={{ goBack: jest.fn() }} />,
+  );
+  expect(texts(tree.toJSON())).toContain("Couldn't load your history.");
+
+  const retry = byLabel(tree, 'try again');
+  expect(retry).toBeDefined();
+  // The touch-target floor: the pill is 33dp tall, so it carries hitSlop.
+  expect(retry.props.hitSlop).toBe(8);
+
+  await ReactTestRenderer.act(async () => {
+    retry.props.onPress();
+  });
+  const body = texts(tree.toJSON());
+  expect(body).toContain('Song t1');
+  expect(body).not.toContain("Couldn't load your history.");
+  expect(byLabel(tree, 'try again')).toBeUndefined();
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});

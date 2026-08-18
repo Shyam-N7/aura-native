@@ -256,6 +256,19 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
                 )}
               </>
             )}
+            {/* An ok response with no tracks used to render a bare title —
+                indistinguishable from a broken fetch. The filter-no-match line
+                above only covers a list that HAS rows. */}
+            {tracks.length === 0 && (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyTitle, { color: t.ink }]}>
+                  This playlist is empty.
+                </Text>
+                <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
+                  No songs in it right now — check back after the next refresh.
+                </Text>
+              </View>
+            )}
           </>
         )}
           </View>
@@ -273,4 +286,7 @@ const styles = StyleSheet.create({
   // ListTools→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  empty: { marginTop: 18, gap: 5 },
+  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
+  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
 });

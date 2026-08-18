@@ -132,6 +132,20 @@ export default function AlbumScreen({ route, navigation }) {
                     <CountLine tracks={tracks} />
                   </>
                 )}
+                {/* A successful load with no tracks used to render the hero and
+                    then nothing at all, which reads as a broken screen rather
+                    than an empty release. Same shape as liked/playlist. */}
+                {tracks.length === 0 && (
+                  <View style={styles.empty}>
+                    <Text style={[styles.emptyTitle, { color: t.ink }]}>
+                      No tracks in this {kind} yet.
+                    </Text>
+                    <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
+                      Nothing here to play — try another release from this
+                      artist.
+                    </Text>
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -149,4 +163,7 @@ const styles = StyleSheet.create({
   // CountLine→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  empty: { marginTop: 18, gap: 5 },
+  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
+  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
 });
