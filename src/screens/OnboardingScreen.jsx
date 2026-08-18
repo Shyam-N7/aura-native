@@ -186,6 +186,11 @@ export function OnboardingScreen({ onDone }) {
   const [trending, setTrending] = useState([]);
   const [artistImages, setArtistImages] = useState(() => new Map());
   const [loadError, setLoadError] = useState(false);
+  // The first trending fetch, in flight. Without it the grid's empty branch is
+  // the only thing on screen while the request is out, so "still arriving" and
+  // "nothing to show" look identical — and the retry button invites a press
+  // for a request that has not failed yet.
+  const [loadingArtists, setLoadingArtists] = useState(true);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1); // 1 forward · -1 back
@@ -195,14 +200,17 @@ export function OnboardingScreen({ onDone }) {
   // the grid full while it loads and if it fails.
   useEffect(() => {
     const ctl = new AbortController();
+    setLoadingArtists(true);
     getDiscoverHome({ signal: ctl.signal })
       .then(data => {
         setTrending(Array.isArray(data?.trending) ? data.trending : []);
         setLoadError(false);
+        setLoadingArtists(false);
       })
       .catch(err => {
         if (err?.name !== 'AbortError') {
           setLoadError(true);
+          setLoadingArtists(false);
         }
       });
     return () => ctl.abort();
@@ -527,25 +535,39 @@ export function OnboardingScreen({ onDone }) {
                   </PressScale>
                 );
               })}
-              {tiles.length === 0 && (
-                <View style={styles.empty}>
-                  <Text style={[styles.emptyLine, { color: t.inkSoft }]}>
-                    {loadError ? "Couldn't load artists" : 'No artists yet'}
-                  </Text>
-                  <PressScale
-                    accessibilityRole="button"
-                    accessibilityLabel="try again"
-                    onPress={() => setReloadNonce(n => n + 1)}
-                    style={[styles.retry, { borderColor: t.line }]}
-                  >
-                    <Text style={[styles.chipText, { color: t.inkSoft }]}>
-                      Try again
+              {tiles.length === 0 &&
+                (loadingArtists ? (
+                  // Same AuraLoader treatment as the "load more" page below —
+                  // the first page just had nothing standing in for it.
+                  <View style={styles.empty}>
+                    <AuraLoader label="Loading artists" />
+                  </View>
+                ) : (
+                  <View style={styles.empty}>
+                    <Text style={[styles.emptyLine, { color: t.inkSoft }]}>
+                      {loadError ? "Couldn't load artists" : 'No artists yet'}
                     </Text>
-                  </PressScale>
-                </View>
-              )}
+                    <PressScale
+                      accessibilityRole="button"
+                      accessibilityLabel="try again"
+                      onPress={() => setReloadNonce(n => n + 1)}
+                      style={[styles.retry, { borderColor: t.line }]}
+                    >
+                      <Text style={[styles.chipText, { color: t.inkSoft }]}>
+                        Try again
+                      </Text>
+                    </PressScale>
+                  </View>
+                ))}
             </View>
-            {canLoadMore &&
+            {/* The initial trending fetch, shown in the same slot the next
+                page uses. The curated seed keeps the grid full while it is
+                out (buildTiles), so without this nothing on the step says
+                more artists are still on the way — and the "load more"
+                button would page a pool about to be replaced. */}
+            {loadingArtists && <AuraLoader label="Loading artists" />}
+            {!loadingArtists &&
+              canLoadMore &&
               (loadingMore ? (
                 <AuraLoader label="Loading more" />
               ) : (

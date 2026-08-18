@@ -227,6 +227,27 @@ export function ListTools({ query, onQuery, sort, onSort, sorts }) {
               accessibilityLabel="find in songs"
               style={[styles.input, { color: t.ink }]}
             />
+            {/* Clear and close are different actions: the round button to the
+                right cancels the whole search, this empties the query and
+                keeps the field (and the keyboard) where they are. Same
+                pattern as the global search field in nav/TopBar.jsx. */}
+            {query.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="clear find"
+                onPress={() => {
+                  onQuery('');
+                  inputRef.current?.focus();
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.clearBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Icon name="close" size={15} color={t.inkSoft} />
+              </Pressable>
+            )}
           </View>
         </Animated.View>
 
@@ -286,6 +307,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 14,
     paddingVertical: 0,
+  },
+  // 32dp of button + 8dp hitSlop on every side = the 48dp floor, without
+  // growing the 44dp row the field sits in.
+  clearBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -8,
   },
   toggle: {
     position: 'absolute',

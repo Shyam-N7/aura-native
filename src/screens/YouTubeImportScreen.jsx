@@ -62,6 +62,7 @@ export default function YouTubeImportScreen({ navigation }) {
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [checkNow, setCheckNow] = useState(false); // Go pressed — skip the debounce
   const [linkError, setLinkError] = useState(null);
   const [starting, setStarting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -83,6 +84,24 @@ export default function YouTubeImportScreen({ navigation }) {
     setUrl(next);
     setPreview(null);
     setLinkError(null);
+    // Back to debounced: the link just changed, so the pending Go was for a
+    // link that no longer exists.
+    setCheckNow(false);
+  };
+
+  // The keyboard's Go key. There is no button in this state — the check runs
+  // itself on a debounce — so "submit" can only mean "stop waiting and check
+  // now". Setting this flag re-runs the effect below with no delay, which also
+  // aborts whatever the debounce had in flight, so Go takes the same path and
+  // the same guards as the automatic check rather than a second one of its own.
+  const submitUrl = () => {
+    // The same guard the check itself uses: an empty (or whitespace-only)
+    // field has nothing to look up, and a check already in flight must not be
+    // doubled by a second Go.
+    if (!url.trim() || checking) {
+      return;
+    }
+    setCheckNow(true);
   };
 
   // Check the link as it is pasted. On Android a paste arrives as one
@@ -105,12 +124,12 @@ export default function YouTubeImportScreen({ navigation }) {
           }
         })
         .finally(() => setChecking(false));
-    }, DEBOUNCE_MS);
+    }, checkNow ? 0 : DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       ctl.abort();
     };
-  }, [url]);
+  }, [url, checkNow]);
 
   // A verdict has landed and the decision moves to the buttons — on a short
   // phone the keyboard would otherwise sit on top of them.
@@ -345,6 +364,7 @@ export default function YouTubeImportScreen({ navigation }) {
                 <PasteState
                   url={url}
                   setUrl={changeUrl}
+                  onSubmit={submitUrl}
                   inputRef={inputRef}
                   checking={checking}
                   linkError={linkError}
@@ -486,7 +506,7 @@ function Note({ title, body, warn }) {
   );
 }
 
-function PasteState({ url, setUrl, inputRef, checking, linkError }) {
+function PasteState({ url, setUrl, onSubmit, inputRef, checking, linkError }) {
   const { t } = useTheme();
   const err = linkError && copyForCode(linkError.code, linkError.message);
   return (
@@ -508,6 +528,7 @@ function PasteState({ url, setUrl, inputRef, checking, linkError }) {
         spellCheck={false}
         keyboardType="url"
         returnKeyType="go"
+        onSubmitEditing={onSubmit}
         accessibilityLabel={COPY.paste.placeholder}
         style={[
           styles.input,
