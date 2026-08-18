@@ -685,9 +685,10 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
           <View style={[styles.menuRule, { backgroundColor: t.line }]} />
 
           <MenuRow icon="play" label={playBusy ? 'starting…' : 'play'} disabled={playBusy} onPress={onPlay} />
-          <MenuRow label="open playlist" onPress={onOpen} />
+          <MenuRow icon="arrow-right" label="open playlist" onPress={onOpen} />
           {onShare && <MenuRow icon="people" label="who can see this" onPress={onShare} />}
           <MenuRow
+            icon="close"
             danger
             label={owned ? 'delete playlist' : 'leave playlist'}
             onPress={onDanger}

@@ -151,6 +151,7 @@ const PlaylistTrackRow = React.memo(function PlaylistTrackRow({
         ? {
             extras: [
               {
+                icon: 'close',
                 label: 'remove from this playlist',
                 danger: true,
                 onPress: () => onRemove(track),

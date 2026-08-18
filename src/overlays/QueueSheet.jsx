@@ -532,7 +532,13 @@ const Row = React.memo(function Row({
               omit: ['play', 'playNext', 'addToQueue'],
               extras: isCurrent
                 ? []
-                : [{ label: 'move to top', onPress: () => onMoveTop(index) }],
+                : [
+                    {
+                      icon: 'arrow-up',
+                      label: 'move to top',
+                      onPress: () => onMoveTop(index),
+                    },
+                  ],
             },
           })
         }
