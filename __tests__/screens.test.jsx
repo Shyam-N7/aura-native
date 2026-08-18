@@ -4,8 +4,10 @@ import ReactTestRenderer from 'react-test-renderer';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import HomeScreen from '../src/screens/HomeScreen';
 import YouScreen from '../src/screens/YouScreen';
-import { groupPlaysByDay } from '../src/screens/HistoryScreen';
+import HistoryScreen, { groupPlaysByDay } from '../src/screens/HistoryScreen';
 import { getFeatured } from '../src/api/catalog';
+import { getHistory } from '../src/api/stats';
+import { subscribeTrackActions } from '../src/lib/trackActionsSheet';
 import { updatePreferences } from '../src/lib/auth';
 import { invalidateHomeCache } from '../src/lib/homeCache';
 import { resetLikesStore } from '../src/hooks/useLikes';
@@ -365,5 +367,73 @@ test('the settings admin row shows only for admins and routes to the composer', 
     byLabel(tree, 'send a notification').props.onPress();
   });
   expect(navigation.navigate).toHaveBeenCalledWith('AdminCompose');
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+// A4 — every gesture keeps a visible button. Both track-row shapes outside
+// components/TrackRow reach the track-actions sheet on a hold; these prove the
+// hold is no longer the only way in.
+test('you: the shelf row ⋯ opens the same track actions its hold opens', async () => {
+  const opened = [];
+  const off = subscribeTrackActions(e => e && opened.push(e));
+  const navigation = {
+    navigate: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+  };
+  const tree = await render(<YouScreen navigation={navigation} />);
+
+  await ReactTestRenderer.act(async () => {
+    byLabel(tree, 'Liked songs').props.onPress();
+  });
+  const row = byLabel(tree, 'play Liked Song');
+  expect(row.props.onLongPress).toBeInstanceOf(Function);
+
+  const more = byLabel(tree, 'more');
+  expect(more.props.accessibilityRole).toBe('button');
+  expect(more.props.hitSlop).toEqual({ top: 8, bottom: 8, left: 12, right: 12 });
+  await ReactTestRenderer.act(async () => {
+    more.props.onPress();
+  });
+  expect(opened).toHaveLength(1);
+  expect(opened[0].track.id).toBe('l1');
+
+  off();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('history: a play row wears the ⋯ that opens its track actions', async () => {
+  getHistory.mockResolvedValueOnce({
+    plays: [
+      {
+        id: 'p1',
+        title: 'Played Song',
+        artist: 'A',
+        language: 'tamil',
+        playedAt: Date.now(),
+      },
+    ],
+    nextBefore: null,
+  });
+  const opened = [];
+  const off = subscribeTrackActions(e => e && opened.push(e));
+  const tree = await render(<HistoryScreen navigation={{ goBack: jest.fn() }} />);
+  await ReactTestRenderer.act(async () => {});
+
+  // The hold survives — the button is an addition, not a replacement.
+  expect(byLabel(tree, 'play Played Song').props.onLongPress).toBeInstanceOf(
+    Function,
+  );
+
+  // Same box TrackRow's ⋯ wears: role, label, hitSlop.
+  const more = byLabel(tree, 'more');
+  expect(more.props.accessibilityRole).toBe('button');
+  expect(more.props.hitSlop).toEqual({ top: 8, bottom: 8, left: 12, right: 12 });
+  await ReactTestRenderer.act(async () => {
+    more.props.onPress();
+  });
+  expect(opened).toHaveLength(1);
+  expect(opened[0].track.id).toBe('p1');
+
+  off();
   await ReactTestRenderer.act(() => tree.unmount());
 });

@@ -23,6 +23,17 @@ import { EASE } from '../../theme/motion';
 const TRACK_H = 168;
 const KNOB = 22;
 
+// One assistive step: a whole decibel, the granularity the readout already
+// ticks in while dragging (and the ±15 dB hardware range is 30 steps wide).
+const STEP_MB = 100;
+
+// Offered to assistive tech ONLY — a pan is unreachable with a screen reader
+// on, exactly like the queue's drag.
+const A11Y_ACTIONS = [
+  { name: 'increment', label: 'louder' },
+  { name: 'decrement', label: 'quieter' },
+];
+
 export function EqFader({
   label,
   value, // millibels
@@ -118,6 +129,30 @@ export function EqFader({
       runOnJS(tickReset)();
     });
 
+  // The assistive equivalent of the drag: one decibel per press, off the
+  // DISPLAYED value so a press always lands on a whole dB even if the band
+  // sits on an odd millibel from a preset.
+  const nudge = dir => {
+    if (disabled) {
+      return;
+    }
+    const from = Math.round(value / STEP_MB) * STEP_MB;
+    const next = Math.min(max, Math.max(min, from + dir * STEP_MB));
+    if (next === value) {
+      return;
+    }
+    y.value = withTiming(toY(next), { duration: 160, easing: EASE.settle });
+    commit(next);
+  };
+  const onA11yAction = e => {
+    const action = e.nativeEvent?.actionName;
+    if (action === 'increment') {
+      nudge(1);
+    } else if (action === 'decrement') {
+      nudge(-1);
+    }
+  };
+
   const knobStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: y.value }],
   }));
@@ -152,8 +187,18 @@ export function EqFader({
             style={[styles.fill, { backgroundColor: t.accent }, fillStyle]}
           />
           <Animated.View
+            accessible
+            accessibilityRole="adjustable"
             accessibilityLabel={`band ${label}`}
-            accessibilityValue={{ text: `${db} decibels` }}
+            accessibilityValue={{
+              min: Math.round(min / 100),
+              max: Math.round(max / 100),
+              now: db,
+              text: `${db} decibels`,
+            }}
+            accessibilityState={{ disabled: !!disabled }}
+            accessibilityActions={A11Y_ACTIONS}
+            onAccessibilityAction={onA11yAction}
             style={[
               styles.knob,
               { backgroundColor: t.accent, borderColor: t.bg },

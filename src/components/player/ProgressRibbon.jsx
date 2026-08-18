@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useAppActive } from '../../hooks/useAppActive';
+import { fmtTime } from '../../utils/fmtTime';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -22,6 +23,19 @@ const SAMPLES = 80;
 // round line caps draw whole at 0% and 100% instead of getting chopped by
 // the svg bounds (field report: the start looked squared-off).
 const PAD = 10;
+
+// One assistive seek press. A pan is unreachable with a screen reader on, and
+// the player's own hold-to-seek moves 5s every 400ms (~12s per second held) —
+// so a single discrete press landing on 10s covers about what a short hold
+// does, and 10s is the step assistive users already expect from a seek bar.
+const SEEK_STEP_SEC = 10;
+
+// Offered to assistive tech ONLY; touch users still have exactly one way in,
+// the drag (the same rule QueueSheet's reorder actions follow).
+const SEEK_ACTIONS = [
+  { name: 'increment', label: `forward ${SEEK_STEP_SEC} seconds` },
+  { name: 'decrement', label: `back ${SEEK_STEP_SEC} seconds` },
+];
 
 // The one sampler every stroke in this file draws through: the track, the
 // played stretch and the loaded-ahead stretch all trace the SAME sine, so they
@@ -297,9 +311,53 @@ export function ProgressRibbon({
     }
   });
 
+  // Scrubbing is a pan, so with a screen reader on the seek bar was simply
+  // unreachable — it didn't even report itself as a control. It now speaks as
+  // an adjustable, reads its position as a time, and moves by whole seconds
+  // through the same onSeek the drag commits to.
+  const durSec = Math.max(0, Math.round(durationSec || 0));
+  const posSec = Math.round(Math.min(1, Math.max(0, progress)) * durSec);
+  const seekBy = delta => {
+    if (durSec <= 0) {
+      return;
+    }
+    const next = Math.min(durSec, Math.max(0, posSec + delta));
+    const p = next / durSec;
+    // Same hold as the drag's onEnd: park the fill on the new spot so it
+    // doesn't flash back to the old progress while the engine seeks.
+    shownProgress.value = p;
+    fill.value = p;
+    commit(p);
+  };
+  const onA11yAction = e => {
+    const action = e.nativeEvent?.actionName;
+    if (action === 'increment') {
+      seekBy(SEEK_STEP_SEC);
+    } else if (action === 'decrement') {
+      seekBy(-SEEK_STEP_SEC);
+    }
+  };
+
   return (
     <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
       <View
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel="seek"
+        // TalkBack re-reads an adjustable's own value on every change, so the
+        // actions deliberately don't announce — that would double-speak.
+        accessibilityValue={
+          durSec > 0
+            ? {
+                min: 0,
+                max: durSec,
+                now: posSec,
+                text: `${fmtTime(posSec)} of ${fmtTime(durSec)}`,
+              }
+            : { min: 0, max: 0, now: 0 }
+        }
+        accessibilityActions={SEEK_ACTIONS}
+        onAccessibilityAction={onA11yAction}
         style={[styles.hit, { height }]}
         onLayout={e => setWidth(e.nativeEvent.layout.width)}
       >

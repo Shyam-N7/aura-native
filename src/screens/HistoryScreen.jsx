@@ -16,6 +16,7 @@ import { summarizeClock } from '../lib/musicClock';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { LONG_LIST } from '../lib/listWindow';
 import { TrackArt } from '../components/TrackRow';
+import { Icon } from '../components/Icon';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -55,31 +56,49 @@ const HistoryRow = React.memo(function HistoryRow({
     [play],
   );
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`play ${title}`}
-      onPress={press}
-      onLongPress={hold}
-      style={pressStyle}
-    >
-      <TrackArt track={play} size={50} radius={4} />
-      <View style={styles.meta}>
-        <Text numberOfLines={1} style={[styles.title, { color: ink }]}>
-          {title}
+    <View style={styles.rowWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`play ${title}`}
+        onPress={press}
+        onLongPress={hold}
+        style={pressStyle}
+      >
+        <TrackArt track={play} size={50} radius={4} />
+        <View style={styles.meta}>
+          <Text numberOfLines={1} style={[styles.title, { color: ink }]}>
+            {title}
+          </Text>
+          <Text numberOfLines={1} style={[ROW_SUB, { color: inkSoft }]}>
+            {(play.artist ?? '').toLowerCase()} · {play.language ?? ''}
+          </Text>
+        </View>
+        <Text style={[type.time, { color: inkFaint }]}>
+          {formatTime12(new Date(play.playedAt))}
         </Text>
-        <Text numberOfLines={1} style={[ROW_SUB, { color: inkSoft }]}>
-          {(play.artist ?? '').toLowerCase()} · {play.language ?? ''}
-        </Text>
-      </View>
-      <Text style={[type.time, { color: inkFaint }]}>
-        {formatTime12(new Date(play.playedAt))}
-      </Text>
-    </Pressable>
+      </Pressable>
+      {/* The hold that opens the track actions, made visible — the same ⋯
+          TrackRow wears, so the two row shapes stay one control. Without it
+          this row's menu existed only as a gesture nothing announced. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="more"
+        onPress={hold}
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+        style={morePressStyle}
+      >
+        <Icon name="dots" size={17} color={inkFaint} />
+      </Pressable>
+    </View>
   );
 });
 
 // Pressable's style-as-function, defined once rather than per row per render.
 const pressStyle = ({ pressed }) => [styles.row, pressed && styles.pressed];
+const morePressStyle = ({ pressed }) => [
+  styles.rowMore,
+  pressed && styles.pressed,
+];
 
 // Closes over nothing, so it belongs here rather than being rebuilt per render.
 const keyForPlay = play => `${play.id}-${play.playedAt}`;
@@ -448,12 +467,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dayHead: { paddingTop: 16, paddingBottom: 6 },
+  rowWrap: { flexDirection: 'row', alignItems: 'center' },
   row: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 7,
   },
+  // TrackRow's ⋯ box, to the pixel.
+  rowMore: { paddingVertical: 10, paddingLeft: 8 },
   pressed: { opacity: 0.6 },
   meta: { flex: 1, minWidth: 0, gap: 3 },
   title: { fontFamily: fonts.medium, fontSize: 15 },
