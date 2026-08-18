@@ -228,7 +228,7 @@ export function QuickPicksWheel({ tracks, currentId, onPick }) {
         </View>
       </GestureDetector>
       <Animated.Text style={[label(9.5), { color: t.inkFaint }, hintStyle]}>
-        flick to spin
+        Flick to spin
       </Animated.Text>
       {!!reason && (
         <Text numberOfLines={1} style={[styles.reason, { color: t.inkSoft }]}>
