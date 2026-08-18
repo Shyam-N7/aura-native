@@ -23,6 +23,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { BounceFlatList } from '../components/ui/Bounce';
 import { LONG_LIST } from '../lib/listWindow';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -69,6 +70,7 @@ import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { EASE } from '../theme/motion';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Your (or a shared) playlist, ported from web DesktopPlaylistDetail: cover +
@@ -218,17 +220,25 @@ export default function PlaylistScreen({ route, navigation }) {
     storage.setItem(SORT_KEY, sortId);
   };
 
+  // `quiet` is the pull-to-refresh mode of the SAME request every other caller
+  // uses: a failure re-throws instead of writing the error state, so a
+  // playlist that is already on screen is never traded for an error page
+  // because the network blinked. usePullRefresh says the sentence.
   const load = useCallback(
-    signal =>
+    (signal, { quiet = false } = {}) =>
       (publicId
         ? getPublicPlaylist(publicId, { signal })
         : getPlaylist(id, { signal })
       )
         .then(data => setHit({ data, error: null }))
         .catch(err => {
-          if (err.name !== 'AbortError') {
-            setHit({ data: null, error: err.message });
+          if (err.name === 'AbortError') {
+            return;
           }
+          if (quiet) {
+            throw err;
+          }
+          setHit({ data: null, error: err.message });
         }),
     [id, publicId],
   );
@@ -237,6 +247,20 @@ export default function PlaylistScreen({ route, navigation }) {
     const ctl = new AbortController();
     load(ctl.signal);
     return () => ctl.abort();
+  }, [load]);
+
+  // Pull-to-refresh, named `pull` because `refreshing` on this screen already
+  // means the YouTube re-check below — a different thing entirely (that one
+  // asks YouTube for new songs, this one re-reads the playlist we have). Both
+  // can run at once and neither touches the other's state.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
+
+  // The error state's way out. The reset to `loading` lives here, not inside
+  // load(): every other caller (the import/refresh re-reads below) re-runs it
+  // against rows that are already on screen and must not blink the loader.
+  const retry = useCallback(() => {
+    setHit({ data: null, error: null });
+    load();
   }, [load]);
 
   // Arrived via "who can see this" in the playlists-list popup: open the
@@ -821,6 +845,7 @@ export default function PlaylistScreen({ route, navigation }) {
         {...LONG_LIST}
         itemLayoutAnimation={streaming ? ROW_LAYOUT : undefined}
         ListFooterComponent={footer}
+        refreshControl={pull.control}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
@@ -833,17 +858,23 @@ export default function PlaylistScreen({ route, navigation }) {
             <CrumbBack onPress={() => navigation.goBack()} />
 
         {status === 'loading' && <AuraLoader label="Loading playlist" />}
+        {/* The copy was one fixed sentence for both branches, so opening YOUR
+            OWN playlist while offline told you it was private and to ask a
+            friend for a share link. The caught message was already in state
+            and simply never rendered — every sibling screen shows it.
+            Lowercase per docs/CONTEXT.md's stated voice. The public branch
+            keeps its retry too: "private or unavailable" is as often a dead
+            connection as a real permission wall. */}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            {/* This was one fixed sentence for both branches, so opening YOUR
-                OWN playlist while offline told you it was private and to ask
-                a friend for a share link. The caught message was already in
-                state and simply never rendered — every sibling screen shows
-                it. Lowercase per docs/CONTEXT.md's stated voice. */}
-            {publicId
-              ? 'This playlist is private or unavailable. If someone shared it, ask them for a public view link.'
-              : hit.error || "Couldn't load this playlist."}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={
+              publicId
+                ? 'This playlist is private or unavailable. If someone shared it, ask them for a public view link.'
+                : hit.error || "Couldn't load this playlist."
+            }
+            onRetry={retry}
+          />
         )}
 
         {status === 'ok' && (
@@ -1243,6 +1274,7 @@ const styles = StyleSheet.create({
   // ListTools→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   cover: {
     width: 148,
     height: 148,

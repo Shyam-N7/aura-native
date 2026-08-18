@@ -14,8 +14,10 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
@@ -44,17 +46,44 @@ export default function AlbumScreen({ route, navigation }) {
   const [hit, setHit] = useState({ data: null, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
+  // Lifted out of the effect so a failed load can offer a retry instead of
+  // dead-ending on Back — same shape as HistoryScreen's loadFirstPage. The
+  // reset to {null, null} puts the screen back into `loading` on the way in,
+  // and an aborted request still never paints as an error.
+  //
+  // `quiet` is the pull-to-refresh mode of the SAME request (LikedScreen
+  // carries the long version of why): no blank-to-loading on the way in, and
+  // a failure re-thrown rather than written into the error state, so a
+  // tracklist that is already on screen outlives a blink of network.
+  const load = useCallback(
+    (signal, { quiet = false } = {}) => {
+      if (!quiet) {
+        setHit({ data: null, error: null });
+      }
+      return getAlbum(id, { signal })
+        .then(data => setHit({ data, error: null }))
+        .catch(err => {
+          if (err.name === 'AbortError') {
+            return;
+          }
+          if (quiet) {
+            throw err;
+          }
+          setHit({ data: null, error: err.message });
+        });
+    },
+    [id],
+  );
+
   useEffect(() => {
     const ctl = new AbortController();
-    getAlbum(id, { signal: ctl.signal })
-      .then(data => setHit({ data, error: null }))
-      .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
-        }
-      });
+    load(ctl.signal);
     return () => ctl.abort();
-  }, [id]);
+  }, [load]);
+
+  // Pull-to-refresh: the same load, quiet. Bounce yields the top drag to it
+  // (see ui/Bounce) so the band and the spinner never move on one finger.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
 
   // Memoized because this is the list's `data`. A fresh `[]`/slice every render
   // is a new identity to VirtualizedList, which re-renders every mounted cell.
@@ -104,15 +133,18 @@ export default function AlbumScreen({ route, navigation }) {
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={pull.control}
         ListHeaderComponent={
           <View style={styles.head}>
             <CrumbBack onPress={() => navigation.goBack()} />
 
             {status === 'loading' && <AuraLoader label={`Loading ${kind}`} />}
             {status === 'error' && (
-              <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-                Couldn't load — {hit.error}
-              </Text>
+              <ErrorState
+                style={styles.errorBlock}
+                message={`Couldn't load — ${hit.error}`}
+                onRetry={() => load()}
+              />
             )}
 
             {status === 'ok' && (
@@ -162,7 +194,7 @@ const styles = StyleSheet.create({
   // seams between the windowed rows; marginBottom keeps the old
   // CountLine→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   empty: { marginTop: 18, gap: 5 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },

@@ -21,8 +21,10 @@ import {
 import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { fonts, label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
@@ -88,20 +90,51 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   const [hit, setHit] = useState({ data: initialData, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
+  // Lifted out of the effect so the failure can offer a retry rather than
+  // dead-ending on Back (HistoryScreen's loadFirstPage shape). Only ever runs
+  // for a fetched list — a pre-loaded auto mix can't fail, so it can't retry.
+  //
+  // `quiet` is the pull-to-refresh mode of the SAME request (LikedScreen
+  // carries the long version): no blank-to-loading on the way in, and a
+  // failure re-thrown rather than written into the error state, so the rows
+  // already on screen outlive a blink of network.
+  const load = useCallback(
+    (signal, { quiet = false } = {}) => {
+      if (!quiet) {
+        setHit({ data: null, error: null });
+      }
+      return getCatalogPlaylist(id, { signal })
+        .then(data => setHit({ data, error: null }))
+        .catch(err => {
+          if (err.name === 'AbortError') {
+            return;
+          }
+          if (quiet) {
+            throw err;
+          }
+          setHit({ data: null, error: err.message });
+        });
+    },
+    [id],
+  );
+
   useEffect(() => {
     if (initialData) {
       return undefined; // pre-loaded (an auto mix) — no fetch
     }
     const ctl = new AbortController();
-    getCatalogPlaylist(id, { signal: ctl.signal })
-      .then(data => setHit({ data, error: null }))
-      .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
-        }
-      });
+    load(ctl.signal);
     return () => ctl.abort();
-  }, [id, initialData]);
+  }, [initialData, load]);
+
+  // Pull-to-refresh, on exactly the same gate as the fetch: a made-for-you
+  // mix arrives whole in `initialData` and has no per-id endpoint behind it,
+  // so there is nothing a pull could ask for. No control on those, and the
+  // rubber band keeps the top drag it always had — an affordance that cannot
+  // do anything is worse than none.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }), {
+    enabled: !initialData,
+  });
 
   const tracks = useMemo(() => hit.data?.tracks ?? [], [hit.data]);
 
@@ -204,6 +237,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        refreshControl={pull.control}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.head}>
@@ -211,9 +245,11 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
 
         {status === 'loading' && <AuraLoader label="Loading playlist" />}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={`Couldn't load — ${hit.error}`}
+            onRetry={() => load()}
+          />
         )}
 
         {status === 'ok' && (
@@ -286,6 +322,7 @@ const styles = StyleSheet.create({
   // ListTools→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   empty: { marginTop: 18, gap: 5 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },

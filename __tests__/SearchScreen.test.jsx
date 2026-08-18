@@ -246,3 +246,41 @@ test('remembers only committed queries and re-runs them from recents', async () 
 
   await ReactTestRenderer.act(() => tree.unmount());
 });
+
+// S3: a failed search was a full stop. The query is debounced, so nothing ever
+// re-fires it on its own — the only way out was to retype what you already
+// typed, or leave the tab.
+test('a failed search offers the retry, and the retry re-runs the same query', async () => {
+  searchCatalog.mockRejectedValueOnce(new Error('offline'));
+  const tree = render();
+
+  await ReactTestRenderer.act(async () => {
+    setSearchQuery('song');
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(600);
+  });
+  expect(texts(tree.toJSON())).toContain('Search failed — offline');
+
+  const retry = byLabel(tree, 'try again');
+  expect(retry).toBeDefined();
+  // The touch-target floor: the pill is 33dp tall, so it carries hitSlop.
+  expect(retry.props.hitSlop).toBe(8);
+
+  await ReactTestRenderer.act(async () => {
+    retry.props.onPress();
+  });
+  expect(searchCatalog).toHaveBeenCalledTimes(2);
+  // The retry re-runs the SAME query, byte for byte — including whichever
+  // language pill is selected (`lastLang` is module-scoped and survives the
+  // screen, so this compares the two calls rather than hardcoding 'all').
+  expect(searchCatalog.mock.calls[1]).toEqual(searchCatalog.mock.calls[0]);
+  expect(searchCatalog.mock.calls[1][0]).toBe('song');
+  expect(searchCatalog.mock.calls[1][1].langs).toEqual(['tamil', 'english']);
+  const body = texts(tree.toJSON());
+  expect(body).toContain('Song One');
+  expect(body).not.toContain('Search failed');
+  expect(byLabel(tree, 'try again')).toBeUndefined();
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
