@@ -16,7 +16,6 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-  useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
@@ -34,6 +33,8 @@ import {
 import { getUser } from '../lib/auth';
 import { Icon } from '../components/Icon';
 import { PressScale } from '../components/ui/PressScale';
+import { ScreenFade } from '../components/ui/ScreenFade';
+import { useMotionGate } from '../hooks/useMotionGate';
 import { fonts, label } from '../theme/tokens';
 
 // Ported from web TalkAura.jsx (mobile) + DesktopTalk.jsx: the conversational
@@ -53,11 +54,21 @@ const GENERIC_SEED =
 const moodSeed = mood =>
   `I'm reading you as ${mood} right now. The set is built around that — but tell me how it actually feels and i'll shift it.`;
 
-function ThinkingDot({ index, inkFaint, reduced }) {
+// `live` is not decoration: this loop is infinite and its only stop condition
+// is the request coming back. A request that hangs — or a listener who left
+// Talk mid-answer, or locked the phone — used to leave three dots pulsing on
+// a screen nobody can see, for as long as the socket stays open.
+function ThinkingDot({ index, inkFaint, reduced, live }) {
   const v = useSharedValue(0.3);
   useEffect(() => {
     if (reduced) {
       v.value = 0.6;
+      return undefined;
+    }
+    // Parked: the previous run's cleanup already cancelled the pulse, so the
+    // dot simply holds its opacity and the loop starts again from there when
+    // the app or the tab comes back — no re-seed, no flash.
+    if (!live) {
       return undefined;
     }
     v.value = withDelay(
@@ -71,7 +82,7 @@ function ThinkingDot({ index, inkFaint, reduced }) {
       ),
     );
     return () => cancelAnimation(v);
-  }, [index, reduced, v]);
+  }, [index, reduced, live, v]);
   const style = useAnimatedStyle(() => ({ opacity: v.value }));
   return (
     <Animated.View
@@ -84,7 +95,10 @@ export default function TalkScreen() {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
   const player = usePlayer();
-  const reduced = useReducedMotion();
+  // mayLoop already folds reduced in; `reduced` is read separately because
+  // the dots have a distinct reduced-motion resting state (a steady 0.6)
+  // rather than just a paused one.
+  const { reduced, mayLoop } = useMotionGate();
   const { messages } = useTalkHistory();
   const [draft, setDraft] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -204,137 +218,140 @@ export default function TalkScreen() {
         { backgroundColor: t.bg, paddingTop: insets.top + TOPBAR_CLEARANCE },
       ]}
     >
-      <View style={styles.headerRow}>
-        <Text style={[styles.heading, { color: t.ink }]}>Talk</Text>
-        {messages.length > 1 && (
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="clear conversation"
-            onPress={clear}
-            hitSlop={8}
-          >
-            <Text style={[label(9.5), { color: t.inkFaint }]}>Clear</Text>
-          </PressScale>
-        )}
-      </View>
-
-      <ScrollView
-        ref={scrollRef}
-        style={styles.fill}
-        contentContainerStyle={styles.thread}
-        keyboardShouldPersistTaps="handled"
-      >
-        {messages.map((m, i) => {
-          const isAura = m.who === 'aura';
-          return (
-            <View
-              key={i}
-              style={[styles.msg, isAura ? styles.msgAura : styles.msgYou]}
+      <ScreenFade>
+        <View style={styles.headerRow}>
+          <Text style={[styles.heading, { color: t.ink }]}>Talk</Text>
+          {messages.length > 1 && (
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel="clear conversation"
+              onPress={clear}
+              hitSlop={8}
             >
-              <Text style={[label(isAura ? 11 : 9), { color: t.inkFaint }]}>
-                {isAura ? dj : 'You'}
-              </Text>
-              <View
-                style={
-                  isAura ? null : [styles.youBubble, { backgroundColor: t.line }]
-                }
-              >
-                <Text
-                  style={[
-                    styles.msgText,
-                    { color: m.error ? t.inkSoft : t.ink },
-                  ]}
-                >
-                  {m.text}
-                </Text>
-              </View>
-              {!!m.tracks && (
-                <PressScale
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    (m.intentCount ?? m.tracks.length) === 1
-                      ? 'play song'
-                      : `play set of ${m.tracks.length}`
-                  }
-                  onPress={() => playSet(m.tracks)}
-                  style={[styles.playSet, { borderColor: t.accent }]}
-                >
-                  <View
-                    style={[styles.playSetDot, { backgroundColor: t.accent }]}
-                  >
-                    <Icon name="play" size={11} color={t.bg} />
-                  </View>
-                  <Text style={[label(9.5), { color: t.ink }]}>
-                    {(m.intentCount ?? m.tracks.length) === 1
-                      ? 'Play song'
-                      : `Play set · ${m.tracks.length}`}
-                  </Text>
-                </PressScale>
-              )}
-            </View>
-          );
-        })}
-        {thinking && (
-          <View style={styles.thinking}>
-            {[0, 1, 2].map(i => (
-              <ThinkingDot
-                key={i}
-                index={i}
-                inkFaint={t.inkFaint}
-                reduced={reduced}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+              <Text style={[label(9.5), { color: t.inkFaint }]}>Clear</Text>
+            </PressScale>
+          )}
+        </View>
 
-      <View style={styles.chips}>
-        {chips.map((s, i) => (
-          <PressScale
-            key={i}
+        <ScrollView
+          ref={scrollRef}
+          style={styles.fill}
+          contentContainerStyle={styles.thread}
+          keyboardShouldPersistTaps="handled"
+        >
+          {messages.map((m, i) => {
+            const isAura = m.who === 'aura';
+            return (
+              <View
+                key={i}
+                style={[styles.msg, isAura ? styles.msgAura : styles.msgYou]}
+              >
+                <Text style={[label(isAura ? 11 : 9), { color: t.inkFaint }]}>
+                  {isAura ? dj : 'You'}
+                </Text>
+                <View
+                  style={
+                    isAura ? null : [styles.youBubble, { backgroundColor: t.line }]
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.msgText,
+                      { color: m.error ? t.inkSoft : t.ink },
+                    ]}
+                  >
+                    {m.text}
+                  </Text>
+                </View>
+                {!!m.tracks && (
+                  <PressScale
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      (m.intentCount ?? m.tracks.length) === 1
+                        ? 'play song'
+                        : `play set of ${m.tracks.length}`
+                    }
+                    onPress={() => playSet(m.tracks)}
+                    style={[styles.playSet, { borderColor: t.accent }]}
+                  >
+                    <View
+                      style={[styles.playSetDot, { backgroundColor: t.accent }]}
+                    >
+                      <Icon name="play" size={11} color={t.bg} />
+                    </View>
+                    <Text style={[label(9.5), { color: t.ink }]}>
+                      {(m.intentCount ?? m.tracks.length) === 1
+                        ? 'Play song'
+                        : `Play set · ${m.tracks.length}`}
+                    </Text>
+                  </PressScale>
+                )}
+              </View>
+            );
+          })}
+          {thinking && (
+            <View style={styles.thinking}>
+              {[0, 1, 2].map(i => (
+                <ThinkingDot
+                  key={i}
+                  index={i}
+                  inkFaint={t.inkFaint}
+                  reduced={reduced}
+                  live={mayLoop}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        <View style={styles.chips}>
+          {chips.map((s, i) => (
+            <PressScale
+              key={i}
+              accessibilityRole="button"
+              accessibilityLabel={s}
+              onPress={() => send(s)}
+              disabled={thinking}
+              hitSlop={CHIP_HIT}
+              style={[
+                styles.chip,
+                { borderColor: t.line },
+                thinking && styles.dim,
+              ]}
+            >
+              <Text style={[styles.chipText, { color: t.inkSoft }]}>{s}</Text>
+            </PressScale>
+          ))}
+        </View>
+
+        <View style={[styles.compose, { borderTopColor: t.line }]}>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={`Tell ${dj} how it feels…`}
+            placeholderTextColor={t.inkFaint}
+            cursorColor={t.accent}
+            selectionColor={t.accent}
+            style={[styles.input, { color: t.ink }]}
+            returnKeyType="send"
+            onSubmitEditing={() => send(draft)}
+            accessibilityLabel="talk message"
+          />
+          <Pressable
             accessibilityRole="button"
-            accessibilityLabel={s}
-            onPress={() => send(s)}
-            disabled={thinking}
-            hitSlop={CHIP_HIT}
+            accessibilityLabel="send"
+            onPress={() => send(draft)}
+            disabled={thinking || !draft.trim()}
             style={[
-              styles.chip,
-              { borderColor: t.line },
-              thinking && styles.dim,
+              styles.sendBtn,
+              { backgroundColor: t.accent },
+              (thinking || !draft.trim()) && styles.dim,
             ]}
           >
-            <Text style={[styles.chipText, { color: t.inkSoft }]}>{s}</Text>
-          </PressScale>
-        ))}
-      </View>
-
-      <View style={[styles.compose, { borderTopColor: t.line }]}>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={`Tell ${dj} how it feels…`}
-          placeholderTextColor={t.inkFaint}
-          cursorColor={t.accent}
-          selectionColor={t.accent}
-          style={[styles.input, { color: t.ink }]}
-          returnKeyType="send"
-          onSubmitEditing={() => send(draft)}
-          accessibilityLabel="talk message"
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="send"
-          onPress={() => send(draft)}
-          disabled={thinking || !draft.trim()}
-          style={[
-            styles.sendBtn,
-            { backgroundColor: t.accent },
-            (thinking || !draft.trim()) && styles.dim,
-          ]}
-        >
-          <Icon name="arrow-right" size={16} color={t.bg} />
-        </Pressable>
-      </View>
+            <Icon name="arrow-right" size={16} color={t.bg} />
+          </Pressable>
+        </View>
+      </ScreenFade>
     </View>
   );
 }

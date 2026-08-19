@@ -26,6 +26,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
@@ -53,19 +54,20 @@ import { AuraLoader } from '../components/ui/AuraLoader';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { fonts } from '../theme/tokens';
-import { EASE } from '../theme/motion';
+import { DUR, EASE, SPRING } from '../theme/motion';
 
-// Web LyricsScreen.css: panel/backdrop enter-exit timings and the cinematic
-// dissolve (800ms ease). The toggle thumb slides on the same curve the panel
-// enters with.
-const PANEL_IN_MS = 260;
-const PANEL_OUT_MS = 220;
+// Web LyricsScreen.css: the cinematic dissolve (800ms ease) and the panel's
+// inner timings. The panel itself no longer keeps its own enter/exit numbers —
+// it is a full-screen surface, so it rides the house grammar the player and
+// queue ride: SPRING.sheet in, DUR.sheetOut out.
 const CINEMA_MS = 800;
 const LINE_MS = 380;
 const IDLE_MS = 5000; // no interaction → cinematic
 const POLL_MS = 25000; // 'pending' (server still generating) re-poll
 const STEMS_POLL_MS = 20000; // "music only" preparation re-poll
 const PANEL_RADIUS = 24;
+// Kept only for motion INSIDE the panel (the view-toggle thumb, the karaoke
+// stage's settle-in) — the surface's own enter/exit is the house grammar.
 const SLIDE = Easing.bezier(0.22, 1, 0.36, 1);
 
 const artUrl = (track, res = 500) =>
@@ -801,7 +803,7 @@ export function LyricsOverlay() {
         enter.value = 1;
       } else {
         enter.value = 0;
-        enter.value = withTiming(1, { duration: PANEL_IN_MS, easing: SLIDE });
+        enter.value = withSpring(1, SPRING.sheet);
       }
       // Every open starts romanized, like the web's fresh mount — and on the
       // reading view, not karaoke.
@@ -826,7 +828,7 @@ export function LyricsOverlay() {
     }
     enter.value = withTiming(
       0,
-      { duration: PANEL_OUT_MS, easing: EASE.exit },
+      { duration: DUR.sheetOut, easing: EASE.exit },
       done => {
         if (done) {
           runOnJS(endClose)();

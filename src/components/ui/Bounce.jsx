@@ -6,6 +6,7 @@ import Animated, {
   runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withSequence,
   withSpring,
@@ -93,6 +94,22 @@ function withRubberBand(Scroller) {
       yieldTop.value = refreshArmed;
     }, [refreshArmed, yieldTop]);
 
+    // ── reduced motion ───────────────────────────────────────────────────
+    // The band is decoration on top of a scroll that works perfectly well
+    // without it, and it is the most widespread motion in the app: every
+    // vertical scroller in every screen goes through this wrapper. With the
+    // OS setting on, both halves stand down — the drag stops translating the
+    // scroller and a fling arrives at the edge without a kick — which leaves
+    // the band at over = 0, its resting AND final value, so nothing is ever
+    // frozen part-way or hidden. Read through a shared value rather than the
+    // captured prop because the scroll worklet is memoised by
+    // useAnimatedScrollHandler and would otherwise keep the first answer.
+    const reduced = useReducedMotion();
+    const noBand = useSharedValue(!!reduced);
+    useEffect(() => {
+      noBand.value = !!reduced;
+    }, [reduced, noBand]);
+
     // The idle timer lives on the JS side; worklets ping it only on gesture
     // boundaries. notifyDeep both delivers the signal and cancels any pending
     // revert; armIdle schedules the relax.
@@ -141,9 +158,12 @@ function withRubberBand(Scroller) {
         // The gesture then falls through to the re-anchoring branch, which is
         // exactly what it needs — no travel, and the band ready to measure
         // from the finger's current position the moment it is handed back.
-        if ((atTop || fits) && d > 0 && !yieldTop.value) {
+        // `!noBand.value`: reduced motion takes both edges out of the
+        // branch chain, so every drag falls through to the re-anchoring
+        // branch and the band never leaves 0.
+        if ((atTop || fits) && d > 0 && !yieldTop.value && !noBand.value) {
           over.value = RUBBER * (1 - 1 / (1 + d / RUBBER));
-        } else if ((atBottom || fits) && d < 0) {
+        } else if ((atBottom || fits) && d < 0 && !noBand.value) {
           over.value = -RUBBER * (1 - 1 / (1 + -d / RUBBER));
         } else {
           // Inside range: keep re-anchoring so the band starts measuring the
@@ -163,7 +183,9 @@ function withRubberBand(Scroller) {
       .onFinalize(() => {
         'worklet';
         touching.value = false;
-        over.value = withSpring(0, BOUNCE_SPRING);
+        // Already 0 under reduced motion; assigned rather than sprung so the
+        // release can't run a spring on a band that never stretched.
+        over.value = noBand.value ? 0 : withSpring(0, BOUNCE_SPRING);
       });
 
     const native = Gesture.Native();
@@ -200,7 +222,7 @@ function withRubberBand(Scroller) {
       );
       // A fling arriving at an edge (no finger down) kicks the band with the
       // last frame's travel as its speed.
-      if (!touching.value && over.value === 0) {
+      if (!touching.value && over.value === 0 && !noBand.value) {
         const speed = prevY.value - y;
         if (y <= 1 && prevY.value > 1 && speed > 6) {
           const kick = Math.min(KICK_MAX, speed * 1.6);

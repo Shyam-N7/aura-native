@@ -18,7 +18,8 @@ export const SPRING = {
 export const DUR = {
   press: 120,
   dot: 200,
-  sheetOut: 300,
+  cardOut: 200, // card-sheet exit — the Sheet chassis's one leave duration
+  sheetOut: 300, // full-screen surface exit (player, queue, lyrics)
   toastIn: 320,
   upNext: 340,
   bud: 380,

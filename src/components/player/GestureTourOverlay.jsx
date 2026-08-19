@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
+import { useMotionGate } from '../../hooks/useMotionGate';
 import { Icon } from '../Icon';
 import { PressScale } from '../ui/PressScale';
 import {
@@ -50,7 +51,7 @@ const bloom = () =>
     -1,
   );
 
-function TapPulse({ accent, reduced }) {
+function TapPulse({ accent, reduced, live }) {
   const p1 = useSharedValue(0);
   const p2 = useSharedValue(0);
   useEffect(() => {
@@ -59,13 +60,20 @@ function TapPulse({ accent, reduced }) {
       p2.value = 0;
       return undefined;
     }
+    // Not live (app backgrounded / screen blurred): the PREVIOUS run's
+    // cleanup has already cancelled both rings, so this just declines to
+    // start them again. The values stay where they stopped, and the effect
+    // re-runs — resuming from there — the moment the tour is visible again.
+    if (!live) {
+      return undefined;
+    }
     p1.value = bloom();
     p2.value = withDelay(170, bloom());
     return () => {
       cancelAnimation(p1);
       cancelAnimation(p2);
     };
-  }, [p1, p2, reduced]);
+  }, [p1, p2, reduced, live]);
   const r1 = useAnimatedStyle(() => ({
     opacity: 0.9 * (1 - p1.value),
     transform: [{ scale: 0.45 + 0.75 * p1.value }],
@@ -83,10 +91,12 @@ function TapPulse({ accent, reduced }) {
 }
 
 // Swipe: an arrow chip gliding side to side.
-function SwipeGlide({ accent, bg, reduced }) {
+function SwipeGlide({ accent, bg, reduced, live }) {
   const x = useSharedValue(0);
   useEffect(() => {
-    if (reduced) {
+    // reduced: the chip rests centred, which is where the glide passes
+    // through — the affordance still reads, it just doesn't travel.
+    if (reduced || !live) {
       return undefined;
     }
     x.value = withRepeat(
@@ -98,7 +108,7 @@ function SwipeGlide({ accent, bg, reduced }) {
       true,
     );
     return () => cancelAnimation(x);
-  }, [x, reduced]);
+  }, [x, reduced, live]);
   const glide = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }],
   }));
@@ -112,11 +122,14 @@ function SwipeGlide({ accent, bg, reduced }) {
 }
 
 // Hold: a soft press that lands, holds, and lets go — at the art's right edge.
-function HoldPulse({ accent, reduced }) {
+function HoldPulse({ accent, reduced, live }) {
   const p = useSharedValue(0);
   useEffect(() => {
     if (reduced) {
       p.value = 1;
+      return undefined;
+    }
+    if (!live) {
       return undefined;
     }
     p.value = withRepeat(
@@ -129,7 +142,7 @@ function HoldPulse({ accent, reduced }) {
       -1,
     );
     return () => cancelAnimation(p);
-  }, [p, reduced]);
+  }, [p, reduced, live]);
   const press = useAnimatedStyle(() => ({
     opacity: 0.25 + 0.55 * p.value,
     transform: [{ scale: 0.82 + 0.18 * p.value }],
@@ -144,10 +157,12 @@ function HoldPulse({ accent, reduced }) {
 }
 
 // Up/down: a chevron drifting the way the finger should.
-function Drift({ dir, accent, reduced }) {
+function Drift({ dir, accent, reduced, live }) {
   const y = useSharedValue(0);
   useEffect(() => {
-    if (reduced) {
+    // reduced: the chevron rests at its origin — the direction is carried by
+    // the glyph itself, not by the drift.
+    if (reduced || !live) {
       return undefined;
     }
     y.value = withRepeat(
@@ -165,7 +180,7 @@ function Drift({ dir, accent, reduced }) {
       true,
     );
     return () => cancelAnimation(y);
-  }, [y, dir, reduced]);
+  }, [y, dir, reduced, live]);
   const drift = useAnimatedStyle(() => ({
     opacity: 0.95,
     transform: [{ translateY: y.value }],
@@ -179,18 +194,25 @@ function Drift({ dir, accent, reduced }) {
   );
 }
 
-function Affordance({ kind, t, reduced }) {
+function Affordance({ kind, t, reduced, live }) {
   switch (kind) {
     case 'tap':
-      return <TapPulse accent={t.accent} reduced={reduced} />;
+      return <TapPulse accent={t.accent} reduced={reduced} live={live} />;
     case 'swipe':
-      return <SwipeGlide accent={t.accent} bg={t.accentCard} reduced={reduced} />;
+      return (
+        <SwipeGlide
+          accent={t.accent}
+          bg={t.accentCard}
+          reduced={reduced}
+          live={live}
+        />
+      );
     case 'hold':
-      return <HoldPulse accent={t.accent} reduced={reduced} />;
+      return <HoldPulse accent={t.accent} reduced={reduced} live={live} />;
     case 'up':
-      return <Drift dir={-1} accent={t.accent} reduced={reduced} />;
+      return <Drift dir={-1} accent={t.accent} reduced={reduced} live={live} />;
     case 'down':
-      return <Drift dir={1} accent={t.accent} reduced={reduced} />;
+      return <Drift dir={1} accent={t.accent} reduced={reduced} live={live} />;
     default:
       return null;
   }
@@ -202,8 +224,18 @@ function Affordance({ kind, t, reduced }) {
 // pointer-transparent; only the card's two buttons catch). The card docks
 // next to whatever is lit. All motion is mounted shared values — never
 // entering/exiting (the 4.2.3/Fabric abort class).
-export function GestureTourOverlay({ reduced, targets }) {
+export function GestureTourOverlay({ reduced: reducedProp, targets }) {
   const { t } = useTheme();
+  // Every loop below is infinite, and the tour has no natural end: a sheet
+  // left open on an unlearned step keeps the ring breathing and the gesture
+  // acting itself out for as long as the app lives. That used to include the
+  // whole time the screen was off — five concurrent withRepeat(-1) clocks
+  // ticking the UI thread behind a dark display, which is precisely the
+  // battery class reports/10 flagged. `live` parks them; the tour picks up
+  // exactly where it stopped when the app comes back.
+  const gate = useMotionGate();
+  const reduced = reducedProp ?? gate.reduced;
+  const live = gate.appActive && gate.navFocused;
   const [tour, setTour] = useState(getTourState);
   useEffect(() => subscribeTour(setTour), []);
   const [box, setBox] = useState(null);
@@ -226,7 +258,7 @@ export function GestureTourOverlay({ reduced, targets }) {
   // The ring breathes with the accent — alive, not a static border.
   const breathe = useSharedValue(0);
   useEffect(() => {
-    if (!tour.active || reduced) {
+    if (!tour.active || reduced || !live) {
       return undefined;
     }
     breathe.value = withRepeat(
@@ -238,7 +270,7 @@ export function GestureTourOverlay({ reduced, targets }) {
       true,
     );
     return () => cancelAnimation(breathe);
-  }, [tour.active, reduced, breathe]);
+  }, [tour.active, reduced, live, breathe]);
   const ringStyle = useAnimatedStyle(() => ({
     opacity: 0.65 + 0.35 * breathe.value,
     transform: [{ scale: 1 + 0.012 * breathe.value }],
@@ -314,7 +346,12 @@ export function GestureTourOverlay({ reduced, targets }) {
                 },
               ]}
             >
-              <Affordance kind={spec.affordance} t={t} reduced={reduced} />
+              <Affordance
+                kind={spec.affordance}
+                t={t}
+                reduced={reduced}
+                live={live}
+              />
             </View>
           </>
         ) : (
