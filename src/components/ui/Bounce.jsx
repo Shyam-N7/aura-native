@@ -42,10 +42,22 @@ function withRubberBand(Scroller) {
   // never a per-frame JS hop (reports/10 made per-frame work while invisible
   // an explicit anti-pattern).
   return React.forwardRef(function Bouncy(
-    // `refreshControl` is destructured to be DISCARDED, not used — see the
-    // note below. Leaving it on ...props would forward it to the scroller and
-    // silently rebuild the exact wrapper this component cannot survive.
-    { style, onDeepChange, deepThreshold = 480, refreshControl: _drop, ...props },
+    // These four are destructured to be DISCARDED, not used — see the note
+    // below. Any of them forwarded to the scroller rebuilds the wrapper this
+    // component cannot survive, and `onRefresh` does it WITHOUT a control:
+    // VirtualizedList synthesises its own RefreshControl from it whenever
+    // `refreshControl` is null (VirtualizedList.js — `} else if (onRefresh) {`),
+    // so stripping the control alone would leave the trap half open.
+    {
+      style,
+      onDeepChange,
+      deepThreshold = 480,
+      refreshControl: _rc,
+      onRefresh: _or,
+      refreshing: _rf,
+      progressViewOffset: _pvo,
+      ...props
+    },
     ref,
   ) {
     const scrollY = useSharedValue(0);
