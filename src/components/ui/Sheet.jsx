@@ -13,9 +13,7 @@ import {
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import Animated, {
-  FadeOut,
-  ReduceMotion,
-  SlideOutDown,
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -40,18 +38,28 @@ import { DUR, EASE, SPRING } from '../../theme/motion';
 // must keep scrolling it — only the header/grip dismisses, like every
 // platform sheet).
 //
-// The OPEN is chassis-owned: a shared-value rise started on first layout, so
-// every sheet slides in — including ones nested under another component's
-// null gate, which the old `entering` layout animation had to skip (field
-// report: the queue options sheet popped open). A cancelled shared value
-// survives any unmount; it is the entering/exiting layout-animation pair
-// reanimated 4.2.3/Fabric aborts natively on when a view is removed
-// mid-flight — this device's documented crash class.
+// BOTH halves are chassis-owned shared values — the open is a rise started on
+// first layout, the close a slide-down + backdrop fade this component plays
+// BEFORE it hands the owner `onClose`. Neither is an entering=/exiting=
+// layout animation: that pair is what reanimated 4.2.3/Fabric aborts natively
+// on when a view is removed mid-flight (this device's documented crash
+// class), and it also had to be skipped for sheets nested under another
+// component's null gate (field report: the queue options sheet popped open).
+// A cancelled shared value survives any unmount.
 //
-// `animated={false}` therefore now opts out of only the EXIT pair. Still
-// required for any sheet nested under another component's null gate (e.g.
-// the queue options sheet inside QueueSheet) and for confirms whose accept
-// tears down the tree (`confirm({ instant: true })`): those pop closed.
+// The close therefore runs the PlayerSheet/QueueSheet mount grammar, inverted
+// for a chassis whose mount its owner holds: a dismissal never calls
+// `onClose` straight away — it plays the exit and lets a timer cut to the
+// animation's own length deliver `onClose`, which is when the owner unmounts
+// us. Owners that close themselves WITHOUT routing through `onClose` (a row
+// press that closes its bus) still pop: the chassis can only see the
+// dismissals it is asked for.
+//
+// `animated={false}` opts out of only that EXIT — `onClose` fires
+// synchronously, the rise still plays. Still required for any sheet nested
+// under another component's null gate (e.g. the queue options sheet inside
+// QueueSheet) and for confirms whose accept tears down the tree
+// (`confirm({ instant: true })`): those pop closed.
 export function Sheet({
   onClose,
   closeLabel,
@@ -69,6 +77,10 @@ export function Sheet({
   // first layout pass (the slide distance IS the measured card height — until
   // then the card hides behind opacity 0, so there is no first-frame flash).
   const p = useSharedValue(0);
+  // Exit progress: 0 = present, 1 = gone (the card a full height below where
+  // it stands, the backdrop faded off). Separate from `p` so the exit starts
+  // from wherever the sheet IS — mid-rise, or held at a released drag.
+  const out = useSharedValue(0);
   const entered = useRef(false);
   const onCardLayout = e => {
     cardH.value = e.nativeEvent.layout.height;
@@ -80,15 +92,48 @@ export function Sheet({
     }
   };
 
+  // Every dismissal — backdrop, back button, drag-down — routes through here:
+  // play the exit, then hand the owner `onClose` on a timer cut to the same
+  // length. Reduced motion and `animated={false}` skip straight to `onClose`,
+  // exactly as `.reduceMotion(ReduceMotion.System)` and the missing `exiting`
+  // prop did before. The ref latches so a second tap mid-exit can't start a
+  // second timer (or close twice).
+  const closing = useRef(false);
+  const closeTimer = useRef(null);
+  const dismiss = useCallback(() => {
+    if (closing.current) {
+      return;
+    }
+    if (!animated || reduced) {
+      onClose();
+      return;
+    }
+    closing.current = true;
+    // The rise must not fight the fall if the sheet is dismissed mid-open.
+    cancelAnimation(p);
+    out.value = withTiming(1, { duration: DUR.dot, easing: EASE.exit });
+    closeTimer.current = setTimeout(onClose, DUR.dot);
+  }, [animated, reduced, onClose, out, p]);
+
+  // Nothing outlives the unmount: every value is cancelled where it stands
+  // and the hand-off timer can never fire into a torn-down tree.
+  useEffect(
+    () => () => {
+      clearTimeout(closeTimer.current);
+      cancelAnimation(p);
+      cancelAnimation(out);
+      cancelAnimation(dragY);
+    },
+    [p, out, dragY],
+  );
+
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose();
+      dismiss();
       return true;
     });
     return () => sub.remove();
-  }, [onClose]);
-
-  const dismiss = useCallback(() => onClose(), [onClose]);
+  }, [dismiss]);
 
   const pan = Gesture.Pan()
     // A clear downward pull only — presses inside the sheet stay presses,
@@ -111,13 +156,16 @@ export function Sheet({
       }
     });
 
-  // Drag and open ride one transform; the backdrop dims in step with the rise.
+  // Drag, open and exit ride one transform; the backdrop dims in step with the
+  // rise and fades under the exit.
   const cardStyle = useAnimatedStyle(() => ({
     opacity: cardH.value === 0 ? 0 : 1,
-    transform: [{ translateY: dragY.value + (1 - p.value) * cardH.value }],
+    transform: [
+      { translateY: dragY.value + (1 - p.value + out.value) * cardH.value },
+    ],
   }));
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, p.value * 1.6),
+    opacity: Math.min(1, p.value * 1.6) * (1 - out.value),
   }));
 
   const grip = <View style={[styles.grip, { backgroundColor: t.line }]} />;
@@ -136,33 +184,21 @@ export function Sheet({
       animationType="none"
       statusBarTranslucent
       navigationBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={dismiss}
     >
       <GestureHandlerRootView style={StyleSheet.absoluteFill}>
         <View style={[StyleSheet.absoluteFill, styles.stack]}>
           <Animated.View
-            exiting={
-              animated
-                ? FadeOut.duration(DUR.dot).reduceMotion(ReduceMotion.System)
-                : undefined
-            }
             style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}
           >
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={closeLabel}
-              onPress={onClose}
+              onPress={dismiss}
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
           <Animated.View
-            exiting={
-              animated
-                ? SlideOutDown.duration(DUR.dot).reduceMotion(
-                    ReduceMotion.System,
-                  )
-                : undefined
-            }
             onLayout={onCardLayout}
             style={[
               styles.card,

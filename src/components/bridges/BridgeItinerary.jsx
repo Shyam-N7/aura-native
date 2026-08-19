@@ -154,7 +154,7 @@ export function BridgeItinerary({
 
       {loading && (
         <Text style={[label(9), styles.state, { color: t.inkFaint }]}>
-          curating your bridge
+          Curating your bridge
         </Text>
       )}
       {!loading && !!narrative && (

@@ -512,11 +512,13 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   section: {
+    fontFamily: fonts.medium,
     fontSize: 11,
     letterSpacing: 0.4,
     marginBottom: 4,
   },
   hint: {
+    fontFamily: fonts.regular,
     fontSize: 13.5,
     marginTop: 12,
   },
@@ -527,12 +529,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   clear: {
+    fontFamily: fonts.medium,
     fontSize: 12.5,
   },
   recentRow: {
     paddingVertical: 9,
   },
   recentText: {
+    fontFamily: fonts.regular,
     fontSize: 14.5,
   },
   pressed: {
@@ -549,10 +553,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   entityName: {
+    fontFamily: fonts.medium,
     fontSize: 15,
-    fontWeight: '500',
   },
   entitySub: {
+    fontFamily: fonts.regular,
     fontSize: 12.5,
   },
   chips: {

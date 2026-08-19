@@ -74,7 +74,7 @@ export function ConfirmPopup({
                 )}
               </View>
               <Text style={[styles.checkLabel, { color: t.inkSoft }]}>
-                don't ask again
+                Don't ask again
               </Text>
             </Pressable>
           )}
@@ -87,7 +87,7 @@ export function ConfirmPopup({
               style={({ pressed }) => [styles.cancel, { borderColor: t.line }, pressed && styles.pressed]}
             >
               <Text style={[styles.cancelText, { color: t.inkSoft }]}>
-                cancel
+                Cancel
               </Text>
             </Pressable>
             <Pressable

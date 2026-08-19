@@ -1634,10 +1634,11 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   source: {
+    fontFamily: fonts.semibold,
     fontSize: 17,
-    fontWeight: '600',
   },
   count: {
+    fontFamily: fonts.regular,
     fontSize: 12,
   },
   toggle: {
@@ -1698,6 +1699,7 @@ const styles = StyleSheet.create({
   },
   idx: {
     width: 22,
+    fontFamily: fonts.regular,
     fontSize: 11,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
@@ -1707,10 +1709,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
+    fontFamily: fonts.medium,
     fontSize: 14.5,
-    fontWeight: '500',
   },
   artist: {
+    fontFamily: fonts.regular,
     fontSize: 12,
   },
   npLine: {
@@ -1731,6 +1734,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   time: {
+    fontFamily: fonts.regular,
     fontSize: 11.5,
     fontVariant: ['tabular-nums'],
   },
@@ -1739,6 +1743,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   empty: {
+    fontFamily: fonts.regular,
     fontSize: 13.5,
     paddingHorizontal: 20,
     marginTop: 16,

@@ -22,9 +22,10 @@ export function SectionHeader({ title, sub, seeAllLabel, onSeeAll }) {
           accessibilityRole="button"
           accessibilityLabel={seeAllLabel ?? `see all ${title}`}
           onPress={onSeeAll}
-          hitSlop={8}
+          hitSlop={10}
+          style={styles.seeAll}
         >
-          <Text style={[label(9.5), { color: t.accent }]}>see all →</Text>
+          <Text style={[label(9.5), { color: t.accent }]}>See all →</Text>
         </Pressable>
       )}
     </View>
@@ -40,4 +41,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   titles: { gap: 3, flexShrink: 1 },
+  // ~11dp of label text is nowhere near tappable. Padding grows the touch box
+  // and the equal negative margin returns the space to the row, so the header
+  // keeps its height and "See all" stays pinned to the same right edge:
+  // 11 + 20 padding + 20 hitSlop = 51dp.
+  seeAll: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: -10,
+    marginHorizontal: -12,
+  },
 });

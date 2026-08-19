@@ -429,7 +429,8 @@ export default function PlaylistsScreen({ navigation }) {
                   setCreating(false);
                   setNewName('');
                 }}
-                style={({ pressed }) => pressed && styles.pressed}
+                hitSlop={10}
+                style={({ pressed }) => [styles.createHit, pressed && styles.pressed]}
               >
                 <Text style={[styles.createBtn, { color: t.inkSoft }]}>
                   Cancel
@@ -440,7 +441,8 @@ export default function PlaylistsScreen({ navigation }) {
                 accessibilityLabel="create"
                 disabled={!newName.trim()}
                 onPress={submitNew}
-                style={({ pressed }) => pressed && styles.pressed}
+                hitSlop={10}
+                style={({ pressed }) => [styles.createHit, pressed && styles.pressed]}
               >
                 <Text
                   style={[
@@ -786,5 +788,9 @@ const styles = StyleSheet.create({
     gap: 22,
     paddingVertical: 2,
   },
+  // ~17dp of text is not a button. Padding grows the touch box and the equal
+  // negative margin returns the space, so the create row keeps its height:
+  // 17 + 20 padding + 20 hitSlop = 57dp.
+  createHit: { paddingVertical: 10, marginVertical: -10 },
   createBtn: { fontFamily: fonts.medium, fontSize: 14.5 },
 });

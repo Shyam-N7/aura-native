@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { fonts } from '../../theme/tokens';
 
 const CELLS = [0, 1, 2, 3, 4, 5];
 
@@ -50,7 +51,7 @@ const styles = StyleSheet.create({
     height: 56,
     justifyContent: 'center',
   },
-  char: { fontSize: 20, fontWeight: '600' },
+  char: { fontFamily: fonts.semibold, fontSize: 20 },
   // Sits on top of the cells: taps focus it natively, but it stays invisible.
   input: { ...StyleSheet.absoluteFillObject, opacity: 0 },
 });

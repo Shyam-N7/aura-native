@@ -262,6 +262,6 @@ test('pending and unavailable states explain themselves', async () => {
 
   mockGetLyrics.mockResolvedValue({ available: false, synced: false });
   tree = await render();
-  expect(texts(tree.toJSON())).toContain("lyrics aren't available");
+  expect(texts(tree.toJSON())).toContain("Lyrics aren't available");
   await ReactTestRenderer.act(() => tree.unmount());
 });

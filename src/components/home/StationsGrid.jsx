@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
 import { Skeleton } from '../ui/Skeleton';
 import { fonts, label } from '../../theme/tokens';
@@ -9,6 +10,11 @@ import { cleanTitle } from '../../utils/title';
 // "Stations" — 2-col image tiles from pool slice(5, 9); a tap starts the set
 // at that track. Caption bar sits on a dark strip so it reads on any art.
 export function StationsGrid({ stations, loading, onPick }) {
+  const { t, name: themeName } = useTheme();
+  // The caption sits on a dark strip over the tile art, so its ink stays LIGHT
+  // in every theme: `surface` on the light themes, `ink` on midnight.
+  const onArt = themeName === 'midnight' ? t.ink : t.surface;
+
   if (loading) {
     return (
       <View style={styles.grid}>
@@ -34,8 +40,8 @@ export function StationsGrid({ stations, loading, onPick }) {
               <Image source={{ uri: img }} style={StyleSheet.absoluteFill} />
             )}
             <View style={styles.caption}>
-              <Text style={[label(8), styles.light]}>station</Text>
-              <Text numberOfLines={1} style={styles.name}>
+              <Text style={[label(8), styles.light]}>Station</Text>
+              <Text numberOfLines={1} style={[styles.name, { color: onArt }]}>
                 {cleanTitle(track.title)}
               </Text>
               {!!track.artist && (
@@ -70,13 +76,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'flex-end',
   },
+  // Deliberate literals: the strip is a fixed dark scrim over ARTWORK (it has
+  // to darken the art on every theme, so it can't follow a light surface), and
+  // the faded caption ink over it has no token — no theme carries a
+  // light-with-alpha ink (dusk/bloom's inkSoft is dark).
   caption: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     paddingHorizontal: 12,
     paddingVertical: 9,
     gap: 1,
   },
-  name: { fontFamily: fonts.semibold, fontSize: 16, color: '#fff' },
+  name: { fontFamily: fonts.semibold, fontSize: 16 },
   artistLine: { fontFamily: fonts.regular, fontSize: 11 },
   light: { color: 'rgba(255,255,255,0.75)' },
 });
