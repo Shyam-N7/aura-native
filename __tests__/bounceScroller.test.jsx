@@ -89,14 +89,24 @@ describe('Bounce keeps the scroller as the gesture detector’s direct child', (
     expect(style.length).toBeGreaterThan(0);
   });
 
-  // A caller passing refreshControl must not be able to reintroduce the
-  // wrapper through ...props.
-  it('swallows refreshControl instead of forwarding it', async () => {
-    await render(
-      <BounceScrollView refreshControl={<Text>spinner</Text>}>
-        <Text>row</Text>
-      </BounceScrollView>,
-    );
-    expect(seen.child.props.refreshControl).toBeUndefined();
-  });
+  // A caller must not be able to reintroduce the wrapper through ...props.
+  // `refreshControl` is the obvious door; `onRefresh` is the one that cost an
+  // evening, because VirtualizedList builds its OWN RefreshControl from it
+  // when none was passed — same wrapper, no control in sight at the call site.
+  it.each(['refreshControl', 'onRefresh', 'refreshing', 'progressViewOffset'])(
+    'swallows %s instead of forwarding it',
+    async prop => {
+      const value =
+        prop === 'refreshControl' ? <Text>spinner</Text>
+        : prop === 'onRefresh' ? () => {}
+        : prop === 'refreshing' ? true
+        : 40;
+      await render(
+        <BounceScrollView {...{ [prop]: value }}>
+          <Text>row</Text>
+        </BounceScrollView>,
+      );
+      expect(seen.child.props[prop]).toBeUndefined();
+    },
+  );
 });
