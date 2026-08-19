@@ -484,3 +484,74 @@ test('removing a track offers an undo that re-adds it, back at its own index', a
   off();
   await ReactTestRenderer.act(() => tree.unmount());
 });
+
+// The rollback used to fire unconditionally. putBack() correctly declines when
+// the row is already there — a collaborator re-added it while the pill was up —
+// but the catch still stripped that row out and decremented the count, so a
+// failed undo deleted somebody else's legitimate edit.
+test('a failed undo never removes a row it did not put back', async () => {
+  const { confirm } = require('../src/lib/confirm');
+  const { addToPlaylist, removeFromPlaylist } = require('../src/api/playlists');
+  const { subscribeToast } = require('../src/lib/toast');
+
+  getPlaylist.mockResolvedValue({
+    id: 'p1', name: 'Drive', role: 'owner', canEdit: true, shared: true,
+    isPublic: false, updatedAt: 1, collaborators: [], trackCount: 2,
+    tracks: [
+      { id: 't1', title: 'One', artist: 'A', language: 'tamil' },
+      { id: 't2', title: 'Two', artist: 'B', language: 'tamil' },
+    ],
+  });
+  confirm.mockResolvedValue(true);
+  removeFromPlaylist.mockResolvedValue(undefined);
+
+  const events = [];
+  const off = subscribeToast(e => events.push(e));
+
+  const tree = await render(
+    <PlaylistScreen
+      route={{ params: { id: 'p1' } }}
+      navigation={{ goBack: jest.fn(), setParams: jest.fn(), addListener: jest.fn(() => jest.fn()) }}
+    />,
+  );
+
+  const rowIds = () =>
+    tree.root
+      .findAll(n => typeof n.props?.track?.id === 'string' && !!n.props?.menu)
+      .map(n => n.props.track.id)
+      .filter((v, i, a) => a.indexOf(v) === i);
+
+  const remove = tree.root
+    .findAll(n => n.props?.track?.id === 't2' && n.props?.menu?.extras?.length)[0]
+    .props.menu.extras.find(x => x.label === 'Remove from this playlist');
+  await ReactTestRenderer.act(async () => {
+    remove.onPress();
+  });
+  expect(rowIds()).toEqual(['t1']);
+
+  // The collaborator's re-add lands before the user reaches Undo: the poll
+  // brings t2 back on its own.
+  getPlaylist.mockResolvedValue({
+    id: 'p1', name: 'Drive', role: 'owner', canEdit: true, shared: true,
+    isPublic: false, updatedAt: 2, collaborators: [], trackCount: 2,
+    tracks: [
+      { id: 't1', title: 'One', artist: 'A', language: 'tamil' },
+      { id: 't2', title: 'Two', artist: 'B', language: 'tamil' },
+    ],
+  });
+  const removed = events[events.length - 1];
+
+  // Now the retry fails with something that is NOT a duplicate.
+  addToPlaylist.mockRejectedValue(new Error('offline'));
+  await ReactTestRenderer.act(async () => {
+    removed.action.onPress();
+  });
+
+  // The row that is on screen belongs to the collaborator, not to this undo,
+  // so the failure must leave it exactly where it is.
+  expect(rowIds()).toContain('t1');
+  expect(events[events.length - 1].message).toContain("Couldn't undo");
+
+  off();
+  await ReactTestRenderer.act(() => tree.unmount());
+});
