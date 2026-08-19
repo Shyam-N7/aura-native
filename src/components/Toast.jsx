@@ -164,9 +164,16 @@ export function Toast() {
   }
   const { action } = current;
   // Without an action the wrap stays exactly as untouchable as it always was.
-  // With one, box-none keeps the wrap and the pill transparent to touch and
-  // hands taps to the single control inside — the full-width wrap must never
-  // start eating taps meant for the screen under it.
+  // With one, EVERY view between the wrap and the control has to be box-none,
+  // not just the outer two: box-none means "not me, try my children", and
+  // Android stops at the first child that hit-tests — so a single `auto` view
+  // anywhere in the chain becomes a target with no handler and swallows the
+  // tap. The glass shell was that view, which turned an undo pill into a
+  // 5-second dead zone over the screen beneath it.
+  //
+  // The copy is wrapped rather than marked: on Android ReactTextView does not
+  // honour pointerEvents at all, so `none` on the <Text> is a no-op and the
+  // words themselves would keep eating taps.
   const touch = action ? 'box-none' : 'none';
   return (
     <View
@@ -174,16 +181,22 @@ export function Toast() {
       style={[styles.wrap, { bottom: insets.bottom + 88 }]}
     >
       <Animated.View pointerEvents={touch} style={pillStyle}>
-        <Glass radius={22} style={[styles.pill, !!action && styles.pillAction]}>
-          <View style={styles.row}>
-            {current.tick && (
-              <Animated.View style={[styles.tick, tickStyle]}>
-                <Icon name="check" size={11} color="#fff" strokeWidth={2.4} />
-              </Animated.View>
-            )}
-            <Text style={[type.body, styles.text, { color: t.ink }]}>
-              {current.message}
-            </Text>
+        <Glass
+          radius={22}
+          pointerEvents={touch}
+          style={[styles.pill, !!action && styles.pillAction]}
+        >
+          <View pointerEvents={touch} style={styles.row}>
+            <View pointerEvents="none" style={styles.copy}>
+              {current.tick && (
+                <Animated.View style={[styles.tick, tickStyle]}>
+                  <Icon name="check" size={11} color="#fff" strokeWidth={2.4} />
+                </Animated.View>
+              )}
+              <Text style={[type.body, styles.text, { color: t.ink }]}>
+                {current.message}
+              </Text>
+            </View>
             {!!action && (
               <Pressable
                 accessibilityRole="button"
@@ -229,6 +242,9 @@ const styles = StyleSheet.create({
   // 5 + 38 + 5 = the 48dp the action needs, with the slop inside the pill.
   pillAction: { paddingVertical: 5, paddingRight: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // Holds the tick and the message so they can be made untouchable as one.
+  // flexShrink keeps the pill's maxWidth shrink behaviour intact.
+  copy: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   tick: {
     width: 18,
     height: 18,

@@ -102,7 +102,38 @@ describe('the seek bar', () => {
         nativeEvent: { actionName: 'decrement' },
       });
     });
-    expect(onSeek).toHaveBeenLastCalledWith(0.45);
+    // Back where it started. This used to expect 0.45 — decrement counting
+    // from the stale prop rather than from the position the increment just
+    // asked for, which is the same defect that made two forwards land on one
+    // spot. Stepping ten forward and ten back must return you to 100s.
+    expect(onSeek).toHaveBeenLastCalledWith(0.5);
+  });
+
+  // `progress` is a 4Hz poll with no seek event, so it still reads the old
+  // position for a beat after a commit. Counting from it meant two presses
+  // inside one poll window both computed from the same number and landed on
+  // the same spot — so a screen-reader user pressing forward twice got +10s,
+  // not +20s, and the second press appeared to do nothing.
+  it('accumulates presses issued before the position prop catches up', () => {
+    const onSeek = jest.fn();
+    // progress stays 0.5 across both presses: the prop has not moved yet.
+    const bar = byLabel(render({ onSeek }), 'seek');
+
+    act(() => {
+      bar.props.onAccessibilityAction({
+        nativeEvent: { actionName: 'increment' },
+      });
+    });
+    expect(onSeek).toHaveBeenLastCalledWith(0.55);
+
+    act(() => {
+      bar.props.onAccessibilityAction({
+        nativeEvent: { actionName: 'increment' },
+      });
+    });
+    // 100 + 10 + 10 of 200 — not 110 again.
+    expect(onSeek).toHaveBeenLastCalledWith(0.6);
+    expect(onSeek).toHaveBeenCalledTimes(2);
   });
 
   it('clamps at the ends and stays quiet with no duration', () => {

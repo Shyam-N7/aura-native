@@ -23,6 +23,11 @@ export function Glass({
   solid = false,
   soft = false,
   blur = false,
+  // Left undefined this renders exactly as before. It exists because a caller
+  // that is `box-none` above us cannot hand taps through on its own: this
+  // shell is a plain View, so it hit-tests as `auto` and Android stops the
+  // search at the first target it finds — which would be the glass itself.
+  pointerEvents,
   children,
 }) {
   const { t, name } = useTheme();
@@ -39,6 +44,7 @@ export function Glass({
 
   return (
     <View
+      pointerEvents={pointerEvents}
       style={[
         styles.shell,
         {

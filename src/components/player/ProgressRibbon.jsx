@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -316,12 +316,32 @@ export function ProgressRibbon({
   // an adjustable, reads its position as a time, and moves by whole seconds
   // through the same onSeek the drag commits to.
   const durSec = Math.max(0, Math.round(durationSec || 0));
-  const posSec = Math.round(Math.min(1, Math.max(0, progress)) * durSec);
+  const propSec = Math.round(Math.min(1, Math.max(0, progress)) * durSec);
+  // `progress` is a 4Hz poll with no seek event, smoothed again on the way in,
+  // so it still reads the OLD position for a beat after a commit. Counting
+  // from it means two presses inside one poll window both compute from the
+  // same number and land on the same spot — the second press does nothing.
+  // Hold the target we last asked for until the prop actually moves, the same
+  // way the hold-to-seek path holds its own target.
+  const pending = useRef(-1);
+  const lastProp = useRef(propSec);
+  if (lastProp.current !== propSec) {
+    lastProp.current = propSec;
+    pending.current = -1;
+  }
+  // Read at render for the announced value...
+  const posSec = pending.current >= 0 ? pending.current : propSec;
   const seekBy = delta => {
     if (durSec <= 0) {
       return;
     }
-    const next = Math.min(durSec, Math.max(0, posSec + delta));
+    // ...and again at call time here, because two presses can land inside one
+    // render: nothing in this component is React state, so a commit does not
+    // schedule a re-render and the second press would otherwise still be
+    // holding the first press's starting point.
+    const from = pending.current >= 0 ? pending.current : propSec;
+    const next = Math.min(durSec, Math.max(0, from + delta));
+    pending.current = next;
     const p = next / durSec;
     // Same hold as the drag's onEnd: park the fill on the new spot so it
     // doesn't flash back to the old progress while the engine seeks.

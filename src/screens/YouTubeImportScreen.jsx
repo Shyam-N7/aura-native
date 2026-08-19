@@ -62,7 +62,11 @@ export default function YouTubeImportScreen({ navigation }) {
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState(null);
   const [checking, setChecking] = useState(false);
-  const [checkNow, setCheckNow] = useState(false); // Go pressed — skip the debounce
+  // A COUNTER, not a flag. As a boolean this was a one-way latch: the second
+  // Go set the same value, React bailed out of the render, the effect below
+  // never re-ran, and the key was dead for the rest of that URL — on a field
+  // whose whole job is retrying a link. Every press must change the deps.
+  const [checkNonce, setCheckNonce] = useState(0); // Go pressed — skip the debounce
   const [linkError, setLinkError] = useState(null);
   const [starting, setStarting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -86,7 +90,7 @@ export default function YouTubeImportScreen({ navigation }) {
     setLinkError(null);
     // Back to debounced: the link just changed, so the pending Go was for a
     // link that no longer exists.
-    setCheckNow(false);
+    setCheckNonce(0);
   };
 
   // The keyboard's Go key. There is no button in this state — the check runs
@@ -101,7 +105,10 @@ export default function YouTubeImportScreen({ navigation }) {
     if (!url.trim() || checking) {
       return;
     }
-    setCheckNow(true);
+    // A retry starts clean: the previous verdict is about the attempt being
+    // replaced, so leaving it up would read as the new one failing instantly.
+    setLinkError(null);
+    setCheckNonce(n => n + 1);
   };
 
   // Check the link as it is pasted. On Android a paste arrives as one
@@ -124,12 +131,12 @@ export default function YouTubeImportScreen({ navigation }) {
           }
         })
         .finally(() => setChecking(false));
-    }, checkNow ? 0 : DEBOUNCE_MS);
+    }, checkNonce ? 0 : DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       ctl.abort();
     };
-  }, [url, checkNow]);
+  }, [url, checkNonce]);
 
   // A verdict has landed and the decision moves to the buttons — on a short
   // phone the keyboard would otherwise sit on top of them.

@@ -275,3 +275,52 @@ test('undo on "don’t show this again" unhides the track and restores the row',
   off();
   await ReactTestRenderer.act(() => tree.unmount());
 });
+
+// The bug this guards: `box-none` was set on the wrap and the pill's outer
+// Animated.View, and a comment claimed that handed taps to the control inside.
+// It did not — box-none means "not me, try my children", and the glass shell
+// between them hit-tested as `auto`, so Android stopped there and every tap
+// that missed Undo was swallowed for the whole five seconds the offer stood.
+// Assert the entire chain, not just the outermost view, because checking only
+// the outer one is precisely what let this ship.
+test('an actionable pill hands every tap it does not own to the screen beneath', async () => {
+  const tree = await render(<Toast />);
+  await ReactTestRenderer.act(async () => {
+    showToast('Removed.', { action: { label: 'Undo', onPress: () => {} } });
+  });
+
+  // Walk from the root down to the Undo control and collect what each view
+  // says about touch. Nothing on that path may be a target.
+  const action = byLabel(tree, 'undo');
+  const chain = [];
+  let node = action.parent;
+  while (node) {
+    if (typeof node.type === 'string' && node.props.style) {
+      chain.push(node.props.pointerEvents);
+    }
+    node = node.parent;
+  }
+  expect(chain.length).toBeGreaterThanOrEqual(3);
+  for (const pe of chain) {
+    expect(pe).toBe('box-none');
+  }
+
+  // The control itself must stay hittable — it is the one thing that is.
+  expect(action.props.pointerEvents).toBeUndefined();
+
+  // And the words sit inside a view that opts out, since a <Text> cannot opt
+  // out of touch on Android — without that wrapper the message itself is a
+  // target and eats the tap even with every ancestor set correctly.
+  const message = tree.root
+    .findAllByType('Text')
+    .find(t => t.props.children === 'Removed.');
+  expect(message).toBeTruthy();
+  let wrapped = false;
+  for (let n = message.parent; n; n = n.parent) {
+    if (n.props?.pointerEvents === 'none') {
+      wrapped = true;
+      break;
+    }
+  }
+  expect(wrapped).toBe(true);
+});

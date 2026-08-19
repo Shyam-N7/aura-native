@@ -591,6 +591,15 @@ export default function PlaylistScreen({ route, navigation }) {
             },
           };
         });
+      // Whether the row was ALREADY there before the optimistic insert — read
+      // off the ref rather than set inside the updater above, which is lazy
+      // and runs twice under StrictMode. The rollback below must undo only
+      // what putBack actually did: if a collaborator re-added the track while
+      // the pill was up, that row is theirs, and a failed retry must not take
+      // it away.
+      const already = (hitRef.current?.data?.tracks ?? []).some(
+        x => x.id === track.id,
+      );
       putBack();
       try {
         await addToPlaylist(id, track.id);
@@ -602,18 +611,20 @@ export default function PlaylistScreen({ route, navigation }) {
           showToast('Back in the playlist.');
           return;
         }
-        setHit(h =>
-          h.data
-            ? {
-                ...h,
-                data: {
-                  ...h.data,
-                  tracks: h.data.tracks.filter(x => x.id !== track.id),
-                  trackCount: (h.data.trackCount ?? 1) - 1,
-                },
-              }
-            : h,
-        );
+        if (!already) {
+          setHit(h =>
+            h.data
+              ? {
+                  ...h,
+                  data: {
+                    ...h.data,
+                    tracks: h.data.tracks.filter(x => x.id !== track.id),
+                    trackCount: (h.data.trackCount ?? 1) - 1,
+                  },
+                }
+              : h,
+          );
+        }
         showToast(`Couldn't undo — ${err.message}`);
       }
     },

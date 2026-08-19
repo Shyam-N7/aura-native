@@ -194,6 +194,13 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
 
   const unhideOne = useCallback(
     async (track, at) => {
+      // putRowBack no-ops when the row is already there, so the rollback has
+      // to know that too — otherwise a failed undo removes a row it never put
+      // back. Read off the ref, not inside the updater, which is lazy and runs
+      // twice under StrictMode.
+      const already = (hitRef.current?.data?.tracks ?? []).some(
+        x => x.id === track.id,
+      );
       putRowBack(track, at);
       try {
         await unhideTrack(track.id);
@@ -201,17 +208,21 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
         invalidateHomeCache('autoPlaylists', 'quickPicks');
         showToast('Back in your mixes.');
       } catch {
-        setHit(h =>
-          h.data
-            ? {
-                ...h,
-                data: {
-                  ...h.data,
-                  tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
-                },
-              }
-            : h,
-        );
+        if (!already) {
+          setHit(h =>
+            h.data
+              ? {
+                  ...h,
+                  data: {
+                    ...h.data,
+                    tracks: (h.data.tracks ?? []).filter(
+                      x => x.id !== track.id,
+                    ),
+                  },
+                }
+              : h,
+          );
+        }
         showToast("Couldn't undo that — try again.");
       }
     },
