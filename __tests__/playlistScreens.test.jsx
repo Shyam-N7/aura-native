@@ -35,6 +35,7 @@ jest.mock('../src/api/playlists', () => ({
   removePlaylistCollaborator: jest.fn(),
   getPlaylist: jest.fn(),
   getPublicPlaylist: jest.fn(),
+  addToPlaylist: jest.fn(),
   removeFromPlaylist: jest.fn(),
   getPlaylistRev: jest.fn(),
   createPlaylistInvite: jest.fn(),
@@ -414,4 +415,72 @@ test('a finished mix import offers aura radio, seeded by its first song', async 
 
   await ReactTestRenderer.act(() => tree.unmount());
   jest.useRealTimers();
+});
+
+
+// Removing a track from a playlist was final: the row went and the toast said
+// so. It now carries an undo — and the undo is honest about what the API can
+// do. addToPlaylist/removeFromPlaylist are the whole surface (no insert-at, no
+// reorder), so the SERVER can only take the track back at the end; the screen
+// puts the row back at its own index, which is what is on screen until the
+// next full refetch.
+test('removing a track offers an undo that re-adds it, back at its own index', async () => {
+  const { confirm } = require('../src/lib/confirm');
+  const { addToPlaylist, removeFromPlaylist } = require('../src/api/playlists');
+  const { subscribeToast } = require('../src/lib/toast');
+
+  getPlaylist.mockResolvedValue({
+    id: 'p1', name: 'Drive', role: 'owner', canEdit: true, shared: false,
+    isPublic: false, updatedAt: 1, collaborators: [], trackCount: 3,
+    tracks: [
+      { id: 't1', title: 'One', artist: 'A', language: 'tamil' },
+      { id: 't2', title: 'Two', artist: 'B', language: 'tamil' },
+      { id: 't3', title: 'Three', artist: 'C', language: 'tamil' },
+    ],
+  });
+  confirm.mockResolvedValue(true);
+  removeFromPlaylist.mockResolvedValue(undefined);
+  addToPlaylist.mockResolvedValue(undefined);
+
+  const events = [];
+  const off = subscribeToast(e => events.push(e));
+
+  const tree = await render(
+    <PlaylistScreen
+      route={{ params: { id: 'p1' } }}
+      navigation={{ goBack: jest.fn(), setParams: jest.fn(), addListener: jest.fn(() => jest.fn()) }}
+    />,
+  );
+
+  const rowIds = () =>
+    tree.root
+      .findAll(n => typeof n.props?.track?.id === 'string' && !!n.props?.menu)
+      .map(n => n.props.track.id)
+      .filter((v, i, a) => a.indexOf(v) === i);
+  expect(rowIds()).toEqual(['t1', 't2', 't3']);
+
+  const remove = tree.root
+    .findAll(n => n.props?.track?.id === 't2' && n.props?.menu?.extras?.length)[0]
+    .props.menu.extras.find(x => x.label === 'Remove from this playlist');
+  await ReactTestRenderer.act(async () => {
+    remove.onPress();
+  });
+
+  expect(removeFromPlaylist).toHaveBeenCalledWith('p1', 't2');
+  expect(rowIds()).toEqual(['t1', 't3']);
+
+  const removed = events[events.length - 1];
+  expect(removed.message).toBe('Removed.');
+  expect(removed.action.label).toBe('Undo');
+
+  await ReactTestRenderer.act(async () => {
+    removed.action.onPress();
+  });
+
+  expect(addToPlaylist).toHaveBeenCalledWith('p1', 't2');
+  expect(rowIds()).toEqual(['t1', 't2', 't3']);
+  expect(events[events.length - 1].message).toBe('Back in the playlist.');
+
+  off();
+  await ReactTestRenderer.act(() => tree.unmount());
 });

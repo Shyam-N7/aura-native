@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -20,6 +20,15 @@ import { DUR } from '../theme/motion';
 // app-wide semantic colour rather than in here.
 const TICK_GREEN = semantic.success;
 
+// The action's own height. 38 of control + 5 of hitSlop top and bottom is the
+// 48dp floor the app's touch passes hold everything to, and the slop has to
+// stay INSIDE the pill: Glass clips to its own bounds (overflow: hidden) and
+// Android drops a touch that lands outside the parent, so a slop that spills
+// past the pill's edge would simply not be there. The pill's vertical padding
+// drops to 5 to match, which keeps an actionable toast 48 tall rather than 58.
+const ACTION_H = 38;
+const ACTION_SLOP = { top: 5, bottom: 5, left: 8, right: 8 };
+
 // Renders the most recent toast (last-write-wins), ported from web Toast.jsx.
 // Web toast motion: rise 16 + scale .96 in, reverse out, short hold — all
 // driven by ONE mounted shared value. entering/exiting props are banned here:
@@ -36,12 +45,59 @@ export function Toast() {
   // The success tick pops in just after the pill lands — a beat of "done".
   const tickScale = useSharedValue(0);
 
-  useEffect(() => subscribeToast(setCurrent), []);
+  // The toast on screen, read by the tap handler. A ref rather than a dep so
+  // the handler keeps one identity for the pill's whole life — a Pressable
+  // that re-created itself mid-animation is a control moving under the thumb.
+  const liveRef = useRef(null);
+  liveRef.current = current;
+  // The id whose action already ran: the once-guard. The hold timer and a
+  // second tap both race the first tap, and an undo that fires twice re-adds
+  // a track twice.
+  const takenRef = useRef(0);
+  // True while an undo is still takeable — an offer holds the floor.
+  const holdRef = useRef(false);
+  // The one message waiting behind that offer (newest wins).
+  const queuedRef = useRef(null);
+  // The out/unmount pair, held so a tap can cancel them mid-flight.
+  const timers = useRef({ out: null, unmount: null });
+  const clearTimers = useCallback(() => {
+    clearTimeout(timers.current.out);
+    clearTimeout(timers.current.unmount);
+    timers.current = { out: null, unmount: null };
+  }, []);
+
+  useEffect(
+    () =>
+      subscribeToast(next => {
+        // Replace or queue? Last-write-wins is right for statements: the
+        // newest news is the truest, and a missed "Saved." costs nothing. An
+        // undo is not a statement, it is an offer with a deadline, and
+        // swallowing it for "Added to your queue." takes away the only way
+        // back from something destructive — silently, while the thumb is
+        // already moving. So a live offer holds the floor and the newer
+        // message waits. ONE slot, newest wins: a burst of toasts must not
+        // build a backlog of stale pills to sit through.
+        if (holdRef.current) {
+          queuedRef.current = next;
+          return;
+        }
+        queuedRef.current = null;
+        setCurrent(next);
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!current) {
-      return;
+      // The floor is free — a message that waited behind an undo goes up.
+      const next = queuedRef.current;
+      if (next) {
+        queuedRef.current = null;
+        setCurrent(next);
+      }
+      return undefined;
     }
+    holdRef.current = !!current.action;
     pill.value = 0;
     pill.value = reduced ? 1 : withTiming(1, { duration: DUR.toastIn });
     if (current.tick) {
@@ -55,21 +111,41 @@ export function Toast() {
     }
     // Hold, animate out, THEN unmount — the timer chain (not a worklet
     // callback) sequences it, and both timers clear if a newer toast lands.
-    let unmountId = null;
-    const outId = setTimeout(() => {
+    // An actionable toast holds far longer: reading it, finding the control
+    // and reaching it does not fit in the statement window.
+    const hold = current.action ? DUR.toastHoldAction : DUR.toastHold;
+    timers.current.out = setTimeout(() => {
+      // The offer expired unanswered; whatever was waiting is free to land.
+      holdRef.current = false;
       pill.value = reduced ? 0 : withTiming(0, { duration: DUR.toastIn });
-      unmountId = setTimeout(
+      timers.current.unmount = setTimeout(
         () => setCurrent(c => (c?.id === current.id ? null : c)),
         reduced ? 0 : DUR.toastIn,
       );
-    }, DUR.toastIn + DUR.toastHold);
-    return () => {
-      clearTimeout(outId);
-      if (unmountId) {
-        clearTimeout(unmountId);
-      }
-    };
-  }, [current, reduced, pill, tickScale]);
+    }, DUR.toastIn + hold);
+    return clearTimers;
+  }, [current, reduced, pill, tickScale, clearTimers]);
+
+  // Tap the action: dismiss now, run the handler once.
+  const takeAction = useCallback(() => {
+    const live = liveRef.current;
+    if (!live?.action || takenRef.current === live.id) {
+      return;
+    }
+    takenRef.current = live.id;
+    holdRef.current = false;
+    // Cancelling the hold pair FIRST is what makes the tap and the expiry
+    // safe to collide: whichever timer was about to fire is gone, and the
+    // exit below is the only one running. The pill answers the tap
+    // immediately — it is not waiting on the handler's network call.
+    clearTimers();
+    pill.value = reduced ? 0 : withTiming(0, { duration: DUR.toastIn });
+    timers.current.unmount = setTimeout(
+      () => setCurrent(c => (c?.id === live.id ? null : c)),
+      reduced ? 0 : DUR.toastIn,
+    );
+    live.action.onPress();
+  }, [clearTimers, pill, reduced]);
 
   const pillStyle = useAnimatedStyle(() => ({
     opacity: pill.value,
@@ -86,13 +162,19 @@ export function Toast() {
   if (!current) {
     return null;
   }
+  const { action } = current;
+  // Without an action the wrap stays exactly as untouchable as it always was.
+  // With one, box-none keeps the wrap and the pill transparent to touch and
+  // hands taps to the single control inside — the full-width wrap must never
+  // start eating taps meant for the screen under it.
+  const touch = action ? 'box-none' : 'none';
   return (
     <View
-      pointerEvents="none"
+      pointerEvents={touch}
       style={[styles.wrap, { bottom: insets.bottom + 88 }]}
     >
-      <Animated.View style={pillStyle}>
-        <Glass radius={22} style={styles.pill}>
+      <Animated.View pointerEvents={touch} style={pillStyle}>
+        <Glass radius={22} style={[styles.pill, !!action && styles.pillAction]}>
           <View style={styles.row}>
             {current.tick && (
               <Animated.View style={[styles.tick, tickStyle]}>
@@ -102,6 +184,22 @@ export function Toast() {
             <Text style={[type.body, styles.text, { color: t.ink }]}>
               {current.message}
             </Text>
+            {!!action && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={action.label.toLowerCase()}
+                onPress={takeAction}
+                hitSlop={ACTION_SLOP}
+                style={({ pressed }) => [
+                  styles.action,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.actionText, { color: t.accent }]}>
+                  {action.label}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </Glass>
       </Animated.View>
@@ -128,6 +226,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+  // 5 + 38 + 5 = the 48dp the action needs, with the slop inside the pill.
+  pillAction: { paddingVertical: 5, paddingRight: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tick: {
     width: 18,
@@ -138,4 +238,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: { fontFamily: fonts.medium, flexShrink: 1 },
+  action: {
+    minHeight: ACTION_H,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+  },
+  actionText: { ...type.body, fontFamily: fonts.medium },
+  pressed: { opacity: 0.6 },
 });

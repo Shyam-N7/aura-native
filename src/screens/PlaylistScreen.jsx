@@ -21,6 +21,7 @@ import { usePlayer } from '../playback/PlayerContext';
 import {
   getPlaylist,
   getPublicPlaylist,
+  addToPlaylist,
   removeFromPlaylist,
   getPlaylistRev,
   createPlaylistInvite,
@@ -560,6 +561,65 @@ export default function PlaylistScreen({ route, navigation }) {
     }
   };
 
+  // Undo for the remove below.
+  //
+  // POSITION, plainly: the playlists API has add and remove and nothing else —
+  // no insert-at, no reorder — so the server can only take the track back at
+  // the END of the playlist. The screen splices the row back where it was, so
+  // what is on screen is right and stays right for this visit; the next full
+  // refetch (pull-to-refresh, the shared-playlist rev poll, reopening the
+  // screen) re-reads the server's order and the track will be last. That is
+  // the honest limit of an undo built on this API, not a bug in the splice.
+  const undoRemove = useCallback(
+    async (track, at) => {
+      // Optimistic, like every other write on this screen: the row is back
+      // before the request, and comes off again if the request fails.
+      const putBack = () =>
+        setHit(h => {
+          const rows = h.data?.tracks;
+          if (!rows || rows.some(x => x.id === track.id)) {
+            return h; // gone, or a collaborator already re-added it
+          }
+          const next = rows.slice();
+          next.splice(Math.min(at, next.length), 0, track);
+          return {
+            ...h,
+            data: {
+              ...h.data,
+              tracks: next,
+              trackCount: (h.data.trackCount ?? next.length - 1) + 1,
+            },
+          };
+        });
+      putBack();
+      try {
+        await addToPlaylist(id, track.id);
+        showToast('Back in the playlist.');
+      } catch (err) {
+        // Already there (a collaborator re-added it while the pill was up) is
+        // the state undo was asking for — that is a success, not an error.
+        if (err.code === 'duplicate') {
+          showToast('Back in the playlist.');
+          return;
+        }
+        setHit(h =>
+          h.data
+            ? {
+                ...h,
+                data: {
+                  ...h.data,
+                  tracks: h.data.tracks.filter(x => x.id !== track.id),
+                  trackCount: (h.data.trackCount ?? 1) - 1,
+                },
+              }
+            : h,
+        );
+        showToast(`Couldn't undo — ${err.message}`);
+      }
+    },
+    [id],
+  );
+
   const removeTrack = useCallback(async track => {
     const ok = await confirm({
       title: `Remove "${cleanTitle(track.title)}"?`,
@@ -572,6 +632,11 @@ export default function PlaylistScreen({ route, navigation }) {
       return;
     }
     const prev = hitRef.current.data;
+    // Where it sat, captured before the filter — the undo puts it back here.
+    const at = Math.max(
+      0,
+      (prev?.tracks ?? []).findIndex(x => x.id === track.id),
+    );
     setHit(h => ({
       ...h,
       data: {
@@ -582,7 +647,9 @@ export default function PlaylistScreen({ route, navigation }) {
     }));
     try {
       await removeFromPlaylist(id, track.id);
-      showToast('Removed.');
+      showToast('Removed.', {
+        action: { label: 'Undo', onPress: () => undoRemove(track, at) },
+      });
     } catch (err) {
       setHit({ data: prev, error: null });
       showToast(`Couldn't remove — ${err.message}`);
@@ -590,7 +657,7 @@ export default function PlaylistScreen({ route, navigation }) {
     // `id` is the only value this needs to keep stable across renders; the
     // rollback snapshot comes off hitRef so a data change does not hand every
     // mounted row a new menu.
-  }, [id]);
+  }, [id, undoRemove]);
 
   // Upload a custom cover image (picker delivers it pre-resized).
   const uploadCover = async () => {
