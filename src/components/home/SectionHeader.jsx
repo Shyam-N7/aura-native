@@ -10,7 +10,9 @@ export function SectionHeader({ title, sub, seeAllLabel, onSeeAll }) {
   return (
     <View style={styles.row}>
       <View style={styles.titles}>
-        <Text style={[type.sectionTitle, { color: t.ink }]}>{title}</Text>
+        <Text accessibilityRole="header" style={[type.sectionTitle, { color: t.ink }]}>
+          {title}
+        </Text>
         {!!sub && (
           <Text style={[label(9.5), { color: t.inkFaint }]} numberOfLines={1}>
             {sub}

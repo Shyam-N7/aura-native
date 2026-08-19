@@ -132,6 +132,13 @@ function GapMark({ accent, reduced }) {
   );
 }
 
+// Holding a lyric line sends it on, and a hold is not a gesture a screen
+// reader can make. The share is therefore also published as an assistive
+// action on the line itself — the QueueSheet reorder pattern. A visible button
+// per line is out of the question here: the column IS the reading experience.
+// Module-level so the memoized line gets the same array every render.
+const LINE_A11Y_ACTIONS = [{ name: 'share', label: 'share this line' }];
+
 // One lyric line. The 380ms rise/settle is the web's transition-all; font size
 // and color switch with the state (RN can't animate fontSize cheaply, and the
 // centering scroll masks the jump). Cinematic depth-of-field: the web blurs
@@ -200,6 +207,10 @@ const LyricLine = memo(function LyricLine({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={text}
+      accessibilityActions={onLongPressLine ? LINE_A11Y_ACTIONS : undefined}
+      onAccessibilityAction={e =>
+        e.nativeEvent.actionName === 'share' && onLongPressLine?.(line)
+      }
       onPress={() => onPressLine(line)}
       onLongPress={() => onLongPressLine?.(line)}
       delayLongPress={350}
@@ -362,6 +373,14 @@ function PlainView({ lines, view, inkSoft, inkFaint, onShareLine, onWakeScroll }
         .map((l, i) => (
           <Pressable
             key={i}
+            // Untimed lines don't seek, so "text" — not "button" — is the
+            // honest role; the hold rides along as an assistive action.
+            accessibilityRole="text"
+            accessibilityLabel={lineFor(l)}
+            accessibilityActions={onShareLine ? LINE_A11Y_ACTIONS : undefined}
+            onAccessibilityAction={e =>
+              e.nativeEvent.actionName === 'share' && onShareLine?.(lineFor(l))
+            }
             onLongPress={() => onShareLine?.(lineFor(l))}
             delayLongPress={350}
           >

@@ -284,9 +284,9 @@ export default function AdminComposeScreen({ navigation }) {
               style={[inputStyle, styles.inputTall]}
             />
             <Pressable
-              accessibilityRole="button"
+              accessibilityRole="switch"
               accessibilityLabel="include an image"
-              accessibilityState={form.withImage ? { selected: true } : {}}
+              accessibilityState={{ checked: form.withImage }}
               onPress={() => {
                 setImageBroken(false);
                 set('withImage', !form.withImage);
@@ -362,9 +362,9 @@ export default function AdminComposeScreen({ navigation }) {
               style={inputStyle}
             />
             <Pressable
-              accessibilityRole="button"
+              accessibilityRole="switch"
               accessibilityLabel="send to everyone"
-              accessibilityState={everyoneOn ? { selected: true } : {}}
+              accessibilityState={{ checked: everyoneOn }}
               disabled={!!form.email.trim()}
               onPress={() => set('toAll', !form.toAll)}
               style={styles.row}
