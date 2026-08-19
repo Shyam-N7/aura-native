@@ -580,9 +580,11 @@ export default function YouScreen({ navigation }) {
           >
             <Text style={[label(9.5), { color: t.inkFaint }]}>Your year</Text>
             {!loaded ? (
-              // Blobs only — the card's own "your year" label already names
-              // it; the goo breathing IS the aura, no gray bars.
-              <AuraLoader style={styles.yearLoader} />
+              // The goo breathing IS the aura — no gray bars. Labelled like
+              // every other loader in the app (the sibling below reads
+              // "Opening your library"): the card's heading alone says what
+              // the card is, not that it is still arriving.
+              <AuraLoader label="Loading your year" style={styles.yearLoader} />
             ) : (
               <>
                 <Text style={[styles.yearLine, { color: t.ink }]}>
@@ -992,6 +994,7 @@ export default function YouScreen({ navigation }) {
                       accessibilityLabel={familyOn ? 'turn off' : 'turn on'}
                       onPress={submitFamily}
                       disabled={pinBusy}
+                      hitSlop={10}
                       style={({ pressed }) => [
                         styles.pinBtn,
                         { borderColor: t.accent },
@@ -1100,7 +1103,10 @@ export default function YouScreen({ navigation }) {
                       accessibilityLabel="try again"
                       onPress={() => setPushError(false)}
                       hitSlop={8}
-                      style={({ pressed }) => pressed && styles.pressed}
+                      style={({ pressed }) => [
+                        styles.textBtn,
+                        pressed && styles.pressed,
+                      ]}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
                         Try again
@@ -1366,7 +1372,10 @@ export default function YouScreen({ navigation }) {
                       accessibilityLabel={`unhide ${h.title}`}
                       onPress={() => unhideOne(h.id)}
                       hitSlop={8}
-                      style={({ pressed }) => pressed && styles.pressed}
+                      style={({ pressed }) => [
+                        styles.textBtn,
+                        pressed && styles.pressed,
+                      ]}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
                         Unhide
@@ -1399,6 +1408,7 @@ export default function YouScreen({ navigation }) {
                         setCrash(null);
                       }}
                       hitSlop={8}
+                      style={styles.blockTextBtn}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
                         Clear report
@@ -1525,6 +1535,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pressed: { opacity: 0.6 },
+  // "Try again" and "Unhide" are 11.4dp of bare label(9.5) text. Padding grows
+  // the touch box and the equal negative margin returns the space, so the row
+  // keeps its height and the word does not move: 11.4 + 24 + 16 slop = 51.4dp.
+  textBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginVertical: -12,
+    marginHorizontal: -10,
+  },
+  // "Clear report" already stretches the full width of the crash card, so only
+  // the height needs help — same padding-and-negative-margin trade, no
+  // horizontal padding because that would shift the text off the card's edge.
+  blockTextBtn: { paddingVertical: 12, marginVertical: -12 },
   rowMeta: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
   emptyRow: {
@@ -1589,6 +1612,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 2,
   },
+  // A bordered pill: 11.4dp of label(9.5) + 18 padding = 29.4dp, and 10dp of
+  // hitSlop on each side takes it to 49.4dp without moving the border. The
+  // 10dp slop is exactly the row's gap, so it never overlaps the PIN field.
   pinBtn: {
     borderWidth: 1,
     borderRadius: 999,

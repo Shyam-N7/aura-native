@@ -175,6 +175,105 @@ test('album: a long tracklist mounts windowed, not all at once', async () => {
   await ReactTestRenderer.act(() => tree.unmount());
 });
 
+// Q2: a successful fetch that comes back empty. Every section on these three
+// screens was gated on `length > 0`, so a real empty result painted the hero
+// and then nothing — indistinguishable from a broken screen.
+test('album: an empty tracklist says so instead of showing a bare hero', async () => {
+  getAlbum.mockResolvedValue({
+    id: 'al3',
+    name: 'Unreleased',
+    isMovie: false,
+    artist: 'A',
+    tracks: [],
+  });
+  const tree = await render(
+    <AlbumScreen
+      route={{ params: { id: 'al3' } }}
+      navigation={{ goBack: jest.fn() }}
+    />,
+  );
+
+  const body = texts(tree.toJSON());
+  expect(body).toContain('No tracks in this album yet.');
+  expect(body).toContain('Nothing here to play');
+  // It is an empty album, not a failed one.
+  expect(body).not.toContain("Couldn't load");
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('album: the empty state stays away while loading and on failure', async () => {
+  let settle;
+  getAlbum.mockReturnValue(
+    new Promise((res, rej) => {
+      settle = { res, rej };
+    }),
+  );
+  const tree = await render(
+    <AlbumScreen
+      route={{ params: { id: 'al4' } }}
+      navigation={{ goBack: jest.fn() }}
+    />,
+  );
+  expect(texts(tree.toJSON())).not.toContain('No tracks in this');
+
+  await ReactTestRenderer.act(async () => {
+    settle.rej(new Error('offline'));
+  });
+  const body = texts(tree.toJSON());
+  expect(body).toContain("Couldn't load");
+  expect(body).not.toContain('No tracks in this');
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('artist: nothing in the catalogue says so instead of a bare hero', async () => {
+  getArtist.mockResolvedValue({
+    id: 'a2',
+    name: 'New Voice',
+    image: null,
+    bio: '',
+    topTracks: [],
+    topAlbums: [],
+    similarArtists: [],
+  });
+  const tree = await render(
+    <ArtistScreen
+      route={{ params: { id: 'a2' } }}
+      navigation={{ goBack: jest.fn(), push: jest.fn() }}
+    />,
+  );
+
+  const body = texts(tree.toJSON());
+  expect(body).toContain('Nothing from this artist yet.');
+  expect(body).toContain('No songs or albums in the catalogue');
+  expect(body).not.toContain("Couldn't load");
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('catalog playlist: an ok response with no tracks says so', async () => {
+  getCatalogPlaylist.mockResolvedValue({
+    id: 'p9',
+    name: 'fresh finds',
+    tracks: [],
+  });
+  const tree = await render(
+    <CatalogPlaylistScreen
+      route={{ params: { id: 'p9' } }}
+      navigation={{ goBack: jest.fn() }}
+    />,
+  );
+
+  const body = texts(tree.toJSON());
+  expect(body).toContain('fresh finds.');
+  expect(body).toContain('This playlist is empty.');
+  expect(body).toContain('check back after the next refresh');
+  expect(body).not.toContain("Couldn't load");
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
 test('language hub: shelves render, tiles pick live or open playlists', async () => {
   getDiscoverHome.mockResolvedValue({
     trending: [TRACK],

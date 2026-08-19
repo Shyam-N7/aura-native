@@ -218,11 +218,14 @@ export default function HistoryScreen({ navigation }) {
   // and the screen read as "that's all my history" (or as a dead button).
   const [moreError, setMoreError] = useState(false);
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    Promise.all([
-      getHistory({ limit: 80, signal: ctl.signal }),
-      getMusicClockPlays({ signal: ctl.signal }).catch(() => []),
+  // Page one, lifted out of the effect so the error state can offer the same
+  // retry the load-more control does. A first-page failure used to be a dead
+  // end — one line of copy and no way back — while page two got a button.
+  const loadFirstPage = useCallback(signal => {
+    setStatus('loading');
+    return Promise.all([
+      getHistory({ limit: 80, signal }),
+      getMusicClockPlays({ signal }).catch(() => []),
     ])
       .then(([h, clockPlays]) => {
         setPlays(h.plays);
@@ -235,8 +238,13 @@ export default function HistoryScreen({ navigation }) {
           setStatus('error');
         }
       });
-    return () => ctl.abort();
   }, []);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    loadFirstPage(ctl.signal);
+    return () => ctl.abort();
+  }, [loadFirstPage]);
 
   const loadMore = () => {
     if (!nextBefore || loadingMore) {
@@ -272,9 +280,26 @@ export default function HistoryScreen({ navigation }) {
       <Text style={[type.queueHero, { color: t.ink }]}>Your history.</Text>
       {status === 'loading' && <AuraLoader label="Loading history" />}
       {status === 'error' && (
-        <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-          Couldn't load your history.
-        </Text>
+        <>
+          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
+            Couldn't load your history.
+          </Text>
+          {/* Same pill as the load-more control below, so the two failures read
+              as one design. hitSlop takes the 33dp pill past the 48dp floor. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="try again"
+            onPress={() => loadFirstPage()}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.more,
+              { borderColor: t.line },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[label(10), { color: t.inkSoft }]}>Try again</Text>
+          </Pressable>
+        </>
       )}
       {status === 'ok' && plays.length === 0 && (
         <View style={styles.empty}>

@@ -7,7 +7,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  ActivityIndicator,
   BackHandler,
   Pressable,
   ScrollView,
@@ -50,6 +49,7 @@ import { cleanLyric, cleanTitle } from '../utils/title';
 import { shareLyric } from '../lib/share';
 import { HeartButton } from '../components/player/HeartButton';
 import { Icon } from '../components/Icon';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { fonts } from '../theme/tokens';
@@ -1343,7 +1343,12 @@ export function LyricsOverlay() {
 
           {status === 'loading' && (
             <View style={styles.centerBody}>
-              <ActivityIndicator color={t.accent} />
+              {/* The house loader, not a platform spinner: this was the only
+                  ActivityIndicator left in the app, and it read as a
+                  different product for the two seconds it was on screen.
+                  Labelled like every other AuraLoader, and in the voice the
+                  states below already speak. */}
+              <AuraLoader label="Finding the words" />
             </View>
           )}
 

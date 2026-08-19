@@ -961,6 +961,7 @@ export default function PlaylistScreen({ route, navigation }) {
                   accessibilityRole="button"
                   accessibilityLabel={`${VIS_LABEL[visibility]} — change who can see this`}
                   onPress={() => setShareOpen(true)}
+                  hitSlop={VIS_SLOP}
                   style={({ pressed }) => [
                     styles.visChip,
                     { borderColor: t.line },
@@ -995,6 +996,7 @@ export default function PlaylistScreen({ route, navigation }) {
                     saved ? 'remove from your playlists' : 'save to your playlists'
                   }
                   onPress={toggleSave}
+                  hitSlop={VIS_SLOP}
                   style={({ pressed }) => [
                     styles.visChip,
                     { borderColor: saved ? t.accent : t.line },
@@ -1015,6 +1017,7 @@ export default function PlaylistScreen({ route, navigation }) {
                   accessibilityLabel={YT_COPY.refresh.action}
                   disabled={refreshing || refreshLive}
                   onPress={checkForNewSongs}
+                  hitSlop={VIS_SLOP}
                   style={({ pressed }) => [
                     styles.visChip,
                     { borderColor: t.line },
@@ -1035,6 +1038,7 @@ export default function PlaylistScreen({ route, navigation }) {
                     accessibilityRole="button"
                     accessibilityLabel={YT_COPY.done.reviewAction}
                     onPress={() => setReviewing(true)}
+                    hitSlop={VIS_SLOP}
                     style={({ pressed }) => [
                       styles.visChip,
                       { borderColor: t.accent, backgroundColor: t.accentSoft },
@@ -1172,7 +1176,10 @@ export default function PlaylistScreen({ route, navigation }) {
                   accessibilityLabel={`remove ${c.name}`}
                   onPress={() => dropCollaborator(c)}
                   hitSlop={8}
-                  style={({ pressed }) => pressed && styles.pressed}
+                  style={({ pressed }) => [
+                    styles.removeBtn,
+                    pressed && styles.pressed,
+                  ]}
                 >
                   <Text style={[label(9.5), { color: t.accent }]}>Remove</Text>
                 </Pressable>
@@ -1247,6 +1254,12 @@ export default function PlaylistScreen({ route, navigation }) {
     </View>
   );
 }
+
+// The action chips are bordered pills — only hitSlop can grow them without
+// redrawing the border. 11.4dp of label(9.5) + 14 padding = 25.4dp, + 24 =
+// 49.4dp tall; sideways they are already past 48 and the slop is held to half
+// the row's 10dp gap so wrapped neighbours never overlap.
+const VIS_SLOP = { top: 12, bottom: 12, left: 5, right: 5 };
 
 const styles = StyleSheet.create({
   streamFoot: { alignItems: 'center', paddingVertical: 18, gap: 6 },
@@ -1336,6 +1349,15 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   memberMeta: { flex: 1, minWidth: 0, gap: 2 },
+  // "Remove" is 11.4dp of label(9.5). Padding grows the touch box, the equal
+  // negative margin gives the space back, so the member row keeps its height
+  // and the word stays put: 11.4 + 24 padding + 16 hitSlop = 51.4dp.
+  removeBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginVertical: -12,
+    marginHorizontal: -10,
+  },
   memberName: { fontFamily: fonts.medium, fontSize: 15 },
   coverGrid: {
     flexDirection: 'row',

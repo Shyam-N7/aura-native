@@ -1020,7 +1020,15 @@ export function PlayerSheet() {
                           { backgroundColor: t.accentCard },
                         ]}
                       >
-                        <Icon name="heart" size={13} color={t.accent} />
+                        {/* Not a heart: an outline heart is this app's
+                            "not liked" STATE everywhere it appears
+                            (player/HeartButton.jsx), so parking one on the
+                            artwork reads as a verdict on the current track
+                            rather than as a hint. bloom is the accent sparkle
+                            — it promises the little celebration the
+                            double-tap actually fires (LikeBurst) and claims
+                            no state at all. */}
+                        <Icon name="bloom" size={13} color={t.accent} />
                         <Text style={[styles.hintText, { color: t.ink }]}>
                           Double-tap to like
                         </Text>
