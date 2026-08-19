@@ -7,7 +7,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceSectionList } from '../components/ui/Bounce';
-import { ROW_LAYOUT } from '../components/ui/RowArrive';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -239,6 +238,11 @@ export default function HistoryScreen({ navigation }) {
   // A failed page used to be swallowed: the spinner blinked, no rows arrived,
   // and the screen read as "that's all my history" (or as a dead button).
   const [moreError, setMoreError] = useState(false);
+  // Bumped every time page one REPLACES the list (mount, retry, pull-to-
+  // refresh). A load-more that started under an older value is describing a
+  // list that no longer exists, so its page must not be appended and its
+  // cursor must not overwrite the fresh one.
+  const chain = useRef(0);
 
   // Page one, lifted out of the effect so the error state can offer the same
   // retry the load-more control does. A first-page failure used to be a dead
@@ -264,6 +268,7 @@ export default function HistoryScreen({ navigation }) {
       getMusicClockPlays({ signal }).catch(() => []),
     ])
       .then(([h, clockPlays]) => {
+        chain.current += 1;
         setPlays(h.plays);
         setNextBefore(h.nextBefore);
         setClock(summarizeClock(clockPlays, { perPart: 2 }));
@@ -292,17 +297,30 @@ export default function HistoryScreen({ navigation }) {
   const pull = usePullRefresh(signal => loadFirstPage(signal, { quiet: true }));
 
   const loadMore = () => {
-    if (!nextBefore || loadingMore) {
+    // `pull.refreshing` closes pull-then-tap only: a page asked for while page
+    // one is in flight would be walking a cursor that is about to be replaced.
+    // The epoch closes the other ordering — tap, THEN pull — where the page is
+    // already in flight when the list underneath it is thrown away.
+    if (!nextBefore || loadingMore || pull.refreshing) {
       return;
     }
+    const mine = chain.current;
     setLoadingMore(true);
     setMoreError(false);
     getHistory({ limit: 80, before: nextBefore })
       .then(h => {
+        if (chain.current !== mine) {
+          return;
+        }
         setPlays(prev => [...prev, ...h.plays]);
         setNextBefore(h.nextBefore);
       })
-      .catch(() => setMoreError(true))
+      .catch(() => {
+        if (chain.current !== mine) {
+          return;
+        }
+        setMoreError(true);
+      })
       .finally(() => setLoadingMore(false));
   };
 
@@ -413,7 +431,6 @@ export default function HistoryScreen({ navigation }) {
         // it, so the rows already on screen settle instead of jumping when the
         // next 80 plays land. (No arrive animation: the appended page is
         // requested, not streamed — it is already where the user is looking.)
-        itemLayoutAnimation={ROW_LAYOUT}
         refreshControl={pull.control}
         {...LONG_LIST}
         contentContainerStyle={[

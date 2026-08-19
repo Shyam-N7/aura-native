@@ -223,4 +223,63 @@ describe('pull to refresh', () => {
     expect(titles(tree)).toEqual(['song c', 'song a']);
     expect(control(tree).props.refreshing).toBe(false);
   });
+
+  // Making page one reachable at any time (the pull) opened a race the screen
+  // never had: a load-more already in flight is describing a list that the
+  // refresh has since thrown away. Appending its page leaves a hole in the day
+  // grouping, and its cursor overwrites the fresh one, so every later page
+  // walks a chain that no longer exists.
+  test('a load-more that started before a refresh is discarded, not spliced on', async () => {
+    getHistory.mockResolvedValueOnce({
+      plays: [{ ...track('a'), playedAt: Date.now() }],
+      nextBefore: 'cursor-old',
+    });
+    const tree = await mount(<HistoryScreen navigation={nav} />);
+    expect(titles(tree)).toEqual(['song a']);
+
+    // Page two goes out and is left hanging.
+    const stale = deferred();
+    getHistory.mockReturnValueOnce(stale.promise);
+    const more = tree.root
+      .findAllByProps({ accessibilityRole: 'button' })
+      .find(n => n.props.accessibilityLabel === 'load more');
+    await ReactTestRenderer.act(async () => {
+      more.props.onPress();
+    });
+    expect(getHistory).toHaveBeenCalledTimes(2);
+    expect(getHistory.mock.calls[1][0].before).toBe('cursor-old');
+
+    // The user pulls before it lands. Page one is replaced wholesale.
+    getHistory.mockResolvedValueOnce({
+      plays: [{ ...track('fresh'), playedAt: Date.now() }],
+      nextBefore: 'cursor-fresh',
+    });
+    await ReactTestRenderer.act(async () => {
+      await control(tree).props.onRefresh();
+    });
+    expect(titles(tree)).toEqual(['song fresh']);
+
+    // NOW the stale page arrives, carrying rows from below the old cursor.
+    await ReactTestRenderer.act(async () => {
+      stale.resolve({
+        plays: [{ ...track('ancient'), playedAt: Date.now() }],
+        nextBefore: 'cursor-ancient',
+      });
+      await stale.promise;
+    });
+
+    // It is dropped: the fresh list is untouched...
+    expect(titles(tree)).toEqual(['song fresh']);
+
+    // ...and so is the fresh cursor — the next page must continue the list on
+    // screen, not the one that was thrown away.
+    getHistory.mockResolvedValueOnce({ plays: [], nextBefore: null });
+    const more2 = tree.root
+      .findAllByProps({ accessibilityRole: 'button' })
+      .find(n => n.props.accessibilityLabel === 'load more');
+    await ReactTestRenderer.act(async () => {
+      more2.props.onPress();
+    });
+    expect(getHistory.mock.calls[3][0].before).toBe('cursor-fresh');
+  });
 });
