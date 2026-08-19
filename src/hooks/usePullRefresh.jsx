@@ -1,14 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl } from 'react-native';
-import { useTheme } from '../theme/ThemeContext';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { showToast } from '../lib/toast';
 
-// The consumer half of pull-to-refresh, the way useBackToTop is the consumer
-// half of the dock's back-to-top: a screen hands over the fetch it already
-// owns and gets back a themed control to hang on its Bounce* scroller.
+// The consumer half of a refresh: a screen hands over the fetch it already
+// owns and gets back a guarded runner plus an honest `refreshing` flag.
 //
 //   const refresh = usePullRefresh(load);
-//   <BounceFlatList refreshControl={refresh.control} … />
+//   if (refresh.refreshing) { … }
+//
+// ── There is deliberately no RefreshControl here ─────────────────────────
+// This hook used to return one, and screens hung it on their Bounce*
+// scroller. On Android that prop makes RN render the control as the OUTER
+// native view with the scroller inside it, which put a SwipeRefreshLayout
+// between the GestureDetector and the scroller in Bounce.jsx — and cost the
+// app one-finger scrolling on all eight screens that used it. The full
+// mechanism is written up at the top of src/components/ui/Bounce.jsx.
+//
+// So the gesture is gone for now and `onRefresh` has no caller: `refreshing`
+// stays false, which is exactly the state these screens were in before
+// pull-to-refresh was added, and the guards that read it still hold. The
+// rules below are kept intact because they are the hard part, and whatever
+// re-introduces the pull — a pan owned by Bounce, not a second native
+// pipeline — should re-use them rather than rediscover them.
 //
 // Why a hook and not eight hand-rolled RefreshControls: the four rules below
 // are the whole reason this is subtle, and none of them are visible at the
@@ -27,24 +39,20 @@ import { showToast } from '../lib/toast';
 //     one through its fetch keeps doing so — and leaving the screen mid-pull
 //     aborts the request instead of setting state on a dead component.
 //
-// The colours: the accent tints the Android arc (`colors`) and the iOS spinner
-// (`tintColor`), and `progressBackgroundColor` is the surface token — the same
-// raised-card colour every theme already uses behind content, so the puck
-// reads as one of the app's own surfaces on dusk, midnight and bloom alike
-// (never the stock white disc, which is invisible on dusk and a hole in
-// midnight).
 export const REFRESH_FAILED = "Couldn't refresh — try again.";
 
-export function usePullRefresh(run, { enabled = true, offset = 0 } = {}) {
-  const { t } = useTheme();
+// A second argument is accepted and ignored: it configured the control's
+// enablement and spinner offset, and callers still pass it. It comes back
+// with the control.
+export function usePullRefresh(run) {
   const [refreshing, setRefreshing] = useState(false);
   // Rule 1's gate, and the abort handle for rule 4.
   const busy = useRef(false);
   const alive = useRef(true);
   const ctl = useRef(null);
   // The screen's fetch usually closes over fresh state, so read it at call
-  // time — onRefresh keeps ONE identity for the life of the screen, which is
-  // what keeps the memoized control below from being rebuilt every render.
+  // time — onRefresh keeps ONE identity for the life of the screen, so a
+  // consumer can hold it in a dep array without rebuilding every render.
   const runRef = useRef(run);
   runRef.current = run;
 
@@ -90,20 +98,5 @@ export function usePullRefresh(run, { enabled = true, offset = 0 } = {}) {
       });
   }, []);
 
-  const control = useMemo(
-    () =>
-      enabled ? (
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[t.accent]}
-          tintColor={t.accent}
-          progressBackgroundColor={t.surface}
-          progressViewOffset={offset}
-        />
-      ) : null,
-    [enabled, refreshing, onRefresh, offset, t.accent, t.surface],
-  );
-
-  return { refreshing, onRefresh, control };
+  return { refreshing, onRefresh };
 }

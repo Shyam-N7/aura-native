@@ -431,7 +431,6 @@ export default function HistoryScreen({ navigation }) {
         // it, so the rows already on screen settle instead of jumping when the
         // next 80 plays land. (No arrive animation: the appended page is
         // requested, not streamed — it is already where the user is looking.)
-        refreshControl={pull.control}
         {...LONG_LIST}
         contentContainerStyle={[
           styles.list,

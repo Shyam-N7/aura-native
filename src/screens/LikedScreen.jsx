@@ -133,7 +133,10 @@ export default function LikedScreen({ navigation }) {
 
   // Pull-to-refresh: the same load, quiet. See ui/Bounce for how the pull and
   // the rubber band share one downward drag at the top.
-  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(signal => load(signal, { quiet: true }));
 
   // Show the server's liked list, dropping a row the moment it's unliked here.
   // Guard on `ready`: until the client like-set has booted, isLiked() is empty
@@ -268,7 +271,6 @@ export default function LikedScreen({ navigation }) {
         // shuffles them — so the survivors slide to their new slots.
         itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
-        refreshControl={pull.control}
         {...LONG_LIST}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"

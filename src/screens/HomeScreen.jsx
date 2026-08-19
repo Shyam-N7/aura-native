@@ -567,7 +567,10 @@ export default function HomeScreen({ navigation }) {
   };
   // The top bar floats over the scroller, so the spinner starts below it
   // rather than under the glass.
-  const pull = usePullRefresh(refreshHome, {
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(refreshHome, {
     offset: insets.top + TOPBAR_CLEARANCE,
   });
 
@@ -576,7 +579,6 @@ export default function HomeScreen({ navigation }) {
       <ScreenFade>
         <BounceScrollView
           {...backToTop}
-          refreshControl={pull.control}
           contentContainerStyle={[
             styles.content,
             // The bar floats over the scroller now (web: position fixed) —
