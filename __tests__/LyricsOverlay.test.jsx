@@ -30,6 +30,13 @@ jest.mock('../src/api/stems', () => ({
   requestStems: (...args) => mockRequestStems(...args),
 }));
 
+// The share sheet itself is native; only that the line reaches it matters here.
+const mockShareLyric = jest.fn();
+jest.mock('../src/lib/share', () => ({
+  ...jest.requireActual('../src/lib/share'),
+  shareLyric: (...args) => mockShareLyric(...args),
+}));
+
 const TRACK = {
   id: 't1',
   title: 'Current Song (From "Some Movie")',
@@ -263,5 +270,52 @@ test('pending and unavailable states explain themselves', async () => {
   mockGetLyrics.mockResolvedValue({ available: false, synced: false });
   tree = await render();
   expect(texts(tree.toJSON())).toContain("Lyrics aren't available");
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+// A4 — hold-a-line-to-share is the one gesture in the app that CANNOT grow a
+// visible button (a ⋯ per lyric would wreck the column), so it is published as
+// an assistive action instead — the QueueSheet reorder pattern.
+const SHARE_ACTION = [{ name: 'share', label: 'share this line' }];
+
+test('a synced lyric line names itself and offers its hold as an action', async () => {
+  const tree = await render();
+  const line = byLabel(tree, 'second words');
+  expect(line.props.accessibilityRole).toBe('button');
+  expect(line.props.accessibilityActions).toEqual(SHARE_ACTION);
+
+  await ReactTestRenderer.act(async () => {
+    line.props.onAccessibilityAction({ nativeEvent: { actionName: 'share' } });
+  });
+  expect(mockShareLyric).toHaveBeenCalledWith(TRACK, 'second words');
+
+  // An unrelated action name is not the share.
+  await ReactTestRenderer.act(async () => {
+    line.props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } });
+  });
+  expect(mockShareLyric).toHaveBeenCalledTimes(1);
+
+  await ReactTestRenderer.act(() => tree.unmount());
+});
+
+test('an untimed lyric line carries the same name and share action', async () => {
+  mockGetLyrics.mockResolvedValue({
+    available: true,
+    synced: false,
+    has_english: false,
+    source: 'jiosaavn',
+    lines: [{ line: 'Words Without Time' }],
+  });
+  const tree = await render();
+  const line = byLabel(tree, 'words without time');
+  // Untimed lines don't seek, so they are read as text, not offered as buttons.
+  expect(line.props.accessibilityRole).toBe('text');
+  expect(line.props.accessibilityActions).toEqual(SHARE_ACTION);
+
+  await ReactTestRenderer.act(async () => {
+    line.props.onAccessibilityAction({ nativeEvent: { actionName: 'share' } });
+  });
+  expect(mockShareLyric).toHaveBeenCalledWith(TRACK, 'words without time');
+
   await ReactTestRenderer.act(() => tree.unmount());
 });

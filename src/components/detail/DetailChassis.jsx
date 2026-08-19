@@ -6,7 +6,7 @@ import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
 import { openTrackActions } from '../../lib/trackActionsSheet';
 import { splitMatch } from '../../lib/listFilter';
-import { fonts, label, type } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 import { fmtTime, fmtRuntime } from '../../utils/fmtTime';
 import { countRender } from '../../lib/renderCount';
@@ -28,6 +28,43 @@ export function CrumbBack({ onPress }) {
     >
       <Icon name="chevron-left" size={24} color={t.ink} />
     </Pressable>
+  );
+}
+
+// The OTHER header in this app: the standalone screens (dna, journal, bridges,
+// equalizer, admin compose) open on a 38dp back box, a MonoLabel eyebrow and
+// the 34px page title — five byte-identical copies until this was extracted.
+// The eyebrow sits BETWEEN the button and the title on every one of them, so
+// it belongs to the chassis rather than to each screen.
+//
+// Spacing is the one thing the five genuinely disagree on, so `titleStyle`
+// carries each screen's own margins around the title; nothing is defaulted.
+//
+// Not folded into CrumbBack: that one is a 24px glyph in a different box, and
+// unifying the two is a design call, not a refactor.
+export function PageHeader({ title, titleStyle, eyebrow, eyebrowSize = 10, onBack }) {
+  const { t } = useTheme();
+  return (
+    <>
+      <PressScale
+        accessibilityRole="button"
+        accessibilityLabel="back"
+        onPress={onBack}
+        hitSlop={10}
+        style={styles.pageBack}
+      >
+        <Icon name="chevron-left" size={22} color={t.ink} />
+      </PressScale>
+      {!!eyebrow && (
+        <Text style={[label(eyebrowSize), { color: t.inkFaint }]}>{eyebrow}</Text>
+      )}
+      <Text
+        accessibilityRole="header"
+        style={[type.pageTitle, titleStyle, { color: t.ink }]}
+      >
+        {title}
+      </Text>
+    </>
   );
 }
 
@@ -64,7 +101,9 @@ export function DetailSection({ title, sub }) {
   const { t } = useTheme();
   return (
     <View style={styles.section}>
-      <Text style={[type.sectionTitle, { color: t.ink }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[type.sectionTitle, { color: t.ink }]}>
+        {title}
+      </Text>
       {!!sub && (
         <Text style={[label(9.5), { color: t.inkFaint }]} numberOfLines={1}>
           {sub}
@@ -191,12 +230,19 @@ export const DetailRow = React.memo(DetailRowBase);
 
 const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', paddingVertical: 4, marginLeft: -4 },
+  pageBack: {
+    width: 38,
+    height: 38,
+    justifyContent: 'center',
+    marginLeft: -8,
+    marginBottom: 6,
+  },
   playAll: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 9,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingLeft: 7,
     paddingRight: 18,
     paddingVertical: 7,
@@ -220,13 +266,7 @@ const styles = StyleSheet.create({
     paddingVertical: ROW_PAD_V,
   },
   pressed: { opacity: 0.6 },
-  idx: {
-    width: 22,
-    fontSize: 11,
-    textAlign: 'center',
-    fontFamily: fonts.regular,
-    fontVariant: ['tabular-nums'],
-  },
+  idx: { ...type.time, width: 22, textAlign: 'center' },
   main: {
     flex: 1,
     flexDirection: 'row',
@@ -234,6 +274,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   meta: { flex: 1, minWidth: 0, gap: 3 },
-  title: { fontFamily: fonts.medium, fontSize: 15 },
+  title: type.rowTitle,
   more: { paddingVertical: 8, paddingLeft: 2 },
 });

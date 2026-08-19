@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -31,9 +32,11 @@ import { showToast } from '../lib/toast';
 import { bumpHint, hintAvailable, killHint } from '../lib/tapHint';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
-import { SHEET_DANGER } from '../components/ui/SheetRow';
+import { Rule } from '../components/ui/Rule';
+import { SheetRow } from '../components/ui/SheetRow';
 import { Icon } from '../components/Icon';
-import { fonts, label, type } from '../theme/tokens';
+import { usePullRefresh } from '../hooks/usePullRefresh';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // The playlists library, ported from web PlaylistsScreen: made-for-you mixes
 // (read-only, full suite), made by you (+ create), shared with you, and
@@ -100,13 +103,21 @@ export default function PlaylistsScreen({ navigation }) {
   const inputRef = useRef(null);
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
-  const reload = useCallback(signal => {
-    listPlaylists({ signal })
+  // Returns its promise, and takes the same `quiet` mode every list screen's
+  // load does: a pull-to-refresh re-runs THIS request rather than a second
+  // copy of it, and a failure re-throws instead of replacing the shelves that
+  // are already on screen with an error line.
+  const reload = useCallback((signal, { quiet = false } = {}) => {
+    return listPlaylists({ signal })
       .then(data => setHit({ data, error: null }))
       .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
+        if (err.name === 'AbortError') {
+          return;
         }
+        if (quiet) {
+          throw err;
+        }
+        setHit({ data: null, error: err.message });
       });
   }, []);
 
@@ -115,6 +126,31 @@ export default function PlaylistsScreen({ navigation }) {
     reload(ctl.signal);
     return () => ctl.abort();
   }, [reload]);
+
+  // The error state's way out. The reset to `loading` lives here rather than
+  // inside reload() because the focus refetch below deliberately re-runs
+  // against a list that is already on screen — it must not blink the loader.
+  const retry = useCallback(() => {
+    setHit({ data: null, error: null });
+    reload();
+  }, [reload]);
+
+  // Pull-to-refresh. This screen is four independent fetches wearing one
+  // page, so the pull re-runs all three that can change (the YouTube feature
+  // flag is deployment state, not data). The two shelves stay best-effort
+  // exactly as their own effects are — a mixes shelf that fails to reload is
+  // still a shelf, and only the playlists themselves are worth a sentence.
+  const pull = usePullRefresh(signal =>
+    Promise.all([
+      reload(signal, { quiet: true }),
+      listAutoPlaylists({ signal })
+        .then(setAuto)
+        .catch(() => {}),
+      listSavedPlaylists({ signal })
+        .then(setSavedLists)
+        .catch(() => {}),
+    ]),
+  );
 
   // Refetch when the screen is focused again. The stack keeps parked screens
   // MOUNTED (see hooks/useNavFocused), so coming back from a finished import
@@ -307,6 +343,7 @@ export default function PlaylistsScreen({ navigation }) {
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
+        refreshControl={pull.control}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -509,9 +546,11 @@ export default function PlaylistsScreen({ navigation }) {
 
         {status === 'loading' && <AuraLoader label="Loading playlists" />}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={`Couldn't load — ${hit.error}`}
+            onRetry={retry}
+          />
         )}
         {status === 'ok' && owned.length === 0 && !creating && (
           <View style={styles.empty}>
@@ -684,12 +723,12 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
             </View>
           </View>
 
-          <View style={[styles.menuRule, { backgroundColor: t.line }]} />
+          <Rule style={styles.menuRule} />
 
-          <MenuRow icon="play" label={playBusy ? 'Starting…' : 'Play'} disabled={playBusy} onPress={onPlay} />
-          <MenuRow icon="arrow-right" label="Open playlist" onPress={onOpen} />
-          {onShare && <MenuRow icon="people" label="Who can see this" onPress={onShare} />}
-          <MenuRow
+          <SheetRow icon="play" label={playBusy ? 'Starting…' : 'Play'} disabled={playBusy} onPress={onPlay} />
+          <SheetRow icon="arrow-right" label="Open playlist" onPress={onOpen} />
+          {onShare && <SheetRow icon="people" label="Who can see this" onPress={onShare} />}
+          <SheetRow
             icon="close"
             danger
             label={owned ? 'Delete playlist' : 'Leave playlist'}
@@ -698,34 +737,6 @@ function MenuPopup({ playlist: p, playBusy, onClose, onOpen, onPlay, onShare, on
         </Pressable>
       </Pressable>
     </Modal>
-  );
-}
-
-function MenuRow({ icon, label: text, danger, disabled, onPress }) {
-  const { t } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={text}
-      accessibilityState={disabled ? { disabled: true } : {}}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}
-    >
-      {icon ? (
-        <Icon name={icon} size={18} color={danger ? SHEET_DANGER : t.inkSoft} />
-      ) : (
-        <View style={styles.menuIconGap} />
-      )}
-      <Text
-        style={[
-          styles.menuRowText,
-          { color: disabled ? t.inkFaint : danger ? SHEET_DANGER : t.ink },
-        ]}
-      >
-        {text}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -744,39 +755,39 @@ const styles = StyleSheet.create({
   },
   more: { paddingVertical: 10, paddingLeft: 8 },
   pressed: { opacity: 0.6 },
-  cover: { width: 50, height: 50, borderRadius: 8 },
+  cover: { width: 50, height: 50, borderRadius: radii.coverMd },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
   coverLetter: { fontFamily: fonts.semibold, fontSize: 20 },
   rowMeta: { flex: 1, minWidth: 0, gap: 3 },
-  rowName: { fontFamily: fonts.medium, fontSize: 15 },
+  rowName: type.rowTitle,
   hint: { paddingLeft: 62, marginTop: -4 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, paddingVertical: 10 },
+  errorBlock: { paddingVertical: 10 },
   empty: { paddingVertical: 14, gap: 4 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
   menuScrim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    // The popup family's one scrim + one radius — the same pair ConfirmPopup
+    // and PickerPopup wear, so a menu and the question it leads to are
+    // visibly the same kind of surface.
+    backgroundColor: 'rgba(10, 8, 6, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 28,
   },
   menuCard: {
     alignSelf: 'stretch',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     padding: 16,
     gap: 2,
   },
   menuHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12 },
-  menuRule: { height: 1, marginBottom: 6 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
-  menuIconGap: { width: 18 },
-  menuRowText: { fontFamily: fonts.medium, fontSize: 15 },
-  create: { borderRadius: 12, padding: 14, gap: 9 },
+  menuRule: { marginBottom: 6 },
+  create: { borderRadius: radii.card, padding: 14, gap: 9 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontFamily: fonts.regular,

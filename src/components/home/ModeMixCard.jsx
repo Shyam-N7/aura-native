@@ -12,7 +12,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
 import { Icon } from '../Icon';
 import { TrackArt } from '../TrackRow';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, type } from '../../theme/tokens';
 
 // One-tap play-all card for the active listening mode's curated pool, ported
 // from web .aura-dh__modemix. Parent gates it on activeMode !== 'everyday'.
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   meta: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.semibold, fontSize: 17 },
+  title: type.blockTitle,
   sub: { fontFamily: fonts.regular, fontSize: 13 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   playDisc: {

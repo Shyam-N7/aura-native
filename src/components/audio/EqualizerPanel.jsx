@@ -14,7 +14,7 @@ import { PickerPopup } from '../ui/PickerPopup';
 import { EqFader } from '../ui/EqFader';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 import { storage } from '../../storage/mmkv';
 import {
   OUTPUTS,
@@ -125,6 +125,16 @@ export function EqualizerPanel() {
     }
     setAsk(false);
     setEnabled(true);
+  };
+
+  // Every fader can be re-zeroed by holding it — a gesture that doesn't exist
+  // with a screen reader on, and that nothing in the chrome offered as a
+  // button. This is that reset as a visible control. It flattens ALL bands
+  // rather than one: the panel has no notion of a "current" band to act on,
+  // and flat is exactly what the per-fader hold means, band by band.
+  const resetBands = () => {
+    Vibration.vibrate(8);
+    applyGains(eq.bands.map(() => 0));
   };
 
   const closePresets = () => {
@@ -292,8 +302,26 @@ export function EqualizerPanel() {
         ))}
       </View>
       <Text style={[styles.hint, { color: t.inkFaint }]}>
-        drag a fader to shape it · hold one to reset it
+        Drag a fader to shape it · hold one to reset it
       </Text>
+      {/* The chip the popups already use, so nothing new is invented; the
+          slop takes its ~33dp box past the 48dp touch target. */}
+      <View style={styles.resetRow}>
+        <PressScale
+          accessibilityRole="button"
+          accessibilityLabel="reset the bands"
+          accessibilityState={on ? {} : { disabled: true }}
+          onPress={resetBands}
+          disabled={!on}
+          hitSlop={10}
+        >
+          <View
+            style={[styles.chip, { borderColor: t.line }, !on && styles.dim]}
+          >
+            <Text style={[styles.chipText, { color: t.inkSoft }]}>Reset</Text>
+          </View>
+        </PressScale>
+      </View>
 
       <View style={styles.btns}>
         {pickBtn('presets', 'Presets', presetName, 'presets')}
@@ -527,7 +555,7 @@ const styles = StyleSheet.create({
   note: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, marginTop: 14 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   rowMeta: { flex: 1, paddingRight: 12, gap: 2 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   rowCaption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
   faders: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
@@ -538,6 +566,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   hintLeft: { textAlign: 'left', marginTop: 8 },
+  resetRow: { alignItems: 'center', marginTop: 10 },
   btns: { marginTop: 14, gap: 8 },
   btn: {
     flexDirection: 'row',
@@ -577,7 +606,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
@@ -587,7 +616,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderStyle: 'dashed',
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -597,7 +626,7 @@ const styles = StyleSheet.create({
   save: { marginTop: 8, gap: 10 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontFamily: fonts.regular,

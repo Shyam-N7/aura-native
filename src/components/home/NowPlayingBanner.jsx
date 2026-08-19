@@ -16,7 +16,7 @@ import { useAppActive } from '../../hooks/useAppActive';
 import { useNavFocused } from '../../hooks/useNavFocused';
 import { PressScale } from '../ui/PressScale';
 import { TrackArt } from '../TrackRow';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 import { cleanTitle } from '../../utils/title';
 import { DUR, EASE } from '../../theme/motion';
 
@@ -220,6 +220,15 @@ export function NowPlayingBanner({ track, dir = 0, playing = false, onOpen }) {
 
 const styles = StyleSheet.create({
   pad: { paddingHorizontal: 22 },
+  // Deliberately NO height and NO maxFontSizeMultiplier anywhere in this
+  // card. The three fixed numbers below (64 art, 64/56/54 aura) are the
+  // artwork and the decorative mark — images, which must not scale with the
+  // OS font setting. The text beside them is a track title and an artist:
+  // content, the first thing someone raises the font scale to read. So the
+  // card is left free to grow instead. At the default scale the meta column
+  // (~52dp) sits inside the 64dp art and this renders exactly as it always
+  // has; past ~1.25× the column becomes the taller side and the card gets a
+  // few dp deeper, which is a scrolling page and costs nothing.
   card: {
     borderRadius: 14,
     borderWidth: 1,
@@ -231,7 +240,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   meta: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.semibold, fontSize: 17 },
+  title: type.blockTitle,
   artist: { fontFamily: fonts.regular, fontSize: 13 },
   // The living mark — sized to the art so the card reads balanced end to end.
   aura: {
@@ -244,13 +253,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 56,
     height: 56,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   ring: {
     position: 'absolute',
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   ring0: { width: 54, height: 54, borderWidth: 1.25 },
   ring1: { width: 33, height: 33, borderWidth: 1.5 },
-  core: { width: 13, height: 13, borderRadius: 999 },
+  core: { width: 13, height: 13, borderRadius: radii.pill },
 });

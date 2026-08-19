@@ -8,27 +8,20 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, {
-  LinearTransition,
-  ReduceMotion,
-  cancelAnimation,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { BounceFlatList } from '../components/ui/Bounce';
 import { LONG_LIST } from '../lib/listWindow';
+import { ROW_LAYOUT, RowArrive } from '../components/ui/RowArrive';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
   getPlaylist,
   getPublicPlaylist,
+  addToPlaylist,
   removeFromPlaylist,
   getPlaylistRev,
   createPlaylistInvite,
@@ -61,13 +54,14 @@ import {
 import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { Sheet } from '../components/ui/Sheet';
+import { SheetRow } from '../components/ui/SheetRow';
 import { Avatar } from '../components/Avatar';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
-import { EASE } from '../theme/motion';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Your (or a shared) playlist, ported from web DesktopPlaylistDetail: cover +
@@ -91,44 +85,6 @@ const SORT_KEY = PLAYLIST_SORT_KEY;
 const SORTS = PLAYLIST_SORTS;
 
 const POLL_MS = 15000;
-
-// Row settling while the stream is live — LikedScreen's exact recipe. Armed
-// ONLY while streaming: the layout-animation machinery runs a per-cell pass
-// every frame while enabled (the QueueSheet drag jitter finding), and a
-// static playlist should pay nothing.
-const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
-  ReduceMotion.System,
-);
-
-// One arriving row's materialization: the Arrive idiom (YouScreen.jsx) — a
-// shared value cancelled on unmount, never an entering= animation (the
-// reanimated 4.2.3/Fabric abort class). Stagger capped so a big batch reads
-// as a quick cascade, not a minute of drip.
-function RowArrive({ animate, i = 0, children }) {
-  const reduced = useReducedMotion();
-  const on = animate && !reduced;
-  const v = useSharedValue(on ? 0 : 1);
-  useEffect(() => {
-    if (!on) {
-      v.value = 1;
-      return undefined;
-    }
-    v.value = 0;
-    v.value = withDelay(
-      70 * Math.min(i, 6),
-      withTiming(1, { duration: 380, easing: EASE.enter }),
-    );
-    return () => cancelAnimation(v);
-  }, [on, i, v]);
-  const style = useAnimatedStyle(() => ({
-    opacity: v.value,
-    transform: [{ translateY: (1 - v.value) * 14 }],
-  }));
-  // Always the same tree shape: an `animate` flip must restyle, never remount
-  // the row underneath (a remount would blink every settled row when the
-  // stream ends).
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
 
 // Nothing inline reaches a row. DetailRow is React.memo'd, and a fresh closure
 // (`onPress={() => playFrom(i)}`), a fresh object (the `menu={{extras: …}}`
@@ -172,41 +128,6 @@ const PlaylistTrackRow = React.memo(function PlaylistTrackRow({
     />
   );
 });
-
-function SheetItem({ icon, text, note, on, disabled, onPress }) {
-  const { t } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={text}
-      accessibilityState={disabled ? { disabled: true } : {}}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.sheetItem, pressed && styles.pressed]}
-    >
-      {icon ? (
-        <Icon name={icon} size={18} color={on ? t.accent : t.inkSoft} />
-      ) : (
-        <View style={styles.sheetIconGap} />
-      )}
-      <View style={styles.sheetItemMeta}>
-        <Text
-          style={[
-            styles.sheetItemText,
-            { color: disabled ? t.inkFaint : on ? t.accent : t.ink },
-          ]}
-        >
-          {text}
-        </Text>
-        {!!note && (
-          <Text style={[styles.sheetItemNote, { color: t.inkSoft }]}>
-            {note}
-          </Text>
-        )}
-      </View>
-    </Pressable>
-  );
-}
 
 function SheetHead({ text }) {
   const { t } = useTheme();
@@ -252,17 +173,25 @@ export default function PlaylistScreen({ route, navigation }) {
     storage.setItem(SORT_KEY, sortId);
   };
 
+  // `quiet` is the pull-to-refresh mode of the SAME request every other caller
+  // uses: a failure re-throws instead of writing the error state, so a
+  // playlist that is already on screen is never traded for an error page
+  // because the network blinked. usePullRefresh says the sentence.
   const load = useCallback(
-    signal =>
+    (signal, { quiet = false } = {}) =>
       (publicId
         ? getPublicPlaylist(publicId, { signal })
         : getPlaylist(id, { signal })
       )
         .then(data => setHit({ data, error: null }))
         .catch(err => {
-          if (err.name !== 'AbortError') {
-            setHit({ data: null, error: err.message });
+          if (err.name === 'AbortError') {
+            return;
           }
+          if (quiet) {
+            throw err;
+          }
+          setHit({ data: null, error: err.message });
         }),
     [id, publicId],
   );
@@ -271,6 +200,20 @@ export default function PlaylistScreen({ route, navigation }) {
     const ctl = new AbortController();
     load(ctl.signal);
     return () => ctl.abort();
+  }, [load]);
+
+  // Pull-to-refresh, named `pull` because `refreshing` on this screen already
+  // means the YouTube re-check below — a different thing entirely (that one
+  // asks YouTube for new songs, this one re-reads the playlist we have). Both
+  // can run at once and neither touches the other's state.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
+
+  // The error state's way out. The reset to `loading` lives here, not inside
+  // load(): every other caller (the import/refresh re-reads below) re-runs it
+  // against rows that are already on screen and must not blink the loader.
+  const retry = useCallback(() => {
+    setHit({ data: null, error: null });
+    load();
   }, [load]);
 
   // Arrived via "who can see this" in the playlists-list popup: open the
@@ -562,6 +505,9 @@ export default function PlaylistScreen({ route, navigation }) {
       title: 'Make this only you?',
       body: `${bits.join(', ')}. You can share it again anytime.`,
       action: 'Make private',
+      // Not destructive — nothing is deleted and it can be shared again
+      // anytime; it only wore red because confirm() used to default to it.
+      danger: false,
     }).then(async ok => {
       if (!ok) {
         return;
@@ -592,6 +538,8 @@ export default function PlaylistScreen({ route, navigation }) {
       title: `Remove ${c.name}?`,
       body: 'They lose access to this playlist. You can re-invite them anytime.',
       action: 'Remove',
+      // Takes someone's access away.
+      danger: true,
     });
     if (!ok) {
       return;
@@ -613,16 +561,93 @@ export default function PlaylistScreen({ route, navigation }) {
     }
   };
 
+  // Undo for the remove below.
+  //
+  // POSITION, plainly: the playlists API has add and remove and nothing else —
+  // no insert-at, no reorder — so the server can only take the track back at
+  // the END of the playlist. The screen splices the row back where it was, so
+  // what is on screen is right and stays right for this visit; the next full
+  // refetch (pull-to-refresh, the shared-playlist rev poll, reopening the
+  // screen) re-reads the server's order and the track will be last. That is
+  // the honest limit of an undo built on this API, not a bug in the splice.
+  const undoRemove = useCallback(
+    async (track, at) => {
+      // Optimistic, like every other write on this screen: the row is back
+      // before the request, and comes off again if the request fails.
+      const putBack = () =>
+        setHit(h => {
+          const rows = h.data?.tracks;
+          if (!rows || rows.some(x => x.id === track.id)) {
+            return h; // gone, or a collaborator already re-added it
+          }
+          const next = rows.slice();
+          next.splice(Math.min(at, next.length), 0, track);
+          return {
+            ...h,
+            data: {
+              ...h.data,
+              tracks: next,
+              trackCount: (h.data.trackCount ?? next.length - 1) + 1,
+            },
+          };
+        });
+      // Whether the row was ALREADY there before the optimistic insert — read
+      // off the ref rather than set inside the updater above, which is lazy
+      // and runs twice under StrictMode. The rollback below must undo only
+      // what putBack actually did: if a collaborator re-added the track while
+      // the pill was up, that row is theirs, and a failed retry must not take
+      // it away.
+      const already = (hitRef.current?.data?.tracks ?? []).some(
+        x => x.id === track.id,
+      );
+      putBack();
+      try {
+        await addToPlaylist(id, track.id);
+        showToast('Back in the playlist.');
+      } catch (err) {
+        // Already there (a collaborator re-added it while the pill was up) is
+        // the state undo was asking for — that is a success, not an error.
+        if (err.code === 'duplicate') {
+          showToast('Back in the playlist.');
+          return;
+        }
+        if (!already) {
+          setHit(h =>
+            h.data
+              ? {
+                  ...h,
+                  data: {
+                    ...h.data,
+                    tracks: h.data.tracks.filter(x => x.id !== track.id),
+                    trackCount: (h.data.trackCount ?? 1) - 1,
+                  },
+                }
+              : h,
+          );
+        }
+        showToast(`Couldn't undo — ${err.message}`);
+      }
+    },
+    [id],
+  );
+
   const removeTrack = useCallback(async track => {
     const ok = await confirm({
       title: `Remove "${cleanTitle(track.title)}"?`,
       body: 'This only removes it from this playlist. Your likes are untouched.',
       action: 'Remove',
+      // Deletes a track out of the playlist.
+      danger: true,
     });
     if (!ok) {
       return;
     }
     const prev = hitRef.current.data;
+    // Where it sat, captured before the filter — the undo puts it back here.
+    const at = Math.max(
+      0,
+      (prev?.tracks ?? []).findIndex(x => x.id === track.id),
+    );
     setHit(h => ({
       ...h,
       data: {
@@ -633,7 +658,9 @@ export default function PlaylistScreen({ route, navigation }) {
     }));
     try {
       await removeFromPlaylist(id, track.id);
-      showToast('Removed.');
+      showToast('Removed.', {
+        action: { label: 'Undo', onPress: () => undoRemove(track, at) },
+      });
     } catch (err) {
       setHit({ data: prev, error: null });
       showToast(`Couldn't remove — ${err.message}`);
@@ -641,7 +668,7 @@ export default function PlaylistScreen({ route, navigation }) {
     // `id` is the only value this needs to keep stable across renders; the
     // rollback snapshot comes off hitRef so a data change does not hand every
     // mounted row a new menu.
-  }, [id]);
+  }, [id, undoRemove]);
 
   // Upload a custom cover image (picker delivers it pre-resized).
   const uploadCover = async () => {
@@ -846,8 +873,12 @@ export default function PlaylistScreen({ route, navigation }) {
         renderItem={renderRow}
         keyExtractor={item => item.id}
         {...LONG_LIST}
+        // Armed ONLY while streaming: ROW_LAYOUT costs a per-cell pass every
+        // frame while enabled (see components/ui/RowArrive), and a settled
+        // playlist never reorders under the user.
         itemLayoutAnimation={streaming ? ROW_LAYOUT : undefined}
         ListFooterComponent={footer}
+        refreshControl={pull.control}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
@@ -860,17 +891,23 @@ export default function PlaylistScreen({ route, navigation }) {
             <CrumbBack onPress={() => navigation.goBack()} />
 
         {status === 'loading' && <AuraLoader label="Loading playlist" />}
+        {/* The copy was one fixed sentence for both branches, so opening YOUR
+            OWN playlist while offline told you it was private and to ask a
+            friend for a share link. The caught message was already in state
+            and simply never rendered — every sibling screen shows it.
+            Lowercase per docs/CONTEXT.md's stated voice. The public branch
+            keeps its retry too: "private or unavailable" is as often a dead
+            connection as a real permission wall. */}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            {/* This was one fixed sentence for both branches, so opening YOUR
-                OWN playlist while offline told you it was private and to ask
-                a friend for a share link. The caught message was already in
-                state and simply never rendered — every sibling screen shows
-                it. Lowercase per docs/CONTEXT.md's stated voice. */}
-            {publicId
-              ? 'This playlist is private or unavailable. If someone shared it, ask them for a public view link.'
-              : hit.error || "Couldn't load this playlist."}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={
+              publicId
+                ? 'This playlist is private or unavailable. If someone shared it, ask them for a public view link.'
+                : hit.error || "Couldn't load this playlist."
+            }
+            onRetry={retry}
+          />
         )}
 
         {status === 'ok' && (
@@ -961,6 +998,7 @@ export default function PlaylistScreen({ route, navigation }) {
                   accessibilityRole="button"
                   accessibilityLabel={`${VIS_LABEL[visibility]} — change who can see this`}
                   onPress={() => setShareOpen(true)}
+                  hitSlop={VIS_SLOP}
                   style={({ pressed }) => [
                     styles.visChip,
                     { borderColor: t.line },
@@ -995,6 +1033,7 @@ export default function PlaylistScreen({ route, navigation }) {
                     saved ? 'remove from your playlists' : 'save to your playlists'
                   }
                   onPress={toggleSave}
+                  hitSlop={VIS_SLOP}
                   style={({ pressed }) => [
                     styles.visChip,
                     { borderColor: saved ? t.accent : t.line },
@@ -1015,6 +1054,7 @@ export default function PlaylistScreen({ route, navigation }) {
                   accessibilityLabel={YT_COPY.refresh.action}
                   disabled={refreshing || refreshLive}
                   onPress={checkForNewSongs}
+                  hitSlop={VIS_SLOP}
                   style={({ pressed }) => [
                     styles.visChip,
                     { borderColor: t.line },
@@ -1035,6 +1075,7 @@ export default function PlaylistScreen({ route, navigation }) {
                     accessibilityRole="button"
                     accessibilityLabel={YT_COPY.done.reviewAction}
                     onPress={() => setReviewing(true)}
+                    hitSlop={VIS_SLOP}
                     style={({ pressed }) => [
                       styles.visChip,
                       { borderColor: t.accent, backgroundColor: t.accentSoft },
@@ -1086,9 +1127,9 @@ export default function PlaylistScreen({ route, navigation }) {
       {shareOpen && (
         <Sheet onClose={() => setShareOpen(false)} closeLabel="close sharing">
           <SheetHead text="Who can see this" />
-          <SheetItem
+          <SheetRow
             icon="lock"
-            text="Only you"
+            label="Only you"
             note="Just for you"
             on={visibility === 'private'}
             disabled={visibility === 'private'}
@@ -1097,30 +1138,30 @@ export default function PlaylistScreen({ route, navigation }) {
           <SheetHead
             text={`People you invite${collaborators.length ? ' ·' : ''}`}
           />
-          <SheetItem
+          <SheetRow
             icon="people"
-            text="Share an edit-invite link"
+            label="Share an edit-invite link"
             note="They can add and remove songs after signing in"
             onPress={shareInvite('editor')}
           />
-          <SheetItem
+          <SheetRow
             icon="people"
-            text="Share a view-invite link"
+            label="Share a view-invite link"
             note="They can listen after signing in"
             onPress={shareInvite('viewer')}
           />
           <SheetHead text={`Anyone with the link${isPublic ? ' ·' : ''}`} />
-          <SheetItem
+          <SheetRow
             icon="globe"
-            text={isPublic ? 'Turn off public link' : 'Make a public view link'}
+            label={isPublic ? 'Turn off public link' : 'Make a public view link'}
             on={isPublic}
             disabled={shareBusy}
             onPress={togglePublic}
           />
           {isPublic && !!pubId && (
-            <SheetItem
+            <SheetRow
               icon="globe"
-              text="Share public link"
+              label="Share public link"
               onPress={sharePublicLink}
             />
           )}
@@ -1172,7 +1213,10 @@ export default function PlaylistScreen({ route, navigation }) {
                   accessibilityLabel={`remove ${c.name}`}
                   onPress={() => dropCollaborator(c)}
                   hitSlop={8}
-                  style={({ pressed }) => pressed && styles.pressed}
+                  style={({ pressed }) => [
+                    styles.removeBtn,
+                    pressed && styles.pressed,
+                  ]}
                 >
                   <Text style={[label(9.5), { color: t.accent }]}>Remove</Text>
                 </Pressable>
@@ -1248,6 +1292,12 @@ export default function PlaylistScreen({ route, navigation }) {
   );
 }
 
+// The action chips are bordered pills — only hitSlop can grow them without
+// redrawing the border. 11.4dp of label(9.5) + 14 padding = 25.4dp, + 24 =
+// 49.4dp tall; sideways they are already past 48 and the slop is held to half
+// the row's 10dp gap so wrapped neighbours never overlap.
+const VIS_SLOP = { top: 12, bottom: 12, left: 5, right: 5 };
+
 const styles = StyleSheet.create({
   streamFoot: { alignItems: 'center', paddingVertical: 18, gap: 6 },
   root: { flex: 1 },
@@ -1256,7 +1306,8 @@ const styles = StyleSheet.create({
   // 7px seams between the windowed rows; marginBottom keeps the old
   // ListTools→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  stateLine: { ...type.caption, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   cover: {
     width: 148,
     height: 148,
@@ -1308,27 +1359,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 7,
     marginTop: 10,
   },
   empty: { marginTop: 18, gap: 5 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
   pressed: { opacity: 0.6 },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   sheetHead: { marginTop: 12, marginBottom: 2 },
-  sheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 11,
-  },
-  sheetIconGap: { width: 18 },
-  sheetItemMeta: { flex: 1, minWidth: 0, gap: 2 },
-  sheetItemText: { fontFamily: fonts.medium, fontSize: 15 },
-  sheetItemNote: { fontFamily: fonts.regular, fontSize: 12 },
+  sheetItemText: type.rowTitle,
   member: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1336,7 +1378,16 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   memberMeta: { flex: 1, minWidth: 0, gap: 2 },
-  memberName: { fontFamily: fonts.medium, fontSize: 15 },
+  // "Remove" is 11.4dp of label(9.5). Padding grows the touch box, the equal
+  // negative margin gives the space back, so the member row keeps its height
+  // and the word stays put: 11.4 + 24 padding + 16 hitSlop = 51.4dp.
+  removeBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginVertical: -12,
+    marginHorizontal: -10,
+  },
+  memberName: type.rowTitle,
   coverGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1348,7 +1399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.card,
     paddingHorizontal: 14,
     paddingVertical: 11,
     marginTop: 4,

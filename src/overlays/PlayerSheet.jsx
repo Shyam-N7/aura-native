@@ -69,6 +69,7 @@ import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { PressScale } from '../components/ui/PressScale';
+import { Rule } from '../components/ui/Rule';
 import { Sheet } from '../components/ui/Sheet';
 import { SheetRow } from '../components/ui/SheetRow';
 import { EqualizerPopup } from './EqualizerPopup';
@@ -169,7 +170,7 @@ function PlayerMenuSheet({
           shareMoment(track, sec);
         })}
       />
-      <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+      <Rule style={styles.menuSeparator} />
       <SheetRow
         icon="sliders"
         label="Equalizer"
@@ -811,7 +812,7 @@ export function PlayerSheet() {
     if (next) {
       endTour();
     }
-    showToast(next ? 'gestures off.' : 'gestures on.');
+    showToast(next ? 'Gestures off.' : 'Gestures on.');
   };
   // Replay from the ⋯ menu — turning gestures back on if they were off,
   // since a tour over a gesture-dead player could never advance.
@@ -1020,7 +1021,15 @@ export function PlayerSheet() {
                           { backgroundColor: t.accentCard },
                         ]}
                       >
-                        <Icon name="heart" size={13} color={t.accent} />
+                        {/* Not a heart: an outline heart is this app's
+                            "not liked" STATE everywhere it appears
+                            (player/HeartButton.jsx), so parking one on the
+                            artwork reads as a verdict on the current track
+                            rather than as a hint. bloom is the accent sparkle
+                            — it promises the little celebration the
+                            double-tap actually fires (LikeBurst) and claims
+                            no state at all. */}
+                        <Icon name="bloom" size={13} color={t.accent} />
                         <Text style={[styles.hintText, { color: t.ink }]}>
                           Double-tap to like
                         </Text>
@@ -1263,7 +1272,7 @@ export function PlayerSheet() {
               >
                 <Icon name="plus" size={19} color={t.ink} />
                 <Text style={[styles.saveText, { color: t.ink }]}>
-                  add to playlist
+                  Add to playlist
                 </Text>
               </PressScale>
             </View>
@@ -1365,7 +1374,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
@@ -1379,7 +1388,7 @@ const styles = StyleSheet.create({
   },
   // Player ⋯ menu + gestures guide (QueueOptionsSheet's register).
   menuTitle: { fontFamily: fonts.semibold, fontSize: 18, marginBottom: 8 },
-  menuSeparator: { height: 1, marginVertical: 6 },
+  menuSeparator: { marginVertical: 6 },
   guideRow: { paddingVertical: 8, gap: 2 },
   guideHow: { fontFamily: fonts.medium, fontSize: 14.5 },
   guideWhat: { fontFamily: fonts.regular, fontSize: 12.5 },
@@ -1430,7 +1439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -1442,7 +1451,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 13,
   },
   saveText: { fontFamily: fonts.medium, fontSize: 14 },

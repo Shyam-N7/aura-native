@@ -15,12 +15,15 @@ import { summarizeClock } from '../lib/musicClock';
 import { openTrackActions } from '../lib/trackActionsSheet';
 import { LONG_LIST } from '../lib/listWindow';
 import { TrackArt } from '../components/TrackRow';
+import { Icon } from '../components/Icon';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
-import { fonts, label, type } from '../theme/tokens';
+import { ErrorState } from '../components/ui/ErrorState';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Nothing inline reaches a row. This screen does not use DetailRow, so none of
@@ -52,31 +55,49 @@ const HistoryRow = React.memo(function HistoryRow({
     [play],
   );
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`play ${title}`}
-      onPress={press}
-      onLongPress={hold}
-      style={pressStyle}
-    >
-      <TrackArt track={play} size={50} radius={4} />
-      <View style={styles.meta}>
-        <Text numberOfLines={1} style={[styles.title, { color: ink }]}>
-          {title}
+    <View style={styles.rowWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`play ${title}`}
+        onPress={press}
+        onLongPress={hold}
+        style={pressStyle}
+      >
+        <TrackArt track={play} size={50} radius={4} />
+        <View style={styles.meta}>
+          <Text numberOfLines={1} style={[styles.title, { color: ink }]}>
+            {title}
+          </Text>
+          <Text numberOfLines={1} style={[ROW_SUB, { color: inkSoft }]}>
+            {(play.artist ?? '').toLowerCase()} · {play.language ?? ''}
+          </Text>
+        </View>
+        <Text style={[type.time, { color: inkFaint }]}>
+          {formatTime12(new Date(play.playedAt))}
         </Text>
-        <Text numberOfLines={1} style={[ROW_SUB, { color: inkSoft }]}>
-          {(play.artist ?? '').toLowerCase()} · {play.language ?? ''}
-        </Text>
-      </View>
-      <Text style={[type.time, { color: inkFaint }]}>
-        {formatTime12(new Date(play.playedAt))}
-      </Text>
-    </Pressable>
+      </Pressable>
+      {/* The hold that opens the track actions, made visible — the same ⋯
+          TrackRow wears, so the two row shapes stay one control. Without it
+          this row's menu existed only as a gesture nothing announced. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="more"
+        onPress={hold}
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+        style={morePressStyle}
+      >
+        <Icon name="dots" size={17} color={inkFaint} />
+      </Pressable>
+    </View>
   );
 });
 
 // Pressable's style-as-function, defined once rather than per row per render.
 const pressStyle = ({ pressed }) => [styles.row, pressed && styles.pressed];
+const morePressStyle = ({ pressed }) => [
+  styles.rowMore,
+  pressed && styles.pressed,
+];
 
 // Closes over nothing, so it belongs here rather than being rebuilt per render.
 const keyForPlay = play => `${play.id}-${play.playedAt}`;
@@ -217,39 +238,89 @@ export default function HistoryScreen({ navigation }) {
   // A failed page used to be swallowed: the spinner blinked, no rows arrived,
   // and the screen read as "that's all my history" (or as a dead button).
   const [moreError, setMoreError] = useState(false);
+  // Bumped every time page one REPLACES the list (mount, retry, pull-to-
+  // refresh). A load-more that started under an older value is describing a
+  // list that no longer exists, so its page must not be appended and its
+  // cursor must not overwrite the fresh one.
+  const chain = useRef(0);
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    Promise.all([
-      getHistory({ limit: 80, signal: ctl.signal }),
-      getMusicClockPlays({ signal: ctl.signal }).catch(() => []),
+  // Page one, lifted out of the effect so the error state can offer the same
+  // retry the load-more control does. A first-page failure used to be a dead
+  // end — one line of copy and no way back — while page two got a button.
+  //
+  // `quiet` is the pull-to-refresh mode of the same request: no blank-to-
+  // loading on the way in, and a failure re-thrown instead of written into
+  // the error state, so the history already on screen survives it.
+  //
+  // Refreshing a CURSOR-paginated list means page one and nothing else, and
+  // that is deliberate rather than lossy: pages after the first are windows
+  // behind a `before` cursor, so keeping them while page one is replaced
+  // would leave a hole wherever plays landed in between — and `nextBefore`
+  // would no longer describe the list under it. Page one plus the cursor that
+  // belongs to it is the only self-consistent answer; Load more walks down
+  // again from there.
+  const loadFirstPage = useCallback((signal, { quiet = false } = {}) => {
+    if (!quiet) {
+      setStatus('loading');
+    }
+    return Promise.all([
+      getHistory({ limit: 80, signal }),
+      getMusicClockPlays({ signal }).catch(() => []),
     ])
       .then(([h, clockPlays]) => {
+        chain.current += 1;
         setPlays(h.plays);
         setNextBefore(h.nextBefore);
         setClock(summarizeClock(clockPlays, { perPart: 2 }));
+        setMoreError(false);
         setStatus('ok');
       })
       .catch(err => {
-        if (err.name !== 'AbortError') {
-          setStatus('error');
+        if (err.name === 'AbortError') {
+          return;
         }
+        if (quiet) {
+          throw err;
+        }
+        setStatus('error');
       });
-    return () => ctl.abort();
   }, []);
 
+  useEffect(() => {
+    const ctl = new AbortController();
+    loadFirstPage(ctl.signal);
+    return () => ctl.abort();
+  }, [loadFirstPage]);
+
+  // Pull-to-refresh: page one again. See ui/Bounce for how the pull and the
+  // rubber band share one downward drag at the top.
+  const pull = usePullRefresh(signal => loadFirstPage(signal, { quiet: true }));
+
   const loadMore = () => {
-    if (!nextBefore || loadingMore) {
+    // `pull.refreshing` closes pull-then-tap only: a page asked for while page
+    // one is in flight would be walking a cursor that is about to be replaced.
+    // The epoch closes the other ordering — tap, THEN pull — where the page is
+    // already in flight when the list underneath it is thrown away.
+    if (!nextBefore || loadingMore || pull.refreshing) {
       return;
     }
+    const mine = chain.current;
     setLoadingMore(true);
     setMoreError(false);
     getHistory({ limit: 80, before: nextBefore })
       .then(h => {
+        if (chain.current !== mine) {
+          return;
+        }
         setPlays(prev => [...prev, ...h.plays]);
         setNextBefore(h.nextBefore);
       })
-      .catch(() => setMoreError(true))
+      .catch(() => {
+        if (chain.current !== mine) {
+          return;
+        }
+        setMoreError(true);
+      })
       .finally(() => setLoadingMore(false));
   };
 
@@ -271,10 +342,14 @@ export default function HistoryScreen({ navigation }) {
       <CrumbBack onPress={() => navigation.goBack()} />
       <Text style={[type.queueHero, { color: t.ink }]}>Your history.</Text>
       {status === 'loading' && <AuraLoader label="Loading history" />}
+      {/* The pill this screen grew for its own first-page failure is now the
+          shared ErrorState every other screen wears — same markup, same
+          spacing, same hitSlop. */}
       {status === 'error' && (
-        <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-          Couldn't load your history.
-        </Text>
+        <ErrorState
+          message="Couldn't load your history."
+          onRetry={() => loadFirstPage()}
+        />
       )}
       {status === 'ok' && plays.length === 0 && (
         <View style={styles.empty}>
@@ -352,6 +427,11 @@ export default function HistoryScreen({ navigation }) {
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         stickySectionHeadersEnabled={false}
+        // Load-more appends a page onto the same list rather than replacing
+        // it, so the rows already on screen settle instead of jumping when the
+        // next 80 plays land. (No arrive animation: the appended page is
+        // requested, not streamed — it is already where the user is looking.)
+        refreshControl={pull.control}
         {...LONG_LIST}
         contentContainerStyle={[
           styles.list,
@@ -367,10 +447,10 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { paddingHorizontal: 20 },
   header: { paddingTop: 10, paddingBottom: 6, gap: 10 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5 },
+  stateLine: type.caption,
   empty: { marginTop: 10, gap: 5 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
   clock: {
     borderRadius: 16,
     padding: 16,
@@ -404,19 +484,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dayHead: { paddingTop: 16, paddingBottom: 6 },
+  rowWrap: { flexDirection: 'row', alignItems: 'center' },
   row: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 7,
   },
+  // TrackRow's ⋯ box, to the pixel.
+  rowMore: { paddingVertical: 10, paddingLeft: 8 },
   pressed: { opacity: 0.6 },
   meta: { flex: 1, minWidth: 0, gap: 3 },
-  title: { fontFamily: fonts.medium, fontSize: 15 },
+  title: type.rowTitle,
   more: {
     alignSelf: 'center',
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 22,
     paddingVertical: 10,
     marginTop: 18,

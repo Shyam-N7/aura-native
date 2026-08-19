@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -7,12 +7,14 @@ import { getJournal } from '../api/journal';
 import { getTrack } from '../api/catalog';
 import { cleanTitle } from '../utils/title';
 import { TrackArt } from '../components/TrackRow';
-import { Icon } from '../components/Icon';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { PressScale } from '../components/ui/PressScale';
+import { RULE_WIDTH } from '../components/ui/Rule';
+import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii } from '../theme/tokens';
 
 // Ported from web DesktopJournal.jsx: the private listening journal — one
 // auto-written entry per listening day. The web renders entry.tracks as track
@@ -31,9 +33,12 @@ export default function JournalScreen({ navigation }) {
 
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    getJournal({ days: 7, signal: ctl.signal })
+  // Lifted out of the effect so a failed read offers a retry instead of only
+  // Back (HistoryScreen's loadFirstPage shape). The reset returns the screen
+  // to `loading`; an abort still never renders as an error.
+  const load = useCallback(signal => {
+    setHit({ data: null, error: null });
+    return getJournal({ days: 7, signal })
       .then(data => setHit({ data, error: null }))
       .catch(err => {
         if (err.name === 'AbortError') {
@@ -41,8 +46,13 @@ export default function JournalScreen({ navigation }) {
         }
         setHit({ data: null, error: err.message });
       });
-    return () => ctl.abort();
   }, []);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    load(ctl.signal);
+    return () => ctl.abort();
+  }, [load]);
 
   // Hydrate the entries' track ids into playable tracks (dedup, capped so a
   // long journal can't fan out into dozens of catalog calls).
@@ -99,22 +109,12 @@ export default function JournalScreen({ navigation }) {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="back"
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-            style={styles.back}
-          >
-            <Icon name="chevron-left" size={22} color={t.ink} />
-          </PressScale>
-
-          <Text style={[label(10), { color: t.inkFaint }]}>
-            Your private listening journal
-          </Text>
-          <Text style={[styles.hero, { color: t.ink }]}>
-            What you listened{'\n'}to, and why.
-          </Text>
+          <PageHeader
+            eyebrow="Your private listening journal"
+            title={'What you listened\nto, and why.'}
+            titleStyle={styles.title}
+            onBack={() => navigation.goBack()}
+          />
 
           {status === 'loading' && (
             <View style={styles.center}>
@@ -123,9 +123,11 @@ export default function JournalScreen({ navigation }) {
           )}
 
           {status === 'error' && (
-            <Text style={[styles.errorText, { color: t.inkSoft }]}>
-              Couldn't load the journal — {hit.error}
-            </Text>
+            <ErrorState
+              style={styles.errorBlock}
+              message={`Couldn't load the journal — ${hit.error}`}
+              onRetry={() => load()}
+            />
           )}
 
           {status === 'ok' && entries.length === 0 && (
@@ -200,33 +202,14 @@ export default function JournalScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 22 },
-  back: {
-    width: 38,
-    height: 38,
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 6,
-  },
-  hero: {
-    fontFamily: fonts.regular,
-    fontSize: 34,
-    lineHeight: 36,
-    letterSpacing: -1.02,
-    marginTop: 8,
-    marginBottom: 22,
-  },
+  title: { marginTop: 8, marginBottom: 22 },
   center: { paddingVertical: 48, alignItems: 'center' },
-  errorText: {
-    fontFamily: fonts.regular,
-    fontSize: 15,
-    lineHeight: 21,
-    paddingVertical: 24,
-  },
+  errorBlock: { paddingVertical: 24 },
   empty: { paddingVertical: 32, gap: 8 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   entry: {
-    borderTopWidth: 1,
+    borderTopWidth: RULE_WIDTH,
     paddingVertical: 18,
     gap: 8,
   },
@@ -236,7 +219,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tag: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },

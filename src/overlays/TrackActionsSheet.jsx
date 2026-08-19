@@ -14,9 +14,10 @@ import { openWhy } from '../lib/whySheet';
 import { shareTrack } from '../lib/share';
 import { showToast } from '../lib/toast';
 import { TrackArt } from '../components/TrackRow';
+import { Rule } from '../components/ui/Rule';
 import { Sheet } from '../components/ui/Sheet';
 import { SheetRow } from '../components/ui/SheetRow';
-import { fonts } from '../theme/tokens';
+import { fonts, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 
 // The track action menu (web TrackContextMenu rethought as a bottom sheet —
@@ -186,7 +187,7 @@ export function TrackActionsSheet() {
         />
       ))}
       {extras.length > 0 && (
-        <View style={[styles.separator, { backgroundColor: t.line }]} />
+        <Rule style={styles.separator} />
       )}
       {extras.map(extra => (
         <SheetRow
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   headMeta: { flex: 1, minWidth: 0, gap: 2 },
-  headTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  headTitle: type.rowTitle,
   headArtist: { fontFamily: fonts.regular, fontSize: 12.5 },
-  separator: { height: 1, marginVertical: 6 },
+  separator: { marginVertical: 6 },
 });

@@ -13,7 +13,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { getCurrentMood } from '../api/mood';
 import { getTopArtists } from '../api/stats';
 import { partOfDay } from '../lib/sensing';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, type } from '../theme/tokens';
 import { EASE } from '../theme/motion';
 
 // One unfolding line's arrival, the Arrive idiom (YouScreen.jsx): a shared
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   orb: { width: 16, height: 16, borderRadius: 8 },
   lines: { gap: 8, minHeight: 110 },
-  line: { fontFamily: fonts.regular, fontSize: 14 },
+  line: type.body,
   moodBlock: { marginTop: 28, minHeight: 110 },
   mood: {
     fontFamily: 'Fraunces-Regular',

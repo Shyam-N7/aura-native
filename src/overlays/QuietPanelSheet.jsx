@@ -7,7 +7,7 @@ import { getNotifications, markNotificationsSeen } from '../api/notifications';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
 import { TrackArt } from '../components/TrackRow';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 
 // The quiet panel (owner's brief: "nothing visits you — you visit it").
@@ -154,7 +154,7 @@ export function QuietPanelSheet() {
 
 const styles = StyleSheet.create({
   title: { fontFamily: fonts.semibold, fontSize: 18, marginBottom: 6 },
-  empty: { fontFamily: fonts.regular, fontSize: 13.5, paddingVertical: 14 },
+  empty: { ...type.caption, paddingVertical: 14 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   rowMeta: { flex: 1, gap: 2 },
-  rowLabel: { fontFamily: fonts.medium, fontSize: 15 },
+  rowLabel: type.rowTitle,
   rowHint: { fontFamily: fonts.regular, fontSize: 12.5 },
   liveDot: { width: 7, height: 7, borderRadius: 4 },
 });

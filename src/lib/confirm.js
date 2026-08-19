@@ -11,11 +11,18 @@
 const subscribers = new Set();
 let pending = null;
 
+// `danger` paints the action pill red. It defaults to FALSE — red is the one
+// cue this app uses for "this destroys something", so it has to be asked for.
+// It used to default to TRUE here while ConfirmPopup's identical card
+// defaulted to false, which is how questions like "Make this only you?" ended
+// up wearing a destructive red they never requested; every call site now says
+// which it is.
+//
 // `instant` is for the one kind of caller whose action tears down the tree the
 // sheet lives in (sign out swaps the whole navigator for the sign-in screen).
 // reanimated 4.2.3/Fabric aborts natively when a view is removed mid-exiting,
 // so that sheet has to pop instead of slide. Everything else keeps the motion.
-export function confirm({ title, body, action, danger = true, instant = false }) {
+export function confirm({ title, body, action, danger = false, instant = false }) {
   return new Promise(resolve => {
     pending?.resolve(false);
     pending = { title, body, action, danger, instant, resolve };

@@ -113,8 +113,14 @@ describe('the queue sheet does not re-render its rows on every track advance', (
     const src = code(body);
     expect(src).toMatch(/const renderItem = useCallback\(/);
     expect(src).toMatch(/const keyForRow = useCallback\(/);
-    // getItemLayout closes over nothing, so it is a module constant.
-    expect(src).toContain('getItemLayout={ROW_LAYOUT}');
+    // getItemLayout now closes over the row height (derived from the OS font
+    // scale — see rowHeightAt), so it cannot be a module constant any more.
+    // It still must not be rebuilt per render: one useMemo, keyed on the row
+    // height, which only changes between openings of the sheet.
+    expect(src).toMatch(
+      /const rowLayout = useMemo\(\(\) => rowLayoutAt\(rowH\), \[rowH\]\)/,
+    );
+    expect(src).toContain('getItemLayout={rowLayout}');
     expect(src).toContain('keyExtractor={keyForRow}');
     // The spread that used to allocate per render belongs inside the memo.
     expect(src).not.toMatch(/const listData = /);

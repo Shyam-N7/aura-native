@@ -14,7 +14,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAppActive } from '../../hooks/useAppActive';
 import { useNavFocused } from '../../hooks/useNavFocused';
 import { Goo } from './Goo';
-import { label } from '../../theme/tokens';
+import { label, space } from '../../theme/tokens';
 
 // The house loader: three accent blobs that pulse and fuse under the goo
 // metaball filter, so "loading" reads as something alive rather than a spinner.
@@ -88,7 +88,7 @@ export function AuraLoader({ label: text, style }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 8 },
+  wrap: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: space.s8 },
   canvas: { width: W, height: H },
   text: { textAlign: 'center' },
 });

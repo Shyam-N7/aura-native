@@ -70,6 +70,15 @@ export const type = {
     lineHeight: 43,
     letterSpacing: -1.32,
   },
+  // The standalone screens' page title (dna, journal, bridges, equalizer,
+  // admin compose) — the queueHero register one step down. Vertical spacing is
+  // deliberately NOT in here: every screen sets its own margins around it.
+  pageTitle: {
+    fontFamily: fonts.regular,
+    fontSize: 34,
+    lineHeight: 36,
+    letterSpacing: -1.02,
+  },
   searchInput: {
     fontFamily: fonts.regular,
     fontSize: 24,
@@ -87,8 +96,18 @@ export const type = {
     letterSpacing: -0.11,
   },
   wordmark: { fontFamily: fonts.semibold, fontSize: 24, letterSpacing: -0.48 },
+  // The heading that tops a block of content one step under sectionTitle: the
+  // empty/blank-state line on eight list screens, and the card and banner
+  // titles that already matched it (memory rail, mode mix, now-playing banner,
+  // the gesture tour, the queue's source line). Thirteen sites had spelled it
+  // out identically before it was a token.
+  blockTitle: { fontFamily: fonts.semibold, fontSize: 17 },
   rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
   body: { fontFamily: fonts.regular, fontSize: 14 },
+  // The secondary line under a title — empty-state bodies, hints, taglines,
+  // "loading…"/"nothing yet" state lines. Half a point under body, and the
+  // most-reimplemented register in the app (25 sites).
+  caption: { fontFamily: fonts.regular, fontSize: 13.5 },
   time: {
     fontFamily: fonts.regular,
     fontSize: 11,
@@ -104,6 +123,27 @@ export const label = size => ({
   textTransform: 'uppercase',
 });
 
+// The OS font-scale policy (Settings → Display → Font size). Everything in
+// this app scales with it by default and MUST keep doing so — body copy,
+// titles, list rows, lyrics, empty states. That setting is the whole point.
+//
+// The one exception is text sealed inside chrome whose height is a fixed
+// CONTRACT with the rest of the layout, not a container that can just grow:
+//   · the dock capsule (52dp) — DOCK_CLEARANCE (96) is the padding ~20
+//     screens leave at the bottom of their scrollers for it;
+//   · the top bar (52dp) — TOPBAR_CLEARANCE (68) is the same deal at the top.
+// Those two numbers are compiled into every screen, so the bar cannot grow
+// without every screen's padding growing with it. The text living in them is
+// a 7.5–14dp label or the wordmark — chrome, never content — so capping its
+// growth is the smaller loss: the label stays legible and nothing clips.
+//
+// 1.3 is the largest multiplier every capped site still fits at. The tightest
+// is the dock tab label: 52 capsule − 12 padding − 22 icon − 3 gap = 15dp of
+// room, and label(7.5) at 1.3× is a ~13.6dp line box.
+//
+// Anything in a flexible container gets NO cap. If a box can grow, it grows.
+export const CHROME_MAX_FONT_SCALE = 1.3;
+
 export const radii = {
   pill: 999,
   dock: 26,
@@ -115,6 +155,44 @@ export const radii = {
   coverMd: 8,
   auth: 26,
   input: 12,
+};
+
+// The spacing scale, read back OUT of the ~830 padding/margin/gap declarations
+// already in the tree rather than invented over them: these nine steps are the
+// values the app reaches for most. Keys are the value itself (s8 IS 8dp) — a
+// t-shirt scale would hide whether a migrated site still renders the same
+// pixel, and every site that moved to these tokens moved without moving.
+// gutter is the screen's side padding: 22 earns a name instead of a step
+// number because it means "the page edge", not "a bit more than 20".
+//
+// This is NOT a snapping tool. Everything off the scale stays where it is —
+// the odd values (1, 3, 5, 7, 9, 11, 13, 15: 111 uses between them) and the
+// even in-betweens the scale skips (10, 14, 18). Rounding any of them onto a
+// step would move pixels on screen, and that is the owner's design call, not
+// something a token migration gets to make on the way past.
+export const space = {
+  s2: 2,
+  s4: 4,
+  s6: 6,
+  s8: 8,
+  s12: 12,
+  s16: 16,
+  s20: 20,
+  s24: 24,
+  s32: 32,
+  gutter: 22,
+};
+
+// App-wide semantic colours. Both read on all three themes, so neither is a
+// per-theme token — they were living as loose consts inside the one component
+// that happened to need them first (SheetRow, Toast), which is how the second
+// caller ends up hardcoding the hex again. Those modules still re-export their
+// original names, so existing imports are untouched.
+export const semantic = {
+  // Destructive rows and confirm actions.
+  danger: '#b3402e',
+  // The toast's success tick.
+  success: '#3f9d6b',
 };
 
 // RN Android shadows = elevation (+ shadowColor tint on API 28+). OPAQUE

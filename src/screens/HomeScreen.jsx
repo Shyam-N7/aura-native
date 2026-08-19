@@ -26,6 +26,7 @@ import {
 import { logImpressions } from '../api/impressions';
 import { useFeaturedPool } from '../hooks/useFeaturedPool';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { useActiveMode } from '../hooks/useActiveMode';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
@@ -47,7 +48,7 @@ import { PressScale } from '../components/ui/PressScale';
 import { ConfirmPopup } from '../components/ui/ConfirmPopup';
 import { isBackgroundPlay, setBackgroundPlay } from '../playback/engine';
 import { storage } from '../storage/mmkv';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
 import { partOfDay } from '../utils/daypart';
@@ -89,12 +90,22 @@ function greeting() {
 // but it never suppresses the fetch, so it's shown-while-refreshing, and the
 // fresh result overwrites both layers. Failures resolve to [] without
 // caching, so a later visit retries. null = nothing to show yet.
-function useHomeSection(key, fetcher) {
+//
+// `fresh` is the pull-to-refresh handshake, and it is a nonce rather than a
+// second fetch path: refreshHome() below re-fetches every section and writes
+// the results into homeCache, then bumps the nonce — this effect re-runs, sees
+// a populated key, and hands the section the fresh list. One fetch per section
+// per refresh, the cache and the snapshots stay the sources of truth, and
+// nothing here needs to know a refresh happened.
+function useHomeSection(key, fetcher, fresh = 0) {
   const [data, setData] = useState(
     () => homeCache[key] ?? readSnapshot(`home.${key}`),
   );
   useEffect(() => {
     if (homeCache[key] !== undefined) {
+      // Mount: the initializer already read this, and React bails on an
+      // identical value. After a refresh: this is where the new list lands.
+      setData(homeCache[key]);
       return undefined;
     }
     let stale = false;
@@ -116,9 +127,33 @@ function useHomeSection(key, fetcher) {
       stale = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, fresh]);
   return data;
 }
+
+// The six cache-first sections, as data — the pull-to-refresh below re-runs
+// exactly this map, so a section can never be added to Home and forgotten by
+// the refresh.
+const HOME_SECTIONS = {
+  quickPicks: getQuickPicks,
+  mostPlayed: getMostPlayed,
+  recentlyPlayed: getRecentlyPlayed,
+  topArtists: getTopArtists,
+  yourPlaylists: listPlaylists,
+  discover: getDiscoverHome,
+};
+
+// The three personalization calls resolve as one surface, and both the effect
+// that loads them and the refresh that re-loads them need the same shape —
+// so the shape is written once, here.
+const fetchReco = () =>
+  Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
+    ([h, n, s]) => ({
+      hero: h?.track ? h : null,
+      newForYou: n?.tracks?.length ? n.tracks : null,
+      stations: s?.stations?.length ? s.stations : null,
+    }),
+  );
 
 // Reco resolved with nothing personal in it — distinct from `null`, which
 // means "still asking". Module scope so it is a stable effect dependency.
@@ -173,12 +208,23 @@ export default function HomeScreen({ navigation }) {
   };
 
   const pool = useFeaturedPool({ limit: 24 });
-  const quickPicks = useHomeSection('quickPicks', getQuickPicks);
-  const mostPlayed = useHomeSection('mostPlayed', getMostPlayed);
-  const recent = useHomeSection('recentlyPlayed', getRecentlyPlayed);
-  const topArtists = useHomeSection('topArtists', getTopArtists);
-  const yourPlaylists = useHomeSection('yourPlaylists', listPlaylists);
-  const discover = useHomeSection('discover', getDiscoverHome);
+  // Bumped by a pull-to-refresh once every section's fresh data is in the
+  // cache; see refreshHome below.
+  const [fresh, setFresh] = useState(0);
+  const quickPicks = useHomeSection('quickPicks', HOME_SECTIONS.quickPicks, fresh);
+  const mostPlayed = useHomeSection('mostPlayed', HOME_SECTIONS.mostPlayed, fresh);
+  const recent = useHomeSection(
+    'recentlyPlayed',
+    HOME_SECTIONS.recentlyPlayed,
+    fresh,
+  );
+  const topArtists = useHomeSection('topArtists', HOME_SECTIONS.topArtists, fresh);
+  const yourPlaylists = useHomeSection(
+    'yourPlaylists',
+    HOME_SECTIONS.yourPlaylists,
+    fresh,
+  );
+  const discover = useHomeSection('discover', HOME_SECTIONS.discover, fresh);
 
   // Made-for-you is the one stale-while-revalidate fetch (web contract):
   // cached mixes render instantly, a fresh list swaps in on every mount
@@ -295,21 +341,15 @@ export default function HomeScreen({ navigation }) {
         setReco(null);
       }
     }
-    Promise.all([getHomeHero(), getHomeNewForYou(), getHomeStations()]).then(
-      ([h, n, s]) => {
+    fetchReco()
+      .then(next => {
         if (stale) {
           return;
         }
-        const next = {
-          hero: h?.track ? h : null,
-          newForYou: n?.tracks?.length ? n.tracks : null,
-          stations: s?.stations?.length ? s.stations : null,
-        };
         homeCache.reco = next;
         writeSnapshot('home.reco', next, as);
         setReco(next);
-      },
-    )
+      })
       .catch(() => {
         // No .catch used to exist: a rejection left `reco` null forever, which
         // read as "no personalization" and was invisible because the featured
@@ -473,11 +513,70 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate('CatalogPlaylist', { initialData: item.mix });
   };
 
+  // ── Pull to refresh ──────────────────────────────────────────────────
+  //
+  // Home is cache-first by design: every section reads homeCache and skips its
+  // fetch when the key is present, which is what makes a tab return instant
+  // and is also why a stale Home used to have no way back short of killing the
+  // app. The pull is that way back, and it goes through the SAME fetchers the
+  // sections use — it refills the cache (and the on-disk snapshots) and then
+  // bumps `fresh` so every section reads what just landed.
+  //
+  // Not a useCallback: usePullRefresh holds this in a ref and calls the latest
+  // one, so a plain function keeps the closure honest without an identity that
+  // has to be maintained.
+  //
+  // What it deliberately leaves alone: the featured pool (it re-runs itself,
+  // below) and the more-like-this shelf, which is keyed by the track you are
+  // PLAYING and re-seeds itself when that changes — a pull cannot make it any
+  // fresher than the music already does.
+  //
+  // allSettled, not all: a shelf whose fetch failed keeps what it already had
+  // — half a Home is still a Home — and only a refresh where EVERY call failed
+  // (the offline case) is worth telling the user about, which the re-throw
+  // does through usePullRefresh's one sentence.
+  const refreshHome = () => {
+    const as = snapshotOwner();
+    // The featured pool carries its own status and skeletons, so it re-runs
+    // itself rather than reporting through this spinner.
+    pool.retry();
+    const jobs = [
+      ...Object.entries(HOME_SECTIONS).map(([key, fetcher]) =>
+        fetcher().then(d => {
+          homeCache[key] = d;
+          writeSnapshot(`home.${key}`, d, as);
+        }),
+      ),
+      listAutoPlaylists().then(p => {
+        homeCache.autoPlaylists = p;
+        writeSnapshot('home.autoPlaylists', p, as);
+        setAutoMixes(p);
+      }),
+      fetchReco().then(next => {
+        homeCache.reco = next;
+        writeSnapshot('home.reco', next, as);
+        setReco(next);
+      }),
+    ];
+    return Promise.allSettled(jobs).then(results => {
+      setFresh(n => n + 1);
+      if (results.every(r => r.status === 'rejected')) {
+        throw results[0].reason;
+      }
+    });
+  };
+  // The top bar floats over the scroller, so the spinner starts below it
+  // rather than under the glass.
+  const pull = usePullRefresh(refreshHome, {
+    offset: insets.top + TOPBAR_CLEARANCE,
+  });
+
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <ScreenFade>
         <BounceScrollView
           {...backToTop}
+          refreshControl={pull.control}
           contentContainerStyle={[
             styles.content,
             // The bar floats over the scroller now (web: position fixed) —
@@ -800,14 +899,14 @@ const styles = StyleSheet.create({
   headActions: { width: 36, alignItems: 'center', gap: 10 },
   bgStatus: { marginTop: 10 },
   greeting: { fontFamily: fonts.semibold, fontSize: 26 },
-  tagline: { fontFamily: fonts.regular, fontSize: 13.5 },
+  tagline: type.caption,
   wheelWrap: { alignItems: 'center', paddingTop: 6 },
   blank: { alignItems: 'center', gap: 8, paddingVertical: 28 },
-  blankLine: { fontFamily: fonts.semibold, fontSize: 17 },
-  blankSub: { fontFamily: fonts.regular, fontSize: 13.5, textAlign: 'center' },
+  blankLine: type.blockTitle,
+  blankSub: { ...type.caption, textAlign: 'center' },
   blankRetry: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 16,
     paddingVertical: 9,
     marginTop: 4,

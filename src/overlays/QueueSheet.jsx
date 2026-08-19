@@ -8,6 +8,7 @@ import React, {
 import {
   AccessibilityInfo,
   BackHandler,
+  PixelRatio,
   Pressable,
   StyleSheet,
   Text,
@@ -46,22 +47,46 @@ import { showToast } from '../lib/toast';
 import { confirm } from '../lib/confirm';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
+import { Rule } from '../components/ui/Rule';
 import { Sheet } from '../components/ui/Sheet';
 import { SheetRow } from '../components/ui/SheetRow';
 import { cleanTitle } from '../utils/title';
 import { fmtTime } from '../utils/fmtTime';
 import { LONG_LIST } from '../lib/listWindow';
-import { fonts, label, radii } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 import { countRender } from '../lib/renderCount';
 
-const ROW_HEIGHT = 62;
-// Fixed-height rows, so the virtualizer never has to measure one. Hoisted
-// rather than inline: it closes over nothing, and a fresh function per render
-// is one more prop the list has to diff.
-const ROW_LAYOUT = (_data, index) => ({
-  length: ROW_HEIGHT,
-  offset: ROW_HEIGHT * index,
+// The row height. ONE number, and everything geometric in this file runs on
+// it: the style the row is drawn at, getItemLayout, the drag-follow offset,
+// the drop-index rounding, the neighbours' shift, the drop line, the
+// auto-scroll's content-extent clamp. That is the invariant — the row the
+// virtualizer computes and the row the eye sees are the same box by
+// construction — and a hardcoded 62 quietly broke it at a large OS font
+// scale: the two stacked text lines outgrow 62dp, so the row's content spills
+// out of the box the math steps by. What the eye reads as "one row" and the
+// slot the drag counts in stop being the same distance, and a drop that
+// looked right lands somewhere else.
+//
+// So derive it. The row is ROW_PAD of breathing room around whichever is
+// taller: the artwork (fixed — it is an image) or the title+artist block
+// (scales with the OS font setting).
+const ROW_ART = 44; // TrackArt size, never scales
+const ROW_PAD = 18; // 62 − 44: the room the design leaves around the art
+// title (14.5) + 2dp gap + artist (12) as line boxes at scale 1, rounded to
+// 40 — under ROW_ART, so scale 1 lands on 18 + 44 = exactly the 62 that
+// shipped and a default-scale device renders pixel-for-pixel as before.
+const ROW_TEXT = 40;
+// Exported for the test that checks the layout and the drag math agree.
+export const rowHeightAt = scale =>
+  Math.round(ROW_PAD + Math.max(ROW_ART, ROW_TEXT * scale));
+
+// Fixed-height rows, so the virtualizer never has to measure one. Built once
+// per row height rather than inline: a fresh function every render is one
+// more prop the list has to diff.
+export const rowLayoutAt = rowH => (_data, index) => ({
+  length: rowH,
+  offset: rowH * index,
   index,
 });
 
@@ -70,8 +95,8 @@ const ROW_LAYOUT = (_data, index) => ({
 const LIST_TOP_PAD = 4;
 
 // Sentinel list item: the "up next · picked by aura" header row that sits
-// between the real queue and the suggestion rows. Rendered at ROW_HEIGHT so
-// the fixed-height drag math stays uniform around it.
+// between the real queue and the suggestion rows. Rendered at the row height
+// so the fixed-height drag math stays uniform around it.
 const RADIO_HEAD = { id: '__aura-up-next', __radioHead: true };
 // Dropping a song above the playing track is allowed — it just isn't what
 // "next" means any more, and that is invisible unless we say it.
@@ -123,7 +148,7 @@ function ListFade({ reduced, children }) {
 // promises and what happens can never disagree. Purely presentational, and
 // hidden both at rest and when the target is the row's own slot (nothing
 // would change, so nothing is claimed).
-function DropLine({ accent, dragFrom, dragTo, baseSV, scrollY }) {
+function DropLine({ accent, dragFrom, dragTo, baseSV, scrollY, rowH }) {
   const style = useAnimatedStyle(() => {
     // Shown for the whole drag, including while the target still equals the
     // row's own index. Hiding that case looked tidy and was the bug: a pick's
@@ -147,9 +172,7 @@ function DropLine({ accent, dragFrom, dragTo, baseSV, scrollY }) {
           // parking somewhere the tile never goes. scrollY is fed by the real
           // scroll events as well, so it self-corrects.
           translateY:
-            LIST_TOP_PAD +
-            (dragTo.value - baseSV.value) * ROW_HEIGHT -
-            scrollY.value,
+            LIST_TOP_PAD + (dragTo.value - baseSV.value) * rowH - scrollY.value,
         },
       ],
     };
@@ -228,6 +251,7 @@ const Row = React.memo(function Row({
   fingerY,
   fingerTransY,
   listTop,
+  rowH,
 }) {
   // __DEV__-only; stripped from release (lib/renderCount).
   countRender('QueueSheet.Row');
@@ -344,7 +368,7 @@ const Row = React.memo(function Row({
       fingerTransY.value = 0;
       // Anchor the edge zones to the list's real on-screen top. Derive it from
       // the finger itself: at pickup the finger is on THIS row, whose content-Y
-      // is known (rendered index × ROW_HEIGHT), so
+      // is known (rendered index × rowH), so
       //   listTop = fingerY − (rowContentY − scrollY) − ~half a row
       // (the grip is grabbed mid-row). This lives in the SAME absolute space as
       // fingerY, so the frame loop's zone test is consistent. `measure()` on an
@@ -352,9 +376,7 @@ const Row = React.memo(function Row({
       // scrolled), which parked the finger permanently in the bottom zone and
       // scrolled the wrong way — the "reverse" report.
       listTop.value =
-        e.absoluteY -
-        ((index - base) * ROW_HEIGHT - scrollY.value) -
-        ROW_HEIGHT / 2;
+        e.absoluteY - ((index - base) * rowH - scrollY.value) - rowH / 2;
       runOnJS(pickup)();
       // Widen the mount window for the duration of the drag (see DRAG_WINDOW)
       // so this cell survives being scrolled far from the viewport.
@@ -388,7 +410,7 @@ const Row = React.memo(function Row({
         dirPivot.value = ty;
       }
       dragShift.value = ty + scrollCmd.value - scrollStart.value;
-      const to = index + Math.round(dragShift.value / ROW_HEIGHT);
+      const to = index + Math.round(dragShift.value / rowH);
       // `base` floors drops at the first RENDERED row — with hide-past on,
       // the hidden history above the current track is not a drop target.
       dragTo.value = Math.max(base, Math.min(count - 1, to));
@@ -400,13 +422,13 @@ const Row = React.memo(function Row({
       }
       // Settle the card into its slot BEFORE the data commit. At commit time
       // every compensating transform then sits at an exact multiple of
-      // ROW_HEIGHT, so the reorder paints exactly where the eye already sees
+      // rowH, so the reorder paints exactly where the eye already sees
       // the rows — the release becomes invisible instead of the 160ms
       // slide-back that read as a glitch after dropping. `settling` also
       // parks the auto-scroll loop: one of its dragShift writes would cancel
       // this timing and the drop would never commit.
       settling.value = 1;
-      const slot = (dragTo.value - dragFrom.value) * ROW_HEIGHT;
+      const slot = (dragTo.value - dragFrom.value) * rowH;
       dragShift.value = withTiming(
         slot,
         { duration: 110, easing: EASE.settle },
@@ -475,9 +497,9 @@ const Row = React.memo(function Row({
     }
     let shift = 0;
     if (dragFrom.value < index && index <= dragTo.value) {
-      shift = -ROW_HEIGHT;
+      shift = -rowH;
     } else if (dragTo.value <= index && index < dragFrom.value) {
-      shift = ROW_HEIGHT;
+      shift = rowH;
     }
     return {
       zIndex: 0,
@@ -500,7 +522,9 @@ const Row = React.memo(function Row({
   }));
 
   return (
-    <Animated.View style={[styles.row, isPast && styles.past, rowStyle]}>
+    <Animated.View
+      style={[styles.row, { height: rowH }, isPast && styles.past, rowStyle]}
+    >
       <Animated.View style={[styles.rowFill, liftStyle]} />
       <GestureDetector gesture={pan}>
         <Pressable
@@ -610,6 +634,7 @@ const RadioHead = React.memo(function RadioHead({
   inkFaint,
   accent,
   onAdopt,
+  rowH,
 }) {
   const style = useAnimatedStyle(() => {
     if (dragFrom.value < 0) {
@@ -617,16 +642,16 @@ const RadioHead = React.memo(function RadioHead({
     }
     let shift = 0;
     if (dragFrom.value < boundary && boundary <= dragTo.value) {
-      shift = -ROW_HEIGHT;
+      shift = -rowH;
     } else if (dragTo.value <= boundary && boundary < dragFrom.value) {
-      shift = ROW_HEIGHT;
+      shift = rowH;
     }
     return {
       transform: [{ translateY: withTiming(shift, { duration: SHIFT_MS }) }],
     };
   });
   return (
-    <Animated.View style={[styles.radioHeadRow, style]}>
+    <Animated.View style={[styles.radioHeadRow, { height: rowH }, style]}>
       <Text style={[label(9), { color: inkFaint }]}>
         up next · picked by aura
       </Text>
@@ -666,6 +691,8 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
         title: 'Clear queue?',
         body: "We'll keep the currently playing track.",
         action: 'Clear',
+        // Throws away everything queued behind the playing track.
+        danger: true,
       })
     ) {
       player.clearQueue();
@@ -713,7 +740,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
     return (
       <Sheet animated={false} onClose={onClose} closeLabel="close queue options">
         <Text style={[styles.menuTitle, { color: t.ink }]}>
-          save queue as playlist
+          Save queue as playlist
         </Text>
         <Text style={[label(9.5), styles.menuSub, { color: t.inkFaint }]}>
           {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
@@ -823,7 +850,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
       )}
       {tracks.length > 1 && (
         <>
-          <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+          <Rule style={styles.menuSeparator} />
           <SheetRow
             icon="close"
             danger
@@ -967,6 +994,31 @@ export function QueueSheet() {
   const [landed, setLanded] = useState(false);
   const land = useCallback(() => setLanded(true), []);
 
+  // The row height for THIS opening of the sheet. Read from the live OS font
+  // scale, then frozen for as long as the list is mounted — it has to be:
+  // getItemLayout is a promise about every row's offset, and VirtualizedList
+  // caches what it is told, so a height that changed underneath a mounted
+  // list would leave stale offsets scrolling to the wrong place. Refreshing
+  // it on `open` is both safe and enough: the list is unmounted at that
+  // moment (`landed` is false until the slide settles, and this effect is
+  // declared ABOVE the one that arms the slide, so both land in the same
+  // commit and the list's first mount already has the new number). The scale
+  // can only change while the app is backgrounded — i.e. with the queue shut,
+  // or at worst reopened right after.
+  //
+  // And if it somehow did change mid-drag: the style and the math read the
+  // same `rowH`, so they would still agree with each other. Only the text
+  // inside the box would be the wrong size, which self-corrects on reopen.
+  const [rowH, setRowH] = useState(() =>
+    rowHeightAt(PixelRatio.getFontScale()),
+  );
+  useEffect(() => {
+    if (open) {
+      setRowH(rowHeightAt(PixelRatio.getFontScale()));
+    }
+  }, [open]);
+  const rowLayout = useMemo(() => rowLayoutAt(rowH), [rowH]);
+
   // Layout-animation window: flyMs > 0 arms the list's LinearTransition for a
   // beat, so a data change landing inside the window animates rows to their
   // new slots — a shuffle flies the visible tiles (420ms), a removal glides
@@ -1031,7 +1083,7 @@ export function QueueSheet() {
     const rows = ph ? tracks.slice(ph) : tracks;
     // The picks join the SAME list the drag math runs on, under their header
     // row. Queue-space: real rows [0, len-1], picks [len, len+count-1] (the
-    // header renders at ROW_HEIGHT but owns no queue index — drops at `len`
+    // header renders at one row height but owns no queue index — drops at `len`
     // mean "first suggestion").
     //
     // Suggested rows mint keys from the SAME sequence: if one is pulled into
@@ -1308,7 +1360,7 @@ export function QueueSheet() {
       // real extent so the last row stops flush at the viewport bottom.
       const maxY = Math.max(
         0,
-        (countSV.value - baseSV.value) * ROW_HEIGHT - listH.value,
+        (countSV.value - baseSV.value) * rowH - listH.value,
       );
       const next = Math.max(0, Math.min(maxY, scrollCmd.value + vel * dt));
       if (next !== scrollCmd.value) {
@@ -1320,7 +1372,7 @@ export function QueueSheet() {
       }
     }
     dragShift.value = fingerTransY.value + scrollCmd.value - scrollStart.value;
-    const to = dragFrom.value + Math.round(dragShift.value / ROW_HEIGHT);
+    const to = dragFrom.value + Math.round(dragShift.value / rowH);
     dragTo.value = Math.max(baseSV.value, Math.min(countSV.value - 1, to));
   }, false);
   useEffect(() => {
@@ -1374,6 +1426,7 @@ export function QueueSheet() {
           inkFaint={t.inkFaint}
           accent={t.accent}
           onAdopt={onAdoptPicks}
+          rowH={rowH}
         />
       );
     }
@@ -1418,6 +1471,8 @@ export function QueueSheet() {
         fingerY={fingerY}
         fingerTransY={fingerTransY}
         listTop={listTop}
+        // Constant for as long as the list is mounted, so Row's memo holds.
+        rowH={rowH}
       />
     );
     // Deliberately NOT depending on the player context value: it takes a new
@@ -1429,7 +1484,7 @@ export function QueueSheet() {
     leaving, dragCount, jumpToRow, moveToTop, reorderRow, removeRow, onGone,
     onAdoptPicks, onDrag, listGesture, t.inkFaint, t.accent,
     dragFrom, dragTo, dragShift, settling, scrollY, scrollStart, scrollCmd,
-    dragDir, dirPivot, baseSV, countSV, fingerY, fingerTransY, listTop,
+    dragDir, dirPivot, baseSV, countSV, fingerY, fingerTransY, listTop, rowH,
   ]);
 
   // Indexes the SAME sequence listData is built from — they come out of one
@@ -1547,7 +1602,7 @@ export function QueueSheet() {
               itemLayoutAnimation={
                 dragging ? undefined : LinearTransition.duration(flyMs)
               }
-              getItemLayout={ROW_LAYOUT}
+              getItemLayout={rowLayout}
               // Jump to the current row ONLY when the list actually overflows
               // the window. On a list that fits, the native scroll clamps the
               // jump to zero while the virtualizer still believes the offset —
@@ -1555,7 +1610,7 @@ export function QueueSheet() {
               // rows BEFORE the current one never render (field report: a
               // 10-track queue showed a void where the past songs belonged).
               initialScrollIndex={
-                visible.length * ROW_HEIGHT > winH
+                visible.length * rowH > winH
                   ? Math.max(0, Math.min(idx - pastHidden, visible.length - 1))
                   : undefined
               }
@@ -1587,6 +1642,7 @@ export function QueueSheet() {
             dragTo={dragTo}
             baseSV={baseSV}
             scrollY={scrollY}
+            rowH={rowH}
           />
           </ListFade>
         ) : null}
@@ -1633,10 +1689,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
   },
-  source: {
-    fontFamily: fonts.semibold,
-    fontSize: 17,
-  },
+  source: type.blockTitle,
   count: {
     fontFamily: fonts.regular,
     fontSize: 12,
@@ -1657,10 +1710,11 @@ const styles = StyleSheet.create({
     height: 2,
     borderRadius: 1,
   },
+  // Height is applied INLINE, from the sheet's per-open `rowH` — a StyleSheet
+  // entry is frozen at module load and could not track the OS font scale.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: ROW_HEIGHT,
     borderRadius: 10,
     paddingLeft: 2,
     paddingRight: 4,
@@ -1672,10 +1726,10 @@ const styles = StyleSheet.create({
   past: {
     opacity: 0.55,
   },
-  // The in-list "up next · picked by aura" header — exactly ROW_HEIGHT so
-  // the fixed-height drag math stays uniform around it.
+  // The in-list "up next · picked by aura" header — exactly one row tall (its
+  // height comes in inline with the rows') so the drag math stays uniform
+  // around it.
   radioHeadRow: {
-    height: ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
@@ -1697,13 +1751,7 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
-  idx: {
-    width: 22,
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
+  idx: { ...type.time, width: 22, textAlign: 'center' },
   meta: {
     flex: 1,
     gap: 2,
@@ -1726,12 +1774,12 @@ const styles = StyleSheet.create({
     height: 3,
     // Radius past half-height clamps to a true pill, so the caps render
     // round even at this size (1.5 came out visibly squared-off on device).
-    borderRadius: 999,
+    borderRadius: radii.pill,
     overflow: 'hidden',
   },
   npFill: {
     height: 3,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   time: {
     fontFamily: fonts.regular,
@@ -1742,12 +1790,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
   },
-  empty: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingHorizontal: 20,
-    marginTop: 16,
-  },
+  empty: { ...type.caption, paddingHorizontal: 20, marginTop: 16 },
   // Overflow menu (QueueOptionsSheet) — SleepTimerSheet's row register plus
   // AddToPlaylistSheet's inline name-input recipe.
   menuTitle: { fontFamily: fonts.semibold, fontSize: 18 },
@@ -1759,14 +1802,10 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   menuHeadMeta: { flex: 1, minWidth: 0, gap: 2 },
-  menuHeadTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  menuHeadTitle: type.rowTitle,
   menuHeadSub: { fontFamily: fonts.regular, fontSize: 12.5 },
-  menuSeparator: { height: 1, marginVertical: 6 },
-  menuState: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingVertical: 12,
-  },
+  menuSeparator: { marginVertical: 6 },
+  menuState: { ...type.caption, paddingVertical: 12 },
   nameInput: {
     borderWidth: 1,
     borderRadius: radii.input,

@@ -8,16 +8,11 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  cancelAnimation,
   LinearTransition,
   ReduceMotion,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withDelay,
-  withTiming,
 } from 'react-native-reanimated';
 import { BounceScrollView } from '../components/ui/Bounce';
+import { RowArrive } from '../components/ui/RowArrive';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import {
@@ -66,8 +61,7 @@ import { AuraLoader } from '../components/ui/AuraLoader';
 import { CountUp } from '../components/ui/CountUp';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
-import { fonts, label } from '../theme/tokens';
-import { EASE } from '../theme/motion';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { PRIMARY_LANGUAGES } from '../data/languages';
 import { useBackToTop } from '../hooks/useBackToTop';
@@ -91,34 +85,6 @@ let sessionShelf = null;
 const CHIP_LAYOUT = LinearTransition.duration(280).reduceMotion(
   ReduceMotion.System,
 );
-
-// Staggered rise-in for the cards below — each waits its turn, so opening
-// the tab reads as the library composing itself rather than popping on.
-// Driven by a plain animated style, NOT an `entering` layout animation: a
-// session that expires under us tears the whole navigator down (auth 401 →
-// clearSession → Shell swaps to the sign-in screen), and reanimated 4.2.3 on
-// Fabric aborts natively when a view is removed mid-entering. A shared value
-// is simply cancelled on unmount.
-function Arrive({ i = 0, children }) {
-  const reduced = useReducedMotion();
-  const p = useSharedValue(reduced ? 1 : 0);
-  useEffect(() => {
-    if (reduced) {
-      p.value = 1;
-      return undefined;
-    }
-    p.value = withDelay(
-      70 * i,
-      withTiming(1, { duration: 380, easing: EASE.enter }),
-    );
-    return () => cancelAnimation(p);
-  }, [i, p, reduced]);
-  const style = useAnimatedStyle(() => ({
-    opacity: p.value,
-    transform: [{ translateY: (1 - p.value) * 14 }],
-  }));
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
 
 // Overlapping cover fan — the closed-shelf "peek" (three 26px arts).
 function PeekFan({ tracks }) {
@@ -164,7 +130,7 @@ function ShelfRow({ track, onPress }) {
         accessibilityRole="button"
         accessibilityLabel="more"
         onPress={openMenu}
-        hitSlop={8}
+        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
         style={({ pressed }) => [styles.more, pressed && styles.pressed]}
       >
         <Icon name="dots" size={17} color={t.inkFaint} />
@@ -538,6 +504,8 @@ export default function YouScreen({ navigation }) {
         title: 'Sign out?',
         body: 'You can sign back in anytime.',
         action: 'Sign out',
+        // Ends the session and tears the signed-in tree down.
+        danger: true,
         // Signing out unmounts the navigator this sheet lives in — it can't
         // still be animating out when that happens.
         instant: true,
@@ -569,9 +537,12 @@ export default function YouScreen({ navigation }) {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* The cards below rise in one after another (the shared RowArrive,
+              same stagger as an importing playlist's rows), so opening the tab
+              reads as the library composing itself rather than popping on. */}
           {/* Your year — pinned open at the top: the listener's data is just
               there on arrival, no action needed. */}
-          <Arrive i={0}>
+          <RowArrive i={0}>
           <View
             style={[
               styles.yearCard,
@@ -580,9 +551,11 @@ export default function YouScreen({ navigation }) {
           >
             <Text style={[label(9.5), { color: t.inkFaint }]}>Your year</Text>
             {!loaded ? (
-              // Blobs only — the card's own "your year" label already names
-              // it; the goo breathing IS the aura, no gray bars.
-              <AuraLoader style={styles.yearLoader} />
+              // The goo breathing IS the aura — no gray bars. Labelled like
+              // every other loader in the app (the sibling below reads
+              // "Opening your library"): the card's heading alone says what
+              // the card is, not that it is still arriving.
+              <AuraLoader label="Loading your year" style={styles.yearLoader} />
             ) : (
               <>
                 <Text style={[styles.yearLine, { color: t.ink }]}>
@@ -594,7 +567,7 @@ export default function YouScreen({ navigation }) {
               </>
             )}
           </View>
-          </Arrive>
+          </RowArrive>
 
           {loaded && summary && summary.tracksPlayed === 0 && (
             <Text style={[styles.allEmpty, { color: t.inkSoft }]}>
@@ -603,7 +576,7 @@ export default function YouScreen({ navigation }) {
           )}
 
           {/* The written-about-you pair: journal + sonic dna. */}
-          <Arrive i={1}>
+          <RowArrive i={1}>
           <View style={styles.duoRow}>
             <PressScale
               accessibilityRole="button"
@@ -636,10 +609,10 @@ export default function YouScreen({ navigation }) {
               </Text>
             </PressScale>
           </View>
-          </Arrive>
+          </RowArrive>
 
           {/* Mood bridges — gradual paths between feelings. */}
-          <Arrive i={2}>
+          <RowArrive i={2}>
           <PressScale
             accessibilityRole="button"
             accessibilityLabel="mood bridges"
@@ -658,14 +631,14 @@ export default function YouScreen({ navigation }) {
               read you.
             </Text>
           </PressScale>
-          </Arrive>
+          </RowArrive>
 
           {!loaded ? (
             <View style={styles.shelvesLoading}>
               <AuraLoader label="Opening your library" />
             </View>
           ) : (
-            <Arrive i={3}>
+            <RowArrive i={3}>
             <View style={styles.shelves}>
               <Shelf
                 title="Liked songs"
@@ -992,6 +965,7 @@ export default function YouScreen({ navigation }) {
                       accessibilityLabel={familyOn ? 'turn off' : 'turn on'}
                       onPress={submitFamily}
                       disabled={pinBusy}
+                      hitSlop={10}
                       style={({ pressed }) => [
                         styles.pinBtn,
                         { borderColor: t.accent },
@@ -1100,7 +1074,10 @@ export default function YouScreen({ navigation }) {
                       accessibilityLabel="try again"
                       onPress={() => setPushError(false)}
                       hitSlop={8}
-                      style={({ pressed }) => pressed && styles.pressed}
+                      style={({ pressed }) => [
+                        styles.textBtn,
+                        pressed && styles.pressed,
+                      ]}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
                         Try again
@@ -1366,7 +1343,10 @@ export default function YouScreen({ navigation }) {
                       accessibilityLabel={`unhide ${h.title}`}
                       onPress={() => unhideOne(h.id)}
                       hitSlop={8}
-                      style={({ pressed }) => pressed && styles.pressed}
+                      style={({ pressed }) => [
+                        styles.textBtn,
+                        pressed && styles.pressed,
+                      ]}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
                         Unhide
@@ -1399,6 +1379,7 @@ export default function YouScreen({ navigation }) {
                         setCrash(null);
                       }}
                       hitSlop={8}
+                      style={styles.blockTextBtn}
                     >
                       <Text style={[label(9.5), { color: t.accent }]}>
                         Clear report
@@ -1426,7 +1407,7 @@ export default function YouScreen({ navigation }) {
                 </Text>
               </Shelf>
             </View>
-            </Arrive>
+            </RowArrive>
           )}
 
           {/* Identity chip — you sign the corner of your own screen.
@@ -1466,16 +1447,8 @@ const styles = StyleSheet.create({
   // to the two text lines it stands in for.
   yearLoader: { alignItems: 'flex-start', paddingVertical: 2 },
   shelvesLoading: { paddingVertical: 24 },
-  yearLine: {
-    fontFamily: fonts.semibold,
-    fontSize: 22,
-    letterSpacing: -0.11,
-  },
-  allEmpty: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingHorizontal: 2,
-  },
+  yearLine: type.sectionTitle,
+  allEmpty: { ...type.caption, paddingHorizontal: 2 },
   duoRow: { flexDirection: 'row', gap: 10 },
   duoCard: {
     flex: 1,
@@ -1525,8 +1498,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pressed: { opacity: 0.6 },
+  // "Try again" and "Unhide" are 11.4dp of bare label(9.5) text. Padding grows
+  // the touch box and the equal negative margin returns the space, so the row
+  // keeps its height and the word does not move: 11.4 + 24 + 16 slop = 51.4dp.
+  textBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginVertical: -12,
+    marginHorizontal: -10,
+  },
+  // "Clear report" already stretches the full width of the crash card, so only
+  // the height needs help — same padding-and-negative-margin trade, no
+  // horizontal padding because that would shift the text off the card's edge.
+  blockTextBtn: { paddingVertical: 12, marginVertical: -12 },
   rowMeta: { flex: 1, minWidth: 0, gap: 3 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   emptyRow: {
     fontFamily: fonts.regular,
     fontSize: 13,
@@ -1546,7 +1532,7 @@ const styles = StyleSheet.create({
   },
   lang: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
@@ -1582,22 +1568,25 @@ const styles = StyleSheet.create({
   pinInput: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontFamily: fonts.regular,
     fontSize: 15,
     letterSpacing: 2,
   },
+  // A bordered pill: 11.4dp of label(9.5) + 18 padding = 29.4dp, and 10dp of
+  // hitSlop on each side takes it to 49.4dp without moving the border. The
+  // 10dp slop is exactly the row's gap, so it never overlaps the PIN field.
   pinBtn: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   crashCard: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.card,
     padding: 12,
     marginTop: 10,
     gap: 6,

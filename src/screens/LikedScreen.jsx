@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceFlatList } from '../components/ui/Bounce';
+import { ROW_LAYOUT } from '../components/ui/RowArrive';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
@@ -21,8 +22,9 @@ import {
 import { ListTools } from '../components/detail/ListTools';
 import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
 import { LONG_LIST } from '../lib/listWindow';
-import { fonts, label, type } from '../theme/tokens';
+import { label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Full-page liked songs, ported from web DesktopLiked: hero header, count +
@@ -30,10 +32,6 @@ import { countRender } from '../lib/renderCount';
 // plus find-in-list + sort (the chosen sort is remembered).
 const SORT_KEY = LIKED_SORT_KEY;
 const SORTS = LIKED_SORTS;
-
-const ROW_LAYOUT = LinearTransition.duration(220).reduceMotion(
-  ReduceMotion.System,
-);
 
 // One liked row, memoized.
 //
@@ -99,17 +97,43 @@ export default function LikedScreen({ navigation }) {
     storage.setItem(SORT_KEY, id);
   };
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    listLiked({ signal: ctl.signal })
+  // Lifted out of the effect so a failed load offers a retry instead of only
+  // Back (HistoryScreen's loadFirstPage shape). Back to `loading` on entry;
+  // an abort still never renders as an error.
+  //
+  // `quiet` is the pull-to-refresh mode, and it is the same request with two
+  // rules changed — which is the point: a refresh must re-run the screen's
+  // REAL load, not a second fetch written beside it that can drift from it.
+  //  · it does not blank the list to `loading` on the way in (the spinner is
+  //    the progress; a list that vanishes under it is a worse screen);
+  //  · a failure re-throws instead of writing the error state, so the rows
+  //    that are already here survive it. usePullRefresh says the sentence.
+  const load = useCallback((signal, { quiet = false } = {}) => {
+    if (!quiet) {
+      setHit({ data: null, error: null });
+    }
+    return listLiked({ signal })
       .then(data => setHit({ data, error: null }))
       .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
+        if (err.name === 'AbortError') {
+          return;
         }
+        if (quiet) {
+          throw err;
+        }
+        setHit({ data: null, error: err.message });
       });
-    return () => ctl.abort();
   }, []);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    load(ctl.signal);
+    return () => ctl.abort();
+  }, [load]);
+
+  // Pull-to-refresh: the same load, quiet. See ui/Bounce for how the pull and
+  // the rubber band share one downward drag at the top.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
 
   // Show the server's liked list, dropping a row the moment it's unliked here.
   // Guard on `ready`: until the client like-set has booted, isLiked() is empty
@@ -168,9 +192,11 @@ export default function LikedScreen({ navigation }) {
       <CrumbBack onPress={() => navigation.goBack()} />
       {status === 'loading' && <AuraLoader label="Loading liked songs" />}
       {status === 'error' && (
-        <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-          Couldn't load — {hit.error}
-        </Text>
+        <ErrorState
+          style={styles.errorBlock}
+          message={`Couldn't load — ${hit.error}`}
+          onRetry={() => load()}
+        />
       )}
       {status === 'ok' && (
         <>
@@ -238,8 +264,11 @@ export default function LikedScreen({ navigation }) {
         data={status === 'ok' ? shown : []}
         renderItem={renderItem}
         keyExtractor={item => item.id}
+        // The list mutates in place — an unlike drops a row and a re-sort
+        // shuffles them — so the survivors slide to their new slots.
         itemLayoutAnimation={ROW_LAYOUT}
         ListHeaderComponent={header}
+        refreshControl={pull.control}
         {...LONG_LIST}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -257,8 +286,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { paddingHorizontal: 20 },
   header: { paddingTop: 10, paddingBottom: 14, gap: 7 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  stateLine: { ...type.caption, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   empty: { marginTop: 18, gap: 5 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
 });

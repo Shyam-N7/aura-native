@@ -26,7 +26,14 @@ import {
   useSearchQuery,
 } from '../../lib/searchQuery';
 import { usePlayer } from '../../playback/PlayerContext';
-import { themes, type, radii, label, fonts } from '../../theme/tokens';
+import {
+  CHROME_MAX_FONT_SCALE,
+  themes,
+  type,
+  radii,
+  label,
+  fonts,
+} from '../../theme/tokens';
 import { EASE, SPRING } from '../../theme/motion';
 
 // Resting halo opacity once the wordmark's bloom settles.
@@ -271,7 +278,17 @@ export function TopBar({ activeTab, goTab }) {
               </Svg>
             </Animated.View>
             <Animated.View style={squishStyle}>
-              <Text style={[type.wordmark, { color: t.ink }]}>aura</Text>
+              {/* The whole bar is a fixed 52dp and TOPBAR_CLEARANCE (68) is
+                  baked into every screen's top padding, so nothing in this
+                  row may grow with the OS font scale — see
+                  CHROME_MAX_FONT_SCALE. The wordmark is the tightest: 24dp
+                  at 1.3× is a ~39dp line box inside 52. */}
+              <Text
+                maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+                style={[type.wordmark, { color: t.ink }]}
+              >
+                aura
+              </Text>
             </Animated.View>
           </Pressable>
           <View style={styles.spacer} />
@@ -279,6 +296,7 @@ export function TopBar({ activeTab, goTab }) {
             accessibilityRole="button"
             accessibilityLabel="listening mode"
             onPress={openModeSheet}
+            hitSlop={8}
             style={[
               styles.modePill,
               { borderColor: mode === 'everyday' ? t.line : t.accent },
@@ -286,6 +304,7 @@ export function TopBar({ activeTab, goTab }) {
             ]}
           >
             <Text
+              maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
               style={[
                 label(8.5),
                 { color: mode === 'everyday' ? t.inkSoft : t.accent },
@@ -323,7 +342,10 @@ export function TopBar({ activeTab, goTab }) {
             hitSlop={8}
             style={[styles.profile, { backgroundColor: t.accentSoft }]}
           >
-            <Text style={[styles.profileText, { color: t.accent }]}>
+            <Text
+              maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+              style={[styles.profileText, { color: t.accent }]}
+            >
               {initial}
             </Text>
           </PressScale>
@@ -341,7 +363,7 @@ export function TopBar({ activeTab, goTab }) {
             accessibilityRole="button"
             accessibilityLabel="close search"
             onPress={closeSearch}
-            hitSlop={8}
+            hitSlop={BACK_SLOP}
             style={styles.backBtn}
           >
             <Icon name="chevron-left" size={20} color={t.inkSoft} />
@@ -354,6 +376,7 @@ export function TopBar({ activeTab, goTab }) {
             placeholder="Search a song, artist, or mood…"
             placeholderTextColor={t.inkFaint}
             style={[styles.fieldInput, { color: t.ink }]}
+            maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
             autoCapitalize="none"
             autoCorrect={false}
             inputMode="search"
@@ -370,7 +393,7 @@ export function TopBar({ activeTab, goTab }) {
                 setQuery('');
                 searchInputRef.current?.focus();
               }}
-              hitSlop={8}
+              hitSlop={CLEAR_SLOP}
               style={styles.clearBtn}
             >
               <Icon name="close" size={16} color={t.inkSoft} />
@@ -381,6 +404,14 @@ export function TopBar({ activeTab, goTab }) {
     </View>
   );
 }
+
+// The search field's two icon buttons are 28dp and 26dp inside a fixed 52dp
+// bar, so the last ~20dp of target has to come from hitSlop. Sideways the slop
+// stops at the row's 8dp gap — any further and it would sit on top of the
+// neighbour — and the remainder is taken from the bar's own 16dp padding:
+// back 28 + 12 + 8 = 48, clear 26 + 8 + 14 = 48. Vertically both clear 48.
+const BACK_SLOP = { top: 10, bottom: 10, left: 12, right: 8 };
+const CLEAR_SLOP = { top: 11, bottom: 11, left: 8, right: 14 };
 
 const styles = StyleSheet.create({
   // zIndex keeps the bar painting above the screen's scroller: the rubber-band
@@ -411,6 +442,8 @@ const styles = StyleSheet.create({
   clearBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   fieldInput: { flex: 1, fontFamily: fonts.regular, fontSize: 15, padding: 0 },
   spacer: { flex: 1 },
+  // Same 32dp-plus-8dp-hitSlop deal as the chips below: the bar is a fixed
+  // 52dp, so the pill cannot grow without moving the wordmark beside it.
   modePill: {
     height: 32,
     borderRadius: 16,

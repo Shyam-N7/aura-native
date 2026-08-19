@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 6,
     paddingHorizontal: 12,
     marginTop: 8,

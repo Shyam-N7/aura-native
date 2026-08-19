@@ -7,7 +7,7 @@ import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { usePlayer } from '../playback/PlayerContext';
 import { getCatalogPlaylist } from '../api/discover';
-import { hideTrack } from '../api/hidden';
+import { hideTrack, unhideTrack } from '../api/hidden';
 import { invalidateHomeCache } from '../lib/homeCache';
 import { showToast } from '../lib/toast';
 import { storage } from '../storage/mmkv';
@@ -21,8 +21,10 @@ import {
 import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { AuraLoader } from '../components/ui/AuraLoader';
-import { fonts, label, type } from '../theme/tokens';
+import { ErrorState } from '../components/ui/ErrorState';
+import { label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Read-only playlist detail, ported from web DesktopCatalogPlaylistDetail.
@@ -88,20 +90,51 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   const [hit, setHit] = useState({ data: initialData, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
+  // Lifted out of the effect so the failure can offer a retry rather than
+  // dead-ending on Back (HistoryScreen's loadFirstPage shape). Only ever runs
+  // for a fetched list — a pre-loaded auto mix can't fail, so it can't retry.
+  //
+  // `quiet` is the pull-to-refresh mode of the SAME request (LikedScreen
+  // carries the long version): no blank-to-loading on the way in, and a
+  // failure re-thrown rather than written into the error state, so the rows
+  // already on screen outlive a blink of network.
+  const load = useCallback(
+    (signal, { quiet = false } = {}) => {
+      if (!quiet) {
+        setHit({ data: null, error: null });
+      }
+      return getCatalogPlaylist(id, { signal })
+        .then(data => setHit({ data, error: null }))
+        .catch(err => {
+          if (err.name === 'AbortError') {
+            return;
+          }
+          if (quiet) {
+            throw err;
+          }
+          setHit({ data: null, error: err.message });
+        });
+    },
+    [id],
+  );
+
   useEffect(() => {
     if (initialData) {
       return undefined; // pre-loaded (an auto mix) — no fetch
     }
     const ctl = new AbortController();
-    getCatalogPlaylist(id, { signal: ctl.signal })
-      .then(data => setHit({ data, error: null }))
-      .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
-        }
-      });
+    load(ctl.signal);
     return () => ctl.abort();
-  }, [id, initialData]);
+  }, [initialData, load]);
+
+  // Pull-to-refresh, on exactly the same gate as the fetch: a made-for-you
+  // mix arrives whole in `initialData` and has no per-id endpoint behind it,
+  // so there is nothing a pull could ask for. No control on those, and the
+  // rubber band keeps the top drag it always had — an affordance that cannot
+  // do anything is worse than none.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }), {
+    enabled: !initialData,
+  });
 
   const tracks = useMemo(() => hit.data?.tracks ?? [], [hit.data]);
 
@@ -128,30 +161,104 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   );
 
   // "Don't show this again" — only on the made-for-you mixes (a catalog list
-  // isn't a pick of ours to apologise for). Removes the row immediately; the
-  // undo lives in the library's settings shelf.
+  // isn't a pick of ours to apologise for). Removes the row immediately, with
+  // the undo ON the toast. The hidden list is still in settings and still the
+  // place to change your mind later, but the pointer is out of the copy: it
+  // was there because there was nowhere else to undo, and telling someone to
+  // go find a settings screen is a worse answer than the button in front of
+  // them. hideTrack has an exact inverse (unhideTrack), so this undo is real:
+  // it puts the row back at its own index, and the mix's order is the
+  // server's and untouched by hiding, so that IS its original position.
   const isAutoMix = initialData?.kind === 'auto';
-  const hideOne = useCallback(async track => {
-    try {
-      await hideTrack(track.id);
-      setHit(h =>
-        h.data
-          ? {
-              ...h,
-              data: {
-                ...h.data,
-                tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
-              },
-            }
-          : h,
+
+  // The row index has to come off a ref, not the deps: hideOne reaches every
+  // mounted row through renderRow, and a handler that took a new identity on
+  // every data change would hand all of them a new menu (the memo note at the
+  // top of this file). Same shape as PlaylistScreen's hitRef.
+  const hitRef = useRef(hit);
+  hitRef.current = hit;
+
+  const putRowBack = useCallback(
+    (track, at) =>
+      setHit(h => {
+        const rows = h.data?.tracks;
+        if (!rows || rows.some(x => x.id === track.id)) {
+          return h;
+        }
+        const next = rows.slice();
+        next.splice(Math.min(at, next.length), 0, track);
+        return { ...h, data: { ...h.data, tracks: next } };
+      }),
+    [],
+  );
+
+  const unhideOne = useCallback(
+    async (track, at) => {
+      // putRowBack no-ops when the row is already there, so the rollback has
+      // to know that too — otherwise a failed undo removes a row it never put
+      // back. Read off the ref, not inside the updater, which is lazy and runs
+      // twice under StrictMode.
+      const already = (hitRef.current?.data?.tracks ?? []).some(
+        x => x.id === track.id,
       );
-      // Home must not serve it again this session.
-      invalidateHomeCache('autoPlaylists', 'quickPicks');
-      showToast("Hidden — AURA won't pick this for you again. Undo in settings.");
-    } catch {
-      showToast("Couldn't hide that — try again.");
-    }
-  }, []);
+      putRowBack(track, at);
+      try {
+        await unhideTrack(track.id);
+        // Home cached a mix built WITHOUT this track; drop it again.
+        invalidateHomeCache('autoPlaylists', 'quickPicks');
+        showToast('Back in your mixes.');
+      } catch {
+        if (!already) {
+          setHit(h =>
+            h.data
+              ? {
+                  ...h,
+                  data: {
+                    ...h.data,
+                    tracks: (h.data.tracks ?? []).filter(
+                      x => x.id !== track.id,
+                    ),
+                  },
+                }
+              : h,
+          );
+        }
+        showToast("Couldn't undo that — try again.");
+      }
+    },
+    [putRowBack],
+  );
+
+  const hideOne = useCallback(
+    async track => {
+      const at = Math.max(
+        0,
+        (hitRef.current.data?.tracks ?? []).findIndex(x => x.id === track.id),
+      );
+      try {
+        await hideTrack(track.id);
+        setHit(h =>
+          h.data
+            ? {
+                ...h,
+                data: {
+                  ...h.data,
+                  tracks: (h.data.tracks ?? []).filter(x => x.id !== track.id),
+                },
+              }
+            : h,
+        );
+        // Home must not serve it again this session.
+        invalidateHomeCache('autoPlaylists', 'quickPicks');
+        showToast("Hidden — AURA won't pick this for you again.", {
+          action: { label: 'Undo', onPress: () => unhideOne(track, at) },
+        });
+      } catch {
+        showToast("Couldn't hide that — try again.");
+      }
+    },
+    [unhideOne],
+  );
 
   // Play what's on screen: a filtered or re-sorted view queues in that order.
   //
@@ -204,6 +311,7 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        refreshControl={pull.control}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.head}>
@@ -211,9 +319,11 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
 
         {status === 'loading' && <AuraLoader label="Loading playlist" />}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={`Couldn't load — ${hit.error}`}
+            onRetry={() => load()}
+          />
         )}
 
         {status === 'ok' && (
@@ -256,6 +366,19 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
                 )}
               </>
             )}
+            {/* An ok response with no tracks used to render a bare title —
+                indistinguishable from a broken fetch. The filter-no-match line
+                above only covers a list that HAS rows. */}
+            {tracks.length === 0 && (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyTitle, { color: t.ink }]}>
+                  This playlist is empty.
+                </Text>
+                <Text style={[styles.emptyBody, { color: t.inkSoft }]}>
+                  No songs in it right now — check back after the next refresh.
+                </Text>
+              </View>
+            )}
           </>
         )}
           </View>
@@ -272,5 +395,9 @@ const styles = StyleSheet.create({
   // seams between the windowed rows; marginBottom keeps the old
   // ListTools→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  stateLine: { ...type.caption, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
+  empty: { marginTop: 18, gap: 5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
 });

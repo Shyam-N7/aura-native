@@ -107,7 +107,7 @@ export function TrackRow({ track, onPress, active = false, menu }) {
           accessibilityRole="button"
           accessibilityLabel="more"
           onPress={openMenu}
-          hitSlop={8}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
           style={({ pressed }) => [styles.more, pressed && styles.pressed]}>
           <Icon name="dots" size={17} color={t.inkFaint} />
         </Pressable>

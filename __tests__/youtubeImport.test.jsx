@@ -794,3 +794,34 @@ test('the playlists list refetches when it is focused again', async () => {
   await flush(() => onFocus());
   expect(listPlaylists).toHaveBeenCalledTimes(2);
 });
+
+// The Go key used to be a one-way latch: `checkNow` went true on the first
+// press and never came back, so a second press changed no dependency, the
+// check effect did not re-run, and Go was dead for the rest of that URL — on
+// the one field whose whole purpose is retrying a link after a failure.
+test('the Go key still works on the second press', async () => {
+  previewLink.mockRejectedValue(
+    Object.assign(new Error('nope'), { code: 'YT_FETCH_FAILED' }),
+  );
+  const tree = await render(<YouTubeImportScreen navigation={nav()} />);
+  await typeUrl(tree, 'https://youtube.com/playlist?list=PL1');
+  await flush(() => jest.advanceTimersByTime(350));
+  expect(previewLink).toHaveBeenCalledTimes(1);
+
+  // First Go: skips the debounce and re-checks the same link.
+  await flush(() =>
+    byLabel(tree, COPY.paste.placeholder).props.onSubmitEditing(),
+  );
+  // Go re-runs the effect with delay 0 rather than skipping the timer, so the
+  // fake clock still has to tick past it.
+  await flush(() => jest.advanceTimersByTime(0));
+  expect(previewLink).toHaveBeenCalledTimes(2);
+
+  // Second Go, same link, nothing else touched. This is the press that used
+  // to do nothing at all.
+  await flush(() =>
+    byLabel(tree, COPY.paste.placeholder).props.onSubmitEditing(),
+  );
+  await flush(() => jest.advanceTimersByTime(0));
+  expect(previewLink).toHaveBeenCalledTimes(3);
+});

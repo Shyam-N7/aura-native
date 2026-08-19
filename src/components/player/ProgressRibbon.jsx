@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useAppActive } from '../../hooks/useAppActive';
+import { fmtTime } from '../../utils/fmtTime';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -22,6 +23,19 @@ const SAMPLES = 80;
 // round line caps draw whole at 0% and 100% instead of getting chopped by
 // the svg bounds (field report: the start looked squared-off).
 const PAD = 10;
+
+// One assistive seek press. A pan is unreachable with a screen reader on, and
+// the player's own hold-to-seek moves 5s every 400ms (~12s per second held) —
+// so a single discrete press landing on 10s covers about what a short hold
+// does, and 10s is the step assistive users already expect from a seek bar.
+const SEEK_STEP_SEC = 10;
+
+// Offered to assistive tech ONLY; touch users still have exactly one way in,
+// the drag (the same rule QueueSheet's reorder actions follow).
+const SEEK_ACTIONS = [
+  { name: 'increment', label: `forward ${SEEK_STEP_SEC} seconds` },
+  { name: 'decrement', label: `back ${SEEK_STEP_SEC} seconds` },
+];
 
 // The one sampler every stroke in this file draws through: the track, the
 // played stretch and the loaded-ahead stretch all trace the SAME sine, so they
@@ -297,9 +311,73 @@ export function ProgressRibbon({
     }
   });
 
+  // Scrubbing is a pan, so with a screen reader on the seek bar was simply
+  // unreachable — it didn't even report itself as a control. It now speaks as
+  // an adjustable, reads its position as a time, and moves by whole seconds
+  // through the same onSeek the drag commits to.
+  const durSec = Math.max(0, Math.round(durationSec || 0));
+  const propSec = Math.round(Math.min(1, Math.max(0, progress)) * durSec);
+  // `progress` is a 4Hz poll with no seek event, smoothed again on the way in,
+  // so it still reads the OLD position for a beat after a commit. Counting
+  // from it means two presses inside one poll window both compute from the
+  // same number and land on the same spot — the second press does nothing.
+  // Hold the target we last asked for until the prop actually moves, the same
+  // way the hold-to-seek path holds its own target.
+  const pending = useRef(-1);
+  const lastProp = useRef(propSec);
+  if (lastProp.current !== propSec) {
+    lastProp.current = propSec;
+    pending.current = -1;
+  }
+  // Read at render for the announced value...
+  const posSec = pending.current >= 0 ? pending.current : propSec;
+  const seekBy = delta => {
+    if (durSec <= 0) {
+      return;
+    }
+    // ...and again at call time here, because two presses can land inside one
+    // render: nothing in this component is React state, so a commit does not
+    // schedule a re-render and the second press would otherwise still be
+    // holding the first press's starting point.
+    const from = pending.current >= 0 ? pending.current : propSec;
+    const next = Math.min(durSec, Math.max(0, from + delta));
+    pending.current = next;
+    const p = next / durSec;
+    // Same hold as the drag's onEnd: park the fill on the new spot so it
+    // doesn't flash back to the old progress while the engine seeks.
+    shownProgress.value = p;
+    fill.value = p;
+    commit(p);
+  };
+  const onA11yAction = e => {
+    const action = e.nativeEvent?.actionName;
+    if (action === 'increment') {
+      seekBy(SEEK_STEP_SEC);
+    } else if (action === 'decrement') {
+      seekBy(-SEEK_STEP_SEC);
+    }
+  };
+
   return (
     <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
       <View
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel="seek"
+        // TalkBack re-reads an adjustable's own value on every change, so the
+        // actions deliberately don't announce — that would double-speak.
+        accessibilityValue={
+          durSec > 0
+            ? {
+                min: 0,
+                max: durSec,
+                now: posSec,
+                text: `${fmtTime(posSec)} of ${fmtTime(durSec)}`,
+              }
+            : { min: 0, max: 0, now: 0 }
+        }
+        accessibilityActions={SEEK_ACTIONS}
+        onAccessibilityAction={onA11yAction}
         style={[styles.hit, { height }]}
         onLayout={e => setWidth(e.nativeEvent.layout.width)}
       >

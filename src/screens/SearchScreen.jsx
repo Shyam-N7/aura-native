@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Keyboard,
   Pressable,
@@ -10,8 +16,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
+import { ScreenFade } from '../components/ui/ScreenFade';
 import { useTheme } from '../theme/ThemeContext';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { usePlayer } from '../playback/PlayerContext';
@@ -135,11 +143,19 @@ export default function SearchScreen({ navigation }) {
   const trimmed = debouncedQ.trim();
   const wantKey = `${trimmed}|${lang}`;
 
-  useEffect(() => {
-    if (!trimmed) {
-      return undefined;
-    }
+  // Lifted out of the effect so a failed search can be re-run from the error
+  // state — the debounce means the query itself never changes, so nothing else
+  // would ever fire it again and the only way out was to retype.
+  //
+  // Clearing `hit` returns the view to `loading`: status is derived from
+  // whether the stored key matches the key being asked for. Every run
+  // supersedes the one before it (cancelRef), so a retry's late response can
+  // never land on top of a newer query's results.
+  const cancelRef = useRef(null);
+  const runSearch = useCallback(() => {
+    cancelRef.current?.();
     let stale = false;
+    setHit(EMPTY);
     searchCatalog(trimmed, {
       lang: lang === 'all' ? undefined : lang,
       langs: prefLangs,
@@ -156,10 +172,19 @@ export default function SearchScreen({ navigation }) {
           setHit({ ...EMPTY, key: wantKey, error: err.message });
         }
       });
-    return () => {
+    const cancel = () => {
       stale = true;
     };
+    cancelRef.current = cancel;
+    return cancel;
   }, [trimmed, lang, wantKey, prefLangs]);
+
+  useEffect(() => {
+    if (!trimmed) {
+      return undefined;
+    }
+    return runSearch();
+  }, [trimmed, runSearch]);
 
   const view = hit.key === wantKey ? hit : EMPTY;
   const status = !trimmed
@@ -224,262 +249,279 @@ export default function SearchScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <View
-        style={[styles.header, { paddingTop: insets.top + TOPBAR_CLEARANCE }]}>
-        <ScrollView overScrollMode="always"
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillRow}>
-          {LANGS.map(L => {
-            const on = lang === L;
-            return (
-              <Pressable
-                key={L}
-                accessibilityRole="button"
-                accessibilityLabel={`language ${L}`}
-                onPress={() => pickLang(L)}
-                style={[
-                  styles.pill,
-                  on
-                    ? { borderColor: t.accent, backgroundColor: t.accent }
-                    : { borderColor: t.line },
-                ]}>
-                <Text style={[styles.pillText, { color: on ? t.bg : t.inkSoft }]}>
-                  {L}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      <BounceScrollView
-        style={styles.results}
-        contentContainerStyle={styles.resultsInner}
-        keyboardShouldPersistTaps="handled">
-        {status === 'idle' && (
-          <>
-            {recents.items.length > 0 ? (
-              <View>
-                <View style={styles.recentHead}>
-                  <Text style={[styles.section, { color: t.inkFaint }]}>
-                    Recent searches
+      <ScreenFade>
+        <View
+          style={[styles.header, { paddingTop: insets.top + TOPBAR_CLEARANCE }]}>
+          <ScrollView overScrollMode="always"
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillRow}>
+            {LANGS.map(L => {
+              const on = lang === L;
+              return (
+                <Pressable
+                  key={L}
+                  accessibilityRole="button"
+                  accessibilityLabel={`language ${L}`}
+                  onPress={() => pickLang(L)}
+                  hitSlop={PILL_SLOP}
+                  style={[
+                    styles.pill,
+                    on
+                      ? { borderColor: t.accent, backgroundColor: t.accent }
+                      : { borderColor: t.line },
+                  ]}>
+                  <Text style={[styles.pillText, { color: on ? t.bg : t.inkSoft }]}>
+                    {L}
                   </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="clear recent searches"
-                    onPress={recents.clear}
-                    hitSlop={8}>
-                    <Text style={[styles.clear, { color: t.accent }]}>
-                      Clear
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <BounceScrollView
+          style={styles.results}
+          contentContainerStyle={styles.resultsInner}
+          keyboardShouldPersistTaps="handled">
+          {status === 'idle' && (
+            <>
+              {recents.items.length > 0 ? (
+                <View>
+                  <View style={styles.recentHead}>
+                    <Text style={[styles.section, { color: t.inkFaint }]}>
+                      Recent searches
                     </Text>
-                  </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="clear recent searches"
+                      onPress={recents.clear}
+                      hitSlop={8}
+                      style={styles.clearBtn}>
+                      <Text style={[styles.clear, { color: t.accent }]}>
+                        Clear
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {recents.items.map(item => (
+                    <Pressable
+                      key={item}
+                      accessibilityRole="button"
+                      accessibilityLabel={`search ${item}`}
+                      onPress={() => setQ(item)}
+                      style={({ pressed }) => [
+                        styles.recentRow,
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text style={[styles.recentText, { color: t.ink }]}>
+                        {item}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
-                {recents.items.map(item => (
-                  <Pressable
-                    key={item}
-                    accessibilityRole="button"
-                    accessibilityLabel={`search ${item}`}
-                    onPress={() => setQ(item)}
-                    style={({ pressed }) => [
-                      styles.recentRow,
-                      pressed && styles.pressed,
-                    ]}>
-                    <Text style={[styles.recentText, { color: t.ink }]}>
-                      {item}
-                    </Text>
-                  </Pressable>
-                ))}
+              ) : (
+                <Text style={[styles.hint, { color: t.inkFaint }]}>
+                  Find songs, artists and albums from the catalog.
+                </Text>
+              )}
+              <View>
+                <Text style={[styles.section, { color: t.inkFaint }]}>
+                  Trending{lang !== 'all' ? ` · ${lang}` : ''}
+                </Text>
+                <View style={styles.chips}>
+                  {trending.map(item => (
+                    <Pressable
+                      key={item}
+                      accessibilityRole="button"
+                      accessibilityLabel={`search ${item}`}
+                      onPress={() => setQ(item)}
+                      hitSlop={CHIP_SLOP}
+                      style={({ pressed }) => [
+                        styles.chip,
+                        { borderColor: t.line },
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text style={[styles.chipText, { color: t.ink }]}>
+                        {item}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
-            ) : (
-              <Text style={[styles.hint, { color: t.inkFaint }]}>
-                Find songs, artists and albums from the catalog.
-              </Text>
-            )}
-            <View>
-              <Text style={[styles.section, { color: t.inkFaint }]}>
-                Trending{lang !== 'all' ? ` · ${lang}` : ''}
-              </Text>
-              <View style={styles.chips}>
-                {trending.map(item => (
-                  <Pressable
-                    key={item}
-                    accessibilityRole="button"
-                    accessibilityLabel={`search ${item}`}
-                    onPress={() => setQ(item)}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      { borderColor: t.line },
-                      pressed && styles.pressed,
-                    ]}>
-                    <Text style={[styles.chipText, { color: t.ink }]}>
-                      {item}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </>
-        )}
+            </>
+          )}
 
-        {status === 'loading' && <AuraLoader label="Searching" />}
-        {status === 'error' && (
-          <Text style={[styles.hint, { color: t.inkFaint }]}>
-            Search failed — {view.error}
-          </Text>
-        )}
+          {status === 'loading' && <AuraLoader label="Searching" />}
+          {status === 'error' && (
+            <ErrorState
+              style={styles.errorBlock}
+              message={`Search failed — ${view.error}`}
+              onRetry={runSearch}
+            />
+          )}
 
-        {status === 'ok' &&
-          (() => {
-            const songsSection = songs.length > 0 && (
-              <View key="songs">
-                <Text style={[styles.section, { color: t.inkFaint }]}>
-                  Songs
-                </Text>
-                {songs.map(track => (
-                  <TrackRow
-                    key={track.id}
-                    track={track}
-                    onPress={() => playSong(track)}
-                    menu={{}}
-                  />
-                ))}
-              </View>
-            );
-            const artistsSection = view.artists.length > 0 && (
-              <View key="artists">
-                <Text style={[styles.section, { color: t.inkFaint }]}>
-                  Artists
-                </Text>
-                {view.artists.map(a => (
-                  <EntityRow
-                    key={a.id}
-                    image={a.image}
-                    name={a.name}
-                    sub="Artist"
-                    round
-                    t={t}
-                    onPress={() => {
-                      remember();
-                      navigation.navigate('Artist', { id: a.id, name: a.name });
-                    }}
-                  />
-                ))}
-              </View>
-            );
-            const albumsSection = view.albums.length > 0 && (
-              <View key="albums">
-                <Text style={[styles.section, { color: t.inkFaint }]}>
-                  Albums & movies
-                </Text>
-                {view.albums.map(a => (
-                  <EntityRow
-                    key={a.id}
-                    image={a.image}
-                    name={a.name}
-                    sub={[a.isMovie ? 'Movie' : 'Album', a.year]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    t={t}
-                    onPress={() => {
-                      remember();
-                      navigation.navigate('Album', { id: a.id });
-                    }}
-                  />
-                ))}
-              </View>
-            );
-            return (
-              <>
-                {nothing && (
-                  <Text style={[styles.hint, { color: t.inkFaint }]}>
-                    Nothing matched “{trimmed}”.
+          {status === 'ok' &&
+            (() => {
+              const songsSection = songs.length > 0 && (
+                <View key="songs">
+                  <Text style={[styles.section, { color: t.inkFaint }]}>
+                    Songs
                   </Text>
-                )}
-                {view.top && view.top.type !== 'song' && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`open ${view.top.name}`}
-                    onPress={() => openTop(view.top)}
-                    style={({ pressed }) => [
-                      styles.hero,
-                      { backgroundColor: t.surface },
-                      pressed && styles.pressed,
-                    ]}>
-                    <TrackArt
-                      track={{ imageUrl: view.top.image, name: view.top.name }}
-                      size={68}
-                      radius={10}
-                      round={view.top.type === 'artist'}
+                  {songs.map(track => (
+                    <TrackRow
+                      key={track.id}
+                      track={track}
+                      onPress={() => playSong(track)}
+                      menu={{}}
                     />
-                    <View style={styles.entityMeta}>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.heroName, { color: t.ink }]}>
-                        {view.top.name}
+                  ))}
+                </View>
+              );
+              const artistsSection = view.artists.length > 0 && (
+                <View key="artists">
+                  <Text style={[styles.section, { color: t.inkFaint }]}>
+                    Artists
+                  </Text>
+                  {view.artists.map(a => (
+                    <EntityRow
+                      key={a.id}
+                      image={a.image}
+                      name={a.name}
+                      sub="Artist"
+                      round
+                      t={t}
+                      onPress={() => {
+                        remember();
+                        navigation.navigate('Artist', { id: a.id, name: a.name });
+                      }}
+                    />
+                  ))}
+                </View>
+              );
+              const albumsSection = view.albums.length > 0 && (
+                <View key="albums">
+                  <Text style={[styles.section, { color: t.inkFaint }]}>
+                    Albums & movies
+                  </Text>
+                  {view.albums.map(a => (
+                    <EntityRow
+                      key={a.id}
+                      image={a.image}
+                      name={a.name}
+                      sub={[a.isMovie ? 'Movie' : 'Album', a.year]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      t={t}
+                      onPress={() => {
+                        remember();
+                        navigation.navigate('Album', { id: a.id });
+                      }}
+                    />
+                  ))}
+                </View>
+              );
+              return (
+                <>
+                  {nothing && (
+                    <Text style={[styles.hint, { color: t.inkFaint }]}>
+                      Nothing matched “{trimmed}”.
+                    </Text>
+                  )}
+                  {view.top && view.top.type !== 'song' && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`open ${view.top.name}`}
+                      onPress={() => openTop(view.top)}
+                      style={({ pressed }) => [
+                        styles.hero,
+                        { backgroundColor: t.surface },
+                        pressed && styles.pressed,
+                      ]}>
+                      <TrackArt
+                        track={{ imageUrl: view.top.image, name: view.top.name }}
+                        size={68}
+                        radius={10}
+                        round={view.top.type === 'artist'}
+                      />
+                      <View style={styles.entityMeta}>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.heroName, { color: t.ink }]}>
+                          {view.top.name}
+                        </Text>
+                        <Text style={[styles.entitySub, { color: t.inkSoft }]}>
+                          {view.top.type === 'album'
+                            ? view.top.isMovie
+                              ? 'Movie'
+                              : 'Album'
+                            : view.top.type}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  )}
+                  {albumsFirst
+                    ? [albumsSection, songsSection, artistsSection]
+                    : [songsSection, artistsSection, albumsSection]}
+                  {view.playlists.length > 0 && (
+                    <View>
+                      <Text style={[styles.section, { color: t.inkFaint }]}>
+                        Playlists
                       </Text>
-                      <Text style={[styles.entitySub, { color: t.inkSoft }]}>
-                        {view.top.type === 'album'
-                          ? view.top.isMovie
-                            ? 'Movie'
-                            : 'Album'
-                          : view.top.type}
-                      </Text>
+                      {view.playlists.map(p => (
+                        <EntityRow
+                          key={p.id}
+                          image={p.image}
+                          name={p.name}
+                          sub={(p.subtitle ?? 'playlist').toLowerCase()}
+                          t={t}
+                          onPress={() => {
+                            remember();
+                            navigation.navigate('CatalogPlaylist', { id: p.id });
+                          }}
+                        />
+                      ))}
                     </View>
-                  </Pressable>
-                )}
-                {albumsFirst
-                  ? [albumsSection, songsSection, artistsSection]
-                  : [songsSection, artistsSection, albumsSection]}
-                {view.playlists.length > 0 && (
-                  <View>
-                    <Text style={[styles.section, { color: t.inkFaint }]}>
-                      Playlists
-                    </Text>
-                    {view.playlists.map(p => (
-                      <EntityRow
-                        key={p.id}
-                        image={p.image}
-                        name={p.name}
-                        sub={(p.subtitle ?? 'playlist').toLowerCase()}
-                        t={t}
-                        onPress={() => {
-                          remember();
-                          navigation.navigate('CatalogPlaylist', { id: p.id });
-                        }}
-                      />
-                    ))}
-                  </View>
-                )}
-                {view.userPlaylists.length > 0 && (
-                  <View>
-                    <Text style={[styles.section, { color: t.inkFaint }]}>
-                      Your playlists
-                    </Text>
-                    {view.userPlaylists.map(p => (
-                      <EntityRow
-                        key={p.id}
-                        image={p.coverImageUrl}
-                        name={p.name}
-                        sub={`${p.trackCount} ${
-                          p.trackCount === 1 ? 'track' : 'tracks'
-                        }`}
-                        t={t}
-                        onPress={() => {
-                          remember();
-                          navigation.navigate('Playlist', { id: p.id });
-                        }}
-                      />
-                    ))}
-                  </View>
-                )}
-              </>
-            );
-          })()}
-      </BounceScrollView>
+                  )}
+                  {view.userPlaylists.length > 0 && (
+                    <View>
+                      <Text style={[styles.section, { color: t.inkFaint }]}>
+                        Your playlists
+                      </Text>
+                      {view.userPlaylists.map(p => (
+                        <EntityRow
+                          key={p.id}
+                          image={p.coverImageUrl}
+                          name={p.name}
+                          sub={`${p.trackCount} ${
+                            p.trackCount === 1 ? 'track' : 'tracks'
+                          }`}
+                          t={t}
+                          onPress={() => {
+                            remember();
+                            navigation.navigate('Playlist', { id: p.id });
+                          }}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+        </BounceScrollView>
+      </ScreenFade>
     </View>
   );
 }
+
+// Both chip rows are bordered pills, so their touch area can only grow through
+// hitSlop — padding would redraw the border somewhere else. Language pills sit
+// in a single scrolling row (13.2dp of label(11) + 12 padding = 25.2dp, + 24 =
+// 49.2dp) and the trending chips wrap (15dp of 12.5 text + 14 padding = 29dp,
+// + 20 = 49dp). Sideways the slop is half the 8dp gap, so neighbours never
+// overlap; on the wrapped chips the top is held to the full 8dp gutter and the
+// remainder goes downward, where the row below already wins the overlap.
+const PILL_SLOP = { top: 12, bottom: 12, left: 4, right: 4 };
+const CHIP_SLOP = { top: 8, bottom: 12, left: 4, right: 4 };
 
 const styles = StyleSheet.create({
   root: {
@@ -494,7 +536,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   pill: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -517,11 +559,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginBottom: 4,
   },
-  hint: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    marginTop: 12,
-  },
+  hint: { ...type.caption, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   recentHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -531,6 +570,15 @@ const styles = StyleSheet.create({
   clear: {
     fontFamily: fonts.medium,
     fontSize: 12.5,
+  },
+  // 15dp of text is not a target. Padding grows the touch box and the equal
+  // negative margin hands the space straight back, so the heading row keeps its
+  // height and "Clear" stays on the same right edge: 15 + 20 + 16 slop = 51dp.
+  clearBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: -10,
+    marginHorizontal: -12,
   },
   recentRow: {
     paddingVertical: 9,
@@ -552,10 +600,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  entityName: {
-    fontFamily: fonts.medium,
-    fontSize: 15,
-  },
+  entityName: type.rowTitle,
   entitySub: {
     fontFamily: fonts.regular,
     fontSize: 12.5,
@@ -568,7 +613,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
@@ -580,7 +625,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    borderRadius: 14,
+    borderRadius: radii.hero,
     padding: 14,
   },
   heroName: {

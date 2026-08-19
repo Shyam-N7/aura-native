@@ -18,7 +18,8 @@ export const SPRING = {
 export const DUR = {
   press: 120,
   dot: 200,
-  sheetOut: 300,
+  cardOut: 200, // card-sheet exit — the Sheet chassis's one leave duration
+  sheetOut: 300, // full-screen surface exit (player, queue, lyrics)
   toastIn: 320,
   upNext: 340,
   bud: 380,
@@ -28,6 +29,12 @@ export const DUR = {
   crossfade: 900,
   breathe: 2800,
   toastHold: 1600,
+  // A toast carrying an action is not a statement, it is an OFFER: the eye has
+  // to read the message, find the control and the thumb has to travel, and
+  // 1.6s covers none of that. 5s is the platform convention for an undo
+  // (Material's snackbar with an action) and is the window every toast with
+  // an `action` gets instead of toastHold.
+  toastHoldAction: 5000,
 };
 
 export const PRESS = { default: 0.94, disc: 0.86 };

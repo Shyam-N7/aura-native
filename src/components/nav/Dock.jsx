@@ -20,7 +20,13 @@ import { PressScale } from '../ui/PressScale';
 import { useTheme } from '../../theme/ThemeContext';
 import { usePlayer } from '../../playback/PlayerContext';
 import { subscribeScrollDepth } from '../../lib/scrollDepth';
-import { fonts, gooFill, label, radii } from '../../theme/tokens';
+import {
+  CHROME_MAX_FONT_SCALE,
+  fonts,
+  gooFill,
+  label,
+  radii,
+} from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
 const TAB_ICONS = { Home: 'home', Search: 'search', Talk: 'chat', You: 'user' };
@@ -83,14 +89,23 @@ function DockTab({ route, focused, label: tabLabel, tint, accent, onPress, index
       onLayout={e => setW(e.nativeEvent.layout.width)}
     >
       <PressScale
-        accessibilityRole="button"
+        accessibilityRole="tab"
         accessibilityState={focused ? { selected: true } : {}}
         accessibilityLabel={tabLabel}
         onPress={onPress}
         style={styles.tabInner}
       >
         <Icon name={TAB_ICONS[route.name]} size={22} color={tint} />
-        <Text style={[label(7.5), { color: tint }]}>{tabLabel}</Text>
+        {/* Capped: the capsule is a fixed 52dp and DOCK_CLEARANCE (96) is
+            baked into every screen's scroll padding, so the bar cannot grow
+            with the OS font scale without moving every screen. 15dp of room
+            is left for this label — see CHROME_MAX_FONT_SCALE. */}
+        <Text
+          maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+          style={[label(7.5), { color: tint }]}
+        >
+          {tabLabel}
+        </Text>
         <Animated.View style={[styles.dot, { backgroundColor: accent }, dotStyle]} />
       </PressScale>
     </Animated.View>
@@ -184,18 +199,28 @@ export function Dock({ navRef }) {
       firstRender.current = false;
       prevTrack.current = hasTrack;
       prevBtt.current = btt;
-      return;
+      return undefined;
     }
     const trackFlipped = prevTrack.current !== hasTrack;
     const bttFlipped = prevBtt.current !== btt;
     prevTrack.current = hasTrack;
     prevBtt.current = btt;
+    // Reduced motion: no goo window at all, and — the part that used to be
+    // implicit — the bead silhouette is written straight to its FINAL radius
+    // instead of budding there. It was only ever safe because the window
+    // below happens to be gated too; a one-line change to that condition
+    // would have quietly re-armed a 260ms grow the listener switched off.
+    if (reduced) {
+      budR.value = BEAD_SIZE / 2;
+      setGooActive(false);
+      return undefined;
+    }
     // bttFlipped keeps the RETURN morph covered with no track loaded:
     // (hasTrack || btt) alone goes false on that flip, so the capsule
     // re-expanded with the blur LIVE mid-resize — BlurView re-crops per
     // layout pass and printed a displaced pill outline (owner's ghost,
     // the no-disc crops). Solid + goo must ride every geometry change.
-    if ((hasTrack || btt || bttFlipped) && !reduced) {
+    if (hasTrack || btt || bttFlipped) {
       setGooActive(true);
       // The bud animation belongs to the track appearing — a back-to-top flip
       // reuses the window but must not re-bud a bead that was already out
@@ -208,6 +233,7 @@ export function Dock({ navRef }) {
       return () => clearTimeout(id);
     }
     setGooActive(false);
+    return undefined;
   }, [hasTrack, btt, budR, reduced]);
 
   // Silhouette geometry for the goo window, all off the same two clocks.
@@ -281,8 +307,15 @@ export function Dock({ navRef }) {
   // Tabs slide right to clear the bead (web: padding-left 60).
   const padLeft = useSharedValue(hasTrack ? 60 : 4);
   useEffect(() => {
-    padLeft.value = withTiming(hasTrack ? 60 : 4, { duration: DUR.bud, easing: EASE.settle });
-  }, [hasTrack, padLeft]);
+    // Lands on the final padding in one frame under reduced motion — the row
+    // still clears the bead, it just doesn't slide there. This one was the
+    // real leak: unlike the goo window two effects up, nothing above it was
+    // gated, so every track change slid the tabs 56px regardless.
+    const to = hasTrack ? 60 : 4;
+    padLeft.value = reduced
+      ? to
+      : withTiming(to, { duration: DUR.bud, easing: EASE.settle });
+  }, [hasTrack, reduced, padLeft]);
   const rowStyle = useAnimatedStyle(() => ({ paddingLeft: padLeft.value }));
 
   // Hold-and-slide across the dock to switch tabs — iPhone-camera-mode style.
@@ -417,6 +450,7 @@ export function Dock({ navRef }) {
           <Glass radius={radii.dock} solid={gooActive} soft blur style={styles.capsule}>
             <GestureDetector gesture={tabSwipe}>
               <Animated.View
+                accessibilityRole="tablist"
                 pointerEvents={btt ? 'none' : 'auto'}
                 style={[styles.row, rowStyle, rowMeltStyle]}
                 onLayout={(e) => setRowW(e.nativeEvent.layout.width)}
@@ -453,7 +487,10 @@ export function Dock({ navRef }) {
                 style={styles.bttPress}
               >
                 <Icon name="arrow-up" size={14} color={t.ink} />
-                <Text style={[styles.bttText, { color: t.ink }]}>
+                <Text
+                  maxFontSizeMultiplier={CHROME_MAX_FONT_SCALE}
+                  style={[styles.bttText, { color: t.ink }]}
+                >
                   Take me back up
                 </Text>
               </Pressable>

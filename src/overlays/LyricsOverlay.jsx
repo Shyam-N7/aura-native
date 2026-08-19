@@ -7,7 +7,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  ActivityIndicator,
   BackHandler,
   Pressable,
   ScrollView,
@@ -27,6 +26,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
@@ -50,22 +50,24 @@ import { cleanLyric, cleanTitle } from '../utils/title';
 import { shareLyric } from '../lib/share';
 import { HeartButton } from '../components/player/HeartButton';
 import { Icon } from '../components/Icon';
+import { AuraLoader } from '../components/ui/AuraLoader';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
-import { fonts } from '../theme/tokens';
-import { EASE } from '../theme/motion';
+import { fonts, radii } from '../theme/tokens';
+import { DUR, EASE, SPRING } from '../theme/motion';
 
-// Web LyricsScreen.css: panel/backdrop enter-exit timings and the cinematic
-// dissolve (800ms ease). The toggle thumb slides on the same curve the panel
-// enters with.
-const PANEL_IN_MS = 260;
-const PANEL_OUT_MS = 220;
+// Web LyricsScreen.css: the cinematic dissolve (800ms ease) and the panel's
+// inner timings. The panel itself no longer keeps its own enter/exit numbers —
+// it is a full-screen surface, so it rides the house grammar the player and
+// queue ride: SPRING.sheet in, DUR.sheetOut out.
 const CINEMA_MS = 800;
 const LINE_MS = 380;
 const IDLE_MS = 5000; // no interaction → cinematic
 const POLL_MS = 25000; // 'pending' (server still generating) re-poll
 const STEMS_POLL_MS = 20000; // "music only" preparation re-poll
 const PANEL_RADIUS = 24;
+// Kept only for motion INSIDE the panel (the view-toggle thumb, the karaoke
+// stage's settle-in) — the surface's own enter/exit is the house grammar.
 const SLIDE = Easing.bezier(0.22, 1, 0.36, 1);
 
 const artUrl = (track, res = 500) =>
@@ -129,6 +131,13 @@ function GapMark({ accent, reduced }) {
     </View>
   );
 }
+
+// Holding a lyric line sends it on, and a hold is not a gesture a screen
+// reader can make. The share is therefore also published as an assistive
+// action on the line itself — the QueueSheet reorder pattern. A visible button
+// per line is out of the question here: the column IS the reading experience.
+// Module-level so the memoized line gets the same array every render.
+const LINE_A11Y_ACTIONS = [{ name: 'share', label: 'share this line' }];
 
 // One lyric line. The 380ms rise/settle is the web's transition-all; font size
 // and color switch with the state (RN can't animate fontSize cheaply, and the
@@ -198,6 +207,10 @@ const LyricLine = memo(function LyricLine({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={text}
+      accessibilityActions={onLongPressLine ? LINE_A11Y_ACTIONS : undefined}
+      onAccessibilityAction={e =>
+        e.nativeEvent.actionName === 'share' && onLongPressLine?.(line)
+      }
       onPress={() => onPressLine(line)}
       onLongPress={() => onLongPressLine?.(line)}
       delayLongPress={350}
@@ -360,6 +373,14 @@ function PlainView({ lines, view, inkSoft, inkFaint, onShareLine, onWakeScroll }
         .map((l, i) => (
           <Pressable
             key={i}
+            // Untimed lines don't seek, so "text" — not "button" — is the
+            // honest role; the hold rides along as an assistive action.
+            accessibilityRole="text"
+            accessibilityLabel={lineFor(l)}
+            accessibilityActions={onShareLine ? LINE_A11Y_ACTIONS : undefined}
+            onAccessibilityAction={e =>
+              e.nativeEvent.actionName === 'share' && onShareLine?.(lineFor(l))
+            }
             onLongPress={() => onShareLine?.(lineFor(l))}
             delayLongPress={350}
           >
@@ -801,7 +822,7 @@ export function LyricsOverlay() {
         enter.value = 1;
       } else {
         enter.value = 0;
-        enter.value = withTiming(1, { duration: PANEL_IN_MS, easing: SLIDE });
+        enter.value = withSpring(1, SPRING.sheet);
       }
       // Every open starts romanized, like the web's fresh mount — and on the
       // reading view, not karaoke.
@@ -826,7 +847,7 @@ export function LyricsOverlay() {
     }
     enter.value = withTiming(
       0,
-      { duration: PANEL_OUT_MS, easing: EASE.exit },
+      { duration: DUR.sheetOut, easing: EASE.exit },
       done => {
         if (done) {
           runOnJS(endClose)();
@@ -1343,7 +1364,12 @@ export function LyricsOverlay() {
 
           {status === 'loading' && (
             <View style={styles.centerBody}>
-              <ActivityIndicator color={t.accent} />
+              {/* The house loader, not a platform spinner: this was the only
+                  ActivityIndicator left in the app, and it read as a
+                  different product for the two seconds it was on screen.
+                  Labelled like every other AuraLoader, and in the voice the
+                  states below already speak. */}
+              <AuraLoader label="Finding the words" />
             </View>
           )}
 
@@ -1491,7 +1517,7 @@ const styles = StyleSheet.create({
   },
   karaokeBtn: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginRight: 8,
@@ -1574,7 +1600,7 @@ const styles = StyleSheet.create({
   },
   musicOnlyBtn: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 5,
   },
@@ -1628,7 +1654,7 @@ const styles = StyleSheet.create({
   toggle: {
     flexDirection: 'row',
     padding: 2,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
   },
   toggleMidnight: {
@@ -1640,7 +1666,7 @@ const styles = StyleSheet.create({
     top: 2,
     bottom: 2,
     left: 2,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   toggleBtn: {
     minWidth: 48,

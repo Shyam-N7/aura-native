@@ -15,12 +15,12 @@ import {
   saveCfg,
 } from '../lib/bridges';
 import { showToast } from '../lib/toast';
-import { Icon } from '../components/Icon';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { PressScale } from '../components/ui/PressScale';
+import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { BridgeItinerary } from '../components/bridges/BridgeItinerary';
-import { fonts, label, radii } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 
 // Ported from web DesktopBridges.jsx: gradual paths between feelings. A
 // clairvoyant hero reads your mood + proposes tonight's journey, a builder
@@ -242,22 +242,13 @@ export default function BridgesScreen({ navigation }) {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="back"
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-            style={styles.back}
-          >
-            <Icon name="chevron-left" size={22} color={t.ink} />
-          </PressScale>
-
-          <Text style={[label(11), { color: t.inkFaint }]}>
-            Gradual paths between feelings
-          </Text>
-          <Text style={[styles.hero, { color: t.ink }]}>
-            From here{'\n'}to there.
-          </Text>
+          <PageHeader
+            eyebrow="Gradual paths between feelings"
+            eyebrowSize={11}
+            title={'From here\nto there.'}
+            titleStyle={styles.title}
+            onBack={() => navigation.goBack()}
+          />
           <Text style={[styles.sub, { color: t.inkSoft }]}>
             Songs threaded so the mood shifts gradually. Build your own path, or
             let the bridge read you.
@@ -336,6 +327,7 @@ export default function BridgesScreen({ navigation }) {
               accessibilityRole="button"
               accessibilityLabel="your mix"
               onPress={() => toggleLang('mix')}
+              hitSlop={LANG_SLOP}
               style={[
                 styles.langchip,
                 { borderColor: cfg.langs.length === 0 ? t.accent : t.line },
@@ -360,6 +352,7 @@ export default function BridgesScreen({ navigation }) {
                   accessibilityLabel={l}
                   accessibilityState={{ selected: on }}
                   onPress={() => toggleLang(l)}
+                  hitSlop={LANG_SLOP}
                   style={[
                     styles.langchip,
                     { borderColor: on ? t.accent : t.line },
@@ -381,6 +374,7 @@ export default function BridgesScreen({ navigation }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="fewer tracks"
+              hitSlop={8}
               disabled={cfg.steps <= MIN_STEPS}
               onPress={() =>
                 updateCfg({ steps: Math.max(MIN_STEPS, cfg.steps - 1) })
@@ -399,6 +393,7 @@ export default function BridgesScreen({ navigation }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="more tracks"
+              hitSlop={8}
               disabled={cfg.steps >= MAX_STEPS}
               onPress={() =>
                 updateCfg({ steps: Math.min(MAX_STEPS, cfg.steps + 1) })
@@ -478,23 +473,16 @@ export default function BridgesScreen({ navigation }) {
   );
 }
 
+// Bordered pills again, so hitSlop is the only tool that leaves the border
+// where it is: 14.4dp of 12pt text + 12 padding = 26.4dp, + 22 = 48.4dp tall.
+// Sideways it takes half the row's 8dp gap, and the top is held to the full
+// gutter so a chip never sits on the visible edge of the one above it.
+const LANG_SLOP = { top: 8, bottom: 14, left: 4, right: 4 };
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 22 },
-  back: {
-    width: 38,
-    height: 38,
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 6,
-  },
-  hero: {
-    fontFamily: fonts.regular,
-    fontSize: 34,
-    lineHeight: 36,
-    letterSpacing: -1.02,
-    marginTop: 8,
-  },
+  title: { marginTop: 8 },
   sub: {
     fontFamily: fonts.regular,
     fontSize: 14,
@@ -525,10 +513,10 @@ const styles = StyleSheet.create({
     minWidth: 96,
   },
   moodchipHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  moodchipKey: { fontFamily: fonts.medium, fontSize: 15 },
+  moodchipKey: type.rowTitle,
   moodchipHint: { fontFamily: fonts.regular, fontSize: 11.5 },
   badge: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -542,7 +530,7 @@ const styles = StyleSheet.create({
   langrow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   langchip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -553,6 +541,9 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 22,
   },
+  // 34dp of button + 8dp hitSlop on every side = 50dp, comfortably past the
+  // 48dp minimum, and it fits inside the row's 14dp gaps without touching the
+  // count beside it. Growing the circle itself would be a visible change.
   stepBtn: {
     width: 34,
     height: 34,
@@ -562,7 +553,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepSign: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 22 },
-  stepVal: { fontFamily: fonts.medium, fontSize: 15, minWidth: 74 },
+  stepVal: { ...type.rowTitle, minWidth: 74 },
   dim: { opacity: 0.4 },
   hint: {
     fontFamily: fonts.regular,

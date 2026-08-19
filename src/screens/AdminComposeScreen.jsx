@@ -11,12 +11,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import { RULE_WIDTH } from '../components/ui/Rule';
 import { ScreenFade } from '../components/ui/ScreenFade';
-import { PressScale } from '../components/ui/PressScale';
-import { Icon } from '../components/Icon';
+import { PageHeader } from '../components/detail/DetailChassis';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { adminPushReach, adminPushSend } from '../lib/push';
 import { API_BASE, getUser, subscribeAuth } from '../lib/auth';
 import { showToast } from '../lib/toast';
@@ -193,21 +193,12 @@ export default function AdminComposeScreen({ navigation }) {
         <View style={[styles.column, { paddingTop: insets.top + 12 }]}>
           {/* ── fixed top: chrome + the pinned live preview ── */}
           <View style={styles.head}>
-            <PressScale
-              accessibilityRole="button"
-              accessibilityLabel="back"
-              onPress={() => navigation.goBack()}
-              hitSlop={10}
-              style={styles.back}
-            >
-              <Icon name="chevron-left" size={22} color={t.ink} />
-            </PressScale>
-            <Text style={[label(10), { color: t.inkFaint }]}>
-              Admin · push
-            </Text>
-            <Text style={[styles.hero, { color: t.ink }]}>
-              Send a notification
-            </Text>
+            <PageHeader
+              eyebrow="Admin · push"
+              title="Send a notification"
+              titleStyle={styles.title}
+              onBack={() => navigation.goBack()}
+            />
 
             <Text style={[label(9.5), styles.sectionHead, { color: t.inkFaint }]}>
               Preview
@@ -294,9 +285,9 @@ export default function AdminComposeScreen({ navigation }) {
               style={[inputStyle, styles.inputTall]}
             />
             <Pressable
-              accessibilityRole="button"
+              accessibilityRole="switch"
               accessibilityLabel="include an image"
-              accessibilityState={form.withImage ? { selected: true } : {}}
+              accessibilityState={{ checked: form.withImage }}
               onPress={() => {
                 setImageBroken(false);
                 set('withImage', !form.withImage);
@@ -372,9 +363,9 @@ export default function AdminComposeScreen({ navigation }) {
               style={inputStyle}
             />
             <Pressable
-              accessibilityRole="button"
+              accessibilityRole="switch"
               accessibilityLabel="send to everyone"
-              accessibilityState={everyoneOn ? { selected: true } : {}}
+              accessibilityState={{ checked: everyoneOn }}
               disabled={!!form.email.trim()}
               onPress={() => set('toAll', !form.toAll)}
               style={styles.row}
@@ -449,20 +440,7 @@ const styles = StyleSheet.create({
   column: { flex: 1 },
   fill: { flex: 1 },
   head: { paddingHorizontal: 22 },
-  back: {
-    width: 38,
-    height: 38,
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 6,
-  },
-  hero: {
-    fontFamily: fonts.regular,
-    fontSize: 34,
-    lineHeight: 36,
-    letterSpacing: -1.02,
-    marginTop: 4,
-  },
+  title: { marginTop: 4 },
   sectionHead: { marginTop: 14, marginBottom: 6 },
   previewCard: {
     borderWidth: 1,
@@ -494,7 +472,7 @@ const styles = StyleSheet.create({
   fields: { paddingHorizontal: 22, paddingBottom: 16 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontFamily: fonts.regular,
@@ -508,11 +486,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   rowMeta: { flex: 1, paddingRight: 12, gap: 2 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   rowCaption: { fontFamily: fonts.regular, fontSize: 12 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
   sendBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: RULE_WIDTH,
     paddingHorizontal: 22,
     paddingTop: 10,
     paddingBottom: DOCK_CLEARANCE + 8,
@@ -520,7 +498,7 @@ const styles = StyleSheet.create({
   },
   send: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     alignItems: 'center',
     paddingVertical: 11,
   },
