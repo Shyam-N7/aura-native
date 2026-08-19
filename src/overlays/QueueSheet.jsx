@@ -666,6 +666,8 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
         title: 'Clear queue?',
         body: "We'll keep the currently playing track.",
         action: 'Clear',
+        // Throws away everything queued behind the playing track.
+        danger: true,
       })
     ) {
       player.clearQueue();

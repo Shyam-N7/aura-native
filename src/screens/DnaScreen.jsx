@@ -10,10 +10,9 @@ import Svg, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { getSonicDna } from '../api/sonicDna';
-import { Icon } from '../components/Icon';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
-import { PressScale } from '../components/ui/PressScale';
+import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { fonts, label, radii } from '../theme/tokens';
 
@@ -140,22 +139,12 @@ export default function DnaScreen({ navigation }) {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="back"
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-            style={styles.back}
-          >
-            <Icon name="chevron-left" size={22} color={t.ink} />
-          </PressScale>
-
-          <Text style={[label(10), { color: t.inkFaint }]}>
-            Sonic DNA · a fingerprint of you
-          </Text>
-          <Text style={[styles.hero, { color: t.ink }]}>
-            You, as a{'\n'}fingerprint.
-          </Text>
+          <PageHeader
+            eyebrow="Sonic DNA · a fingerprint of you"
+            title={'You, as a\nfingerprint.'}
+            titleStyle={styles.title}
+            onBack={() => navigation.goBack()}
+          />
           {!!dna?.signature && (
             <Text style={[label(10), styles.signature, { color: t.inkFaint }]}>
               {dna.signature}
@@ -274,20 +263,7 @@ export default function DnaScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 22 },
-  back: {
-    width: 38,
-    height: 38,
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 6,
-  },
-  hero: {
-    fontFamily: fonts.regular,
-    fontSize: 34,
-    lineHeight: 36,
-    letterSpacing: -1.02,
-    marginTop: 8,
-  },
+  title: { marginTop: 8 },
   signature: { marginTop: 12 },
   center: { paddingVertical: 48, alignItems: 'center' },
   errorText: {

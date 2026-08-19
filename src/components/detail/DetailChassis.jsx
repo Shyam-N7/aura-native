@@ -31,6 +31,38 @@ export function CrumbBack({ onPress }) {
   );
 }
 
+// The OTHER header in this app: the standalone screens (dna, journal, bridges,
+// equalizer, admin compose) open on a 38dp back box, a MonoLabel eyebrow and
+// the 34px page title — five byte-identical copies until this was extracted.
+// The eyebrow sits BETWEEN the button and the title on every one of them, so
+// it belongs to the chassis rather than to each screen.
+//
+// Spacing is the one thing the five genuinely disagree on, so `titleStyle`
+// carries each screen's own margins around the title; nothing is defaulted.
+//
+// Not folded into CrumbBack: that one is a 24px glyph in a different box, and
+// unifying the two is a design call, not a refactor.
+export function PageHeader({ title, titleStyle, eyebrow, eyebrowSize = 10, onBack }) {
+  const { t } = useTheme();
+  return (
+    <>
+      <PressScale
+        accessibilityRole="button"
+        accessibilityLabel="back"
+        onPress={onBack}
+        hitSlop={10}
+        style={styles.pageBack}
+      >
+        <Icon name="chevron-left" size={22} color={t.ink} />
+      </PressScale>
+      {!!eyebrow && (
+        <Text style={[label(eyebrowSize), { color: t.inkFaint }]}>{eyebrow}</Text>
+      )}
+      <Text style={[type.pageTitle, titleStyle, { color: t.ink }]}>{title}</Text>
+    </>
+  );
+}
+
 export function PlayAllPill({ text, onPress }) {
   const { t } = useTheme();
   return (
@@ -191,6 +223,13 @@ export const DetailRow = React.memo(DetailRowBase);
 
 const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', paddingVertical: 4, marginLeft: -4 },
+  pageBack: {
+    width: 38,
+    height: 38,
+    justifyContent: 'center',
+    marginLeft: -8,
+    marginBottom: 6,
+  },
   playAll: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -12,8 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { ScreenFade } from '../components/ui/ScreenFade';
-import { PressScale } from '../components/ui/PressScale';
-import { Icon } from '../components/Icon';
+import { PageHeader } from '../components/detail/DetailChassis';
 import { DOCK_CLEARANCE } from '../components/nav/Dock';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, label } from '../theme/tokens';
@@ -193,21 +192,12 @@ export default function AdminComposeScreen({ navigation }) {
         <View style={[styles.column, { paddingTop: insets.top + 12 }]}>
           {/* ── fixed top: chrome + the pinned live preview ── */}
           <View style={styles.head}>
-            <PressScale
-              accessibilityRole="button"
-              accessibilityLabel="back"
-              onPress={() => navigation.goBack()}
-              hitSlop={10}
-              style={styles.back}
-            >
-              <Icon name="chevron-left" size={22} color={t.ink} />
-            </PressScale>
-            <Text style={[label(10), { color: t.inkFaint }]}>
-              Admin · push
-            </Text>
-            <Text style={[styles.hero, { color: t.ink }]}>
-              Send a notification
-            </Text>
+            <PageHeader
+              eyebrow="Admin · push"
+              title="Send a notification"
+              titleStyle={styles.title}
+              onBack={() => navigation.goBack()}
+            />
 
             <Text style={[label(9.5), styles.sectionHead, { color: t.inkFaint }]}>
               Preview
@@ -449,20 +439,7 @@ const styles = StyleSheet.create({
   column: { flex: 1 },
   fill: { flex: 1 },
   head: { paddingHorizontal: 22 },
-  back: {
-    width: 38,
-    height: 38,
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 6,
-  },
-  hero: {
-    fontFamily: fonts.regular,
-    fontSize: 34,
-    lineHeight: 36,
-    letterSpacing: -1.02,
-    marginTop: 4,
-  },
+  title: { marginTop: 4 },
   sectionHead: { marginTop: 14, marginBottom: 6 },
   previewCard: {
     borderWidth: 1,

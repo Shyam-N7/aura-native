@@ -15,9 +15,9 @@ import {
   saveCfg,
 } from '../lib/bridges';
 import { showToast } from '../lib/toast';
-import { Icon } from '../components/Icon';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { PressScale } from '../components/ui/PressScale';
+import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { BridgeItinerary } from '../components/bridges/BridgeItinerary';
 import { fonts, label, radii } from '../theme/tokens';
@@ -242,22 +242,13 @@ export default function BridgesScreen({ navigation }) {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="back"
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-            style={styles.back}
-          >
-            <Icon name="chevron-left" size={22} color={t.ink} />
-          </PressScale>
-
-          <Text style={[label(11), { color: t.inkFaint }]}>
-            Gradual paths between feelings
-          </Text>
-          <Text style={[styles.hero, { color: t.ink }]}>
-            From here{'\n'}to there.
-          </Text>
+          <PageHeader
+            eyebrow="Gradual paths between feelings"
+            eyebrowSize={11}
+            title={'From here\nto there.'}
+            titleStyle={styles.title}
+            onBack={() => navigation.goBack()}
+          />
           <Text style={[styles.sub, { color: t.inkSoft }]}>
             Songs threaded so the mood shifts gradually. Build your own path, or
             let the bridge read you.
@@ -491,20 +482,7 @@ const LANG_SLOP = { top: 8, bottom: 14, left: 4, right: 4 };
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 22 },
-  back: {
-    width: 38,
-    height: 38,
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 6,
-  },
-  hero: {
-    fontFamily: fonts.regular,
-    fontSize: 34,
-    lineHeight: 36,
-    letterSpacing: -1.02,
-    marginTop: 8,
-  },
+  title: { marginTop: 8 },
   sub: {
     fontFamily: fonts.regular,
     fontSize: 14,
