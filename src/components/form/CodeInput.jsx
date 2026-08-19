@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts } from '../../theme/tokens';
+import { fonts, radii } from '../../theme/tokens';
 
 const CELLS = [0, 1, 2, 3, 4, 5];
 
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   wrap: { columnGap: 8, flexDirection: 'row', marginBottom: 16 },
   cell: {
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: radii.input,
     borderWidth: 1,
     flex: 1,
     height: 56,

@@ -19,7 +19,7 @@ import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/ui/Sheet';
 import { AuraLoader } from '../components/ui/AuraLoader';
-import { fonts, label, radii } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 
 // "Add to playlist" bottom sheet, ported from web AddToPlaylistSheet +
@@ -296,11 +296,7 @@ export function AddToPlaylistSheet() {
 const styles = StyleSheet.create({
   title: { fontFamily: fonts.semibold, fontSize: 18 },
   subtitle: { marginTop: 3, marginBottom: 8 },
-  stateLine: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingVertical: 12,
-  },
+  stateLine: { ...type.caption, paddingVertical: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -309,11 +305,11 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   rowMeta: { flex: 1, minWidth: 0, gap: 2 },
-  rowName: { fontFamily: fonts.medium, fontSize: 15 },
+  rowName: type.rowTitle,
   coverFallback: {
     width: 38,
     height: 38,
-    borderRadius: 6,
+    borderRadius: radii.coverSm,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -7,8 +7,9 @@ import { getCurrentMood } from '../api/mood';
 import { closeWhy, subscribeWhy } from '../lib/whySheet';
 import { Sheet } from '../components/ui/Sheet';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { RULE_WIDTH } from '../components/ui/Rule';
 import { cleanTitle } from '../utils/title';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, type } from '../theme/tokens';
 
 // Ported from web WhyPanel.jsx: the curator's reasoning for a track — a
 // headline, a short body, three matched-on dimensions with strength bars,
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   dimension: {
-    borderTopWidth: 1,
+    borderTopWidth: RULE_WIDTH,
     paddingTop: 10,
     gap: 4,
   },
@@ -258,9 +259,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   barFill: { height: 2, borderRadius: 1 },
-  hairlineTop: { borderTopWidth: 1, paddingTop: 14 },
+  hairlineTop: { borderTopWidth: RULE_WIDTH, paddingTop: 14 },
   considered: { gap: 3 },
-  consideredTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  consideredTitle: type.rowTitle,
   confidenceRow: {
     flexDirection: 'row',
     alignItems: 'center',

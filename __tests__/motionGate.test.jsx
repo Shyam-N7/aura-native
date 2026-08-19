@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { getAnimatedStyle } from 'react-native-reanimated';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import { BgPlayRail } from '../src/components/home/BgPlayRail';
 import { GestureTourOverlay } from '../src/components/player/GestureTourOverlay';

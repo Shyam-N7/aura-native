@@ -20,7 +20,7 @@ import { Icon } from '../components/Icon';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
-import { fonts, label, type } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
 import { useBackToTop } from '../hooks/useBackToTop';
@@ -430,10 +430,10 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { paddingHorizontal: 20 },
   header: { paddingTop: 10, paddingBottom: 6, gap: 10 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5 },
+  stateLine: type.caption,
   empty: { marginTop: 10, gap: 5 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
   clock: {
     borderRadius: 16,
     padding: 16,
@@ -479,11 +479,11 @@ const styles = StyleSheet.create({
   rowMore: { paddingVertical: 10, paddingLeft: 8 },
   pressed: { opacity: 0.6 },
   meta: { flex: 1, minWidth: 0, gap: 3 },
-  title: { fontFamily: fonts.medium, fontSize: 15 },
+  title: type.rowTitle,
   more: {
     alignSelf: 'center',
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 22,
     paddingVertical: 10,
     marginTop: 18,

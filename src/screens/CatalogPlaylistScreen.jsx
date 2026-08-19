@@ -22,7 +22,7 @@ import { ListTools } from '../components/detail/ListTools';
 import { PLAYLIST_SORT_KEY, PLAYLIST_SORTS } from '../components/detail/listSorts';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
-import { fonts, label, type } from '../theme/tokens';
+import { label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
 import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
@@ -321,9 +321,9 @@ const styles = StyleSheet.create({
   // seams between the windowed rows; marginBottom keeps the old
   // ListTools→first-row breathing room (styles.list's marginTop).
   head: { gap: 7, marginBottom: 8 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  stateLine: { ...type.caption, marginTop: 12 },
   errorBlock: { marginTop: 12 },
   empty: { marginTop: 18, gap: 5 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
 });

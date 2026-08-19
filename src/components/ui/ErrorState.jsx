@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { fonts, label } from '../../theme/tokens';
+import { label, radii, type } from '../../theme/tokens';
 
 // The house failure block: the line that says what broke, plus the way out.
 //
@@ -54,11 +54,11 @@ export function ErrorState({
 
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
-  line: { fontFamily: fonts.regular, fontSize: 13.5 },
+  line: type.caption,
   retry: {
     alignSelf: 'center',
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 22,
     paddingVertical: 10,
     marginTop: 18,

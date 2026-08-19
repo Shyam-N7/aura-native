@@ -13,11 +13,12 @@ import { subscribeToast } from '../lib/toast';
 import { useTheme } from '../theme/ThemeContext';
 import { Glass } from './ui/Glass';
 import { Icon } from './Icon';
-import { fonts, type } from '../theme/tokens';
+import { fonts, semantic, type } from '../theme/tokens';
 import { DUR } from '../theme/motion';
 
-// Success green — reads on all three themes; no theme has a success token.
-const TICK_GREEN = '#3f9d6b';
+// Success green — reads on all three themes, so it lives in tokens.js as an
+// app-wide semantic colour rather than in here.
+const TICK_GREEN = semantic.success;
 
 // Renders the most recent toast (last-write-wins), ported from web Toast.jsx.
 // Web toast motion: rise 16 + scale .96 in, reverse out, short hold — all

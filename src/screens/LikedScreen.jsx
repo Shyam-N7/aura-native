@@ -22,7 +22,7 @@ import {
 import { ListTools } from '../components/detail/ListTools';
 import { LIKED_SORT_KEY, LIKED_SORTS } from '../components/detail/listSorts';
 import { LONG_LIST } from '../lib/listWindow';
-import { fonts, label, type } from '../theme/tokens';
+import { label, type } from '../theme/tokens';
 import { useBackToTop } from '../hooks/useBackToTop';
 import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
@@ -286,9 +286,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { paddingHorizontal: 20 },
   header: { paddingTop: 10, paddingBottom: 14, gap: 7 },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  stateLine: { ...type.caption, marginTop: 12 },
   errorBlock: { marginTop: 12 },
   empty: { marginTop: 18, gap: 5 },
-  emptyTitle: { fontFamily: fonts.semibold, fontSize: 17 },
-  emptyBody: { fontFamily: fonts.regular, fontSize: 13.5 },
+  emptyTitle: type.blockTitle,
+  emptyBody: type.caption,
 });

@@ -53,7 +53,7 @@ import { Icon } from '../components/Icon';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
-import { fonts } from '../theme/tokens';
+import { fonts, radii } from '../theme/tokens';
 import { DUR, EASE, SPRING } from '../theme/motion';
 
 // Web LyricsScreen.css: the cinematic dissolve (800ms ease) and the panel's
@@ -1517,7 +1517,7 @@ const styles = StyleSheet.create({
   },
   karaokeBtn: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginRight: 8,
@@ -1600,7 +1600,7 @@ const styles = StyleSheet.create({
   },
   musicOnlyBtn: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 5,
   },
@@ -1654,7 +1654,7 @@ const styles = StyleSheet.create({
   toggle: {
     flexDirection: 'row',
     padding: 2,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
   },
   toggleMidnight: {
@@ -1666,7 +1666,7 @@ const styles = StyleSheet.create({
     top: 2,
     bottom: 2,
     left: 2,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   toggleBtn: {
     minWidth: 48,

@@ -33,9 +33,10 @@ import {
 import { getUser } from '../lib/auth';
 import { Icon } from '../components/Icon';
 import { PressScale } from '../components/ui/PressScale';
+import { RULE_WIDTH } from '../components/ui/Rule';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { useMotionGate } from '../hooks/useMotionGate';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii } from '../theme/tokens';
 
 // Ported from web TalkAura.jsx (mobile) + DesktopTalk.jsx: the conversational
 // DJ. The web mobile modal carries a now-playing banner because it covers the
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
     paddingRight: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
   },
   playSetDot: {
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
   },
   chipText: {
@@ -449,7 +450,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderTopWidth: 1,
+    borderTopWidth: RULE_WIDTH,
     paddingTop: 8,
     paddingHorizontal: 14,
     paddingBottom: DOCK_CLEARANCE + 8,

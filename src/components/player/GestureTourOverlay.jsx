@@ -21,7 +21,7 @@ import {
   skipTourStep,
   subscribeTour,
 } from '../../lib/gestureTour';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 import { DUR, EASE } from '../../theme/motion';
 
 // Where each step's spotlight lands and which gesture it acts out.
@@ -433,13 +433,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 64,
     height: 64,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 2.5,
   },
   chip: {
     width: 52,
     height: 52,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   holdDot: {
     width: 46,
     height: 46,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   flip: { transform: [{ rotate: '180deg' }] },
   card: {
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 4,
   },
-  how: { fontFamily: fonts.semibold, fontSize: 17 },
+  how: type.blockTitle,
   what: { fontFamily: fonts.regular, fontSize: 13 },
   row: { flexDirection: 'row', gap: 22, marginTop: 10 },
   btn: { fontFamily: fonts.medium, fontSize: 13 },

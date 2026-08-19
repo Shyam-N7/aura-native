@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { space } from '../../theme/tokens';
 import { ConfirmCard } from './ConfirmCard';
 
 // The house confirm as a centered POPUP — user-specified for the
@@ -77,13 +78,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 8, 6, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: space.s32,
   },
   card: {
     alignSelf: 'stretch',
     maxWidth: 400,
     borderWidth: 1,
     borderRadius: 20,
-    padding: 20,
+    padding: space.s20,
   },
 });

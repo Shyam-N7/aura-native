@@ -25,7 +25,7 @@ import { getArtist } from '../api/artists';
 import { PRIMARY_LANGUAGES, MORE_LANGUAGES } from '../data/languages';
 import { SEED_ARTIST_FALLBACK } from '../data/seedArtists';
 import { setSeedArtists, setSeedSignals, markOnboarded } from '../lib/onboarding';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { EASE } from '../theme/motion';
 
 // First-run "pick three" flow — the web OnboardingScreen reimagined for mobile:
@@ -673,14 +673,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 15,
     paddingVertical: 10,
   },
   chipText: { fontFamily: fonts.medium, fontSize: 14 },
   moreLangs: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderStyle: 'dashed',
@@ -736,10 +736,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   empty: { paddingVertical: 40, alignItems: 'center', gap: 12, width: '100%' },
-  emptyLine: { fontFamily: fonts.regular, fontSize: 14 },
+  emptyLine: type.body,
   retry: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 16,
     paddingVertical: 9,
   },
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 12,
     marginTop: 14,
   },
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingLeft: 20,
     paddingRight: 16,
     paddingVertical: 12,

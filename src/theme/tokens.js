@@ -96,8 +96,18 @@ export const type = {
     letterSpacing: -0.11,
   },
   wordmark: { fontFamily: fonts.semibold, fontSize: 24, letterSpacing: -0.48 },
+  // The heading that tops a block of content one step under sectionTitle: the
+  // empty/blank-state line on eight list screens, and the card and banner
+  // titles that already matched it (memory rail, mode mix, now-playing banner,
+  // the gesture tour, the queue's source line). Thirteen sites had spelled it
+  // out identically before it was a token.
+  blockTitle: { fontFamily: fonts.semibold, fontSize: 17 },
   rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
   body: { fontFamily: fonts.regular, fontSize: 14 },
+  // The secondary line under a title — empty-state bodies, hints, taglines,
+  // "loading…"/"nothing yet" state lines. Half a point under body, and the
+  // most-reimplemented register in the app (25 sites).
+  caption: { fontFamily: fonts.regular, fontSize: 13.5 },
   time: {
     fontFamily: fonts.regular,
     fontSize: 11,
@@ -124,6 +134,44 @@ export const radii = {
   coverMd: 8,
   auth: 26,
   input: 12,
+};
+
+// The spacing scale, read back OUT of the ~830 padding/margin/gap declarations
+// already in the tree rather than invented over them: these nine steps are the
+// values the app reaches for most. Keys are the value itself (s8 IS 8dp) — a
+// t-shirt scale would hide whether a migrated site still renders the same
+// pixel, and every site that moved to these tokens moved without moving.
+// gutter is the screen's side padding: 22 earns a name instead of a step
+// number because it means "the page edge", not "a bit more than 20".
+//
+// This is NOT a snapping tool. Everything off the scale stays where it is —
+// the odd values (1, 3, 5, 7, 9, 11, 13, 15: 111 uses between them) and the
+// even in-betweens the scale skips (10, 14, 18). Rounding any of them onto a
+// step would move pixels on screen, and that is the owner's design call, not
+// something a token migration gets to make on the way past.
+export const space = {
+  s2: 2,
+  s4: 4,
+  s6: 6,
+  s8: 8,
+  s12: 12,
+  s16: 16,
+  s20: 20,
+  s24: 24,
+  s32: 32,
+  gutter: 22,
+};
+
+// App-wide semantic colours. Both read on all three themes, so neither is a
+// per-theme token — they were living as loose consts inside the one component
+// that happened to need them first (SheetRow, Toast), which is how the second
+// caller ends up hardcoding the hex again. Those modules still re-export their
+// original names, so existing imports are untouched.
+export const semantic = {
+  // Destructive rows and confirm actions.
+  danger: '#b3402e',
+  // The toast's success tick.
+  success: '#3f9d6b',
 };
 
 // RN Android shadows = elevation (+ shadowColor tint on API 28+). OPAQUE

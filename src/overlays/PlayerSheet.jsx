@@ -69,6 +69,7 @@ import { Icon } from '../components/Icon';
 import { Glass } from '../components/ui/Glass';
 import { GradientBg } from '../components/ui/GradientBg';
 import { PressScale } from '../components/ui/PressScale';
+import { Rule } from '../components/ui/Rule';
 import { Sheet } from '../components/ui/Sheet';
 import { SheetRow } from '../components/ui/SheetRow';
 import { EqualizerPopup } from './EqualizerPopup';
@@ -169,7 +170,7 @@ function PlayerMenuSheet({
           shareMoment(track, sec);
         })}
       />
-      <View style={[styles.menuSeparator, { backgroundColor: t.line }]} />
+      <Rule style={styles.menuSeparator} />
       <SheetRow
         icon="sliders"
         label="Equalizer"
@@ -1373,7 +1374,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
@@ -1387,7 +1388,7 @@ const styles = StyleSheet.create({
   },
   // Player ⋯ menu + gestures guide (QueueOptionsSheet's register).
   menuTitle: { fontFamily: fonts.semibold, fontSize: 18, marginBottom: 8 },
-  menuSeparator: { height: 1, marginVertical: 6 },
+  menuSeparator: { marginVertical: 6 },
   guideRow: { paddingVertical: 8, gap: 2 },
   guideHow: { fontFamily: fonts.medium, fontSize: 14.5 },
   guideWhat: { fontFamily: fonts.regular, fontSize: 12.5 },
@@ -1438,7 +1439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -1450,7 +1451,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 13,
   },
   saveText: { fontFamily: fonts.medium, fontSize: 14 },

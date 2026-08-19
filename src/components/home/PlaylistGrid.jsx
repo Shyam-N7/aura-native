@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../ui/PressScale';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, radii, type } from '../../theme/tokens';
 
 // Shared 2-col cover grid for home rails ("made by you", "popular playlists"),
 // artist discographies and language-hub shelves. Items are pre-normalized:
@@ -59,8 +59,8 @@ const styles = StyleSheet.create({
   },
   // Fixed half-width so an odd last tile keeps its column (never stretches).
   cell: { flexBasis: '48%', gap: 5 },
-  cover: { width: '100%', aspectRatio: 1, borderRadius: 8 },
+  cover: { width: '100%', aspectRatio: 1, borderRadius: radii.coverMd },
   fallback: { alignItems: 'center', justifyContent: 'center' },
   letter: { fontFamily: fonts.semibold, fontSize: 40 },
-  name: { fontFamily: fonts.medium, fontSize: 15 },
+  name: type.rowTitle,
 });

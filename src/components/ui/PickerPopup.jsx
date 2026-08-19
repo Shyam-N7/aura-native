@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Icon } from '../Icon';
-import { fonts, label } from '../../theme/tokens';
+import { fonts, label, space } from '../../theme/tokens';
 
 // A short pick-list as a centered POPUP — the sibling of ConfirmPopup, for
 // choosing one of a handful of options rather than confirming an action.
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 8, 6, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: space.s32,
   },
   card: {
     alignSelf: 'stretch',
@@ -83,14 +83,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 18,
   },
-  title: { marginBottom: 4 },
+  title: { marginBottom: space.s4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: space.s12,
+    gap: space.s12,
   },
-  meta: { flex: 1, gap: 2 },
+  meta: { flex: 1, gap: space.s2 },
   rowLabel: { fontFamily: fonts.medium, fontSize: 15.5 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   pressed: { opacity: 0.7 },

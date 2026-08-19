@@ -13,7 +13,7 @@ import {
 } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
 import { ErrorState } from '../components/ui/ErrorState';
-import { fonts, label, type } from '../theme/tokens';
+import { label, type } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
 
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  stateLine: { ...type.caption, marginTop: 12 },
   errorBlock: { marginTop: 12 },
   gridFlush: { paddingHorizontal: 0 },
   footer: { textAlign: 'center', marginTop: 30 },

@@ -61,7 +61,7 @@ import { AuraLoader } from '../components/ui/AuraLoader';
 import { CountUp } from '../components/ui/CountUp';
 import { TrackArt } from '../components/TrackRow';
 import { Icon } from '../components/Icon';
-import { fonts, label } from '../theme/tokens';
+import { fonts, label, radii, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { PRIMARY_LANGUAGES } from '../data/languages';
 import { useBackToTop } from '../hooks/useBackToTop';
@@ -1447,16 +1447,8 @@ const styles = StyleSheet.create({
   // to the two text lines it stands in for.
   yearLoader: { alignItems: 'flex-start', paddingVertical: 2 },
   shelvesLoading: { paddingVertical: 24 },
-  yearLine: {
-    fontFamily: fonts.semibold,
-    fontSize: 22,
-    letterSpacing: -0.11,
-  },
-  allEmpty: {
-    fontFamily: fonts.regular,
-    fontSize: 13.5,
-    paddingHorizontal: 2,
-  },
+  yearLine: type.sectionTitle,
+  allEmpty: { ...type.caption, paddingHorizontal: 2 },
   duoRow: { flexDirection: 'row', gap: 10 },
   duoCard: {
     flex: 1,
@@ -1520,7 +1512,7 @@ const styles = StyleSheet.create({
   // horizontal padding because that would shift the text off the card's edge.
   blockTextBtn: { paddingVertical: 12, marginVertical: -12 },
   rowMeta: { flex: 1, minWidth: 0, gap: 3 },
-  rowTitle: { fontFamily: fonts.medium, fontSize: 15 },
+  rowTitle: type.rowTitle,
   emptyRow: {
     fontFamily: fonts.regular,
     fontSize: 13,
@@ -1540,7 +1532,7 @@ const styles = StyleSheet.create({
   },
   lang: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
@@ -1576,7 +1568,7 @@ const styles = StyleSheet.create({
   pinInput: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.input,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontFamily: fonts.regular,
@@ -1588,13 +1580,13 @@ const styles = StyleSheet.create({
   // 10dp slop is exactly the row's gap, so it never overlaps the PIN field.
   pinBtn: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   crashCard: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radii.card,
     padding: 12,
     marginTop: 10,
     gap: 6,
