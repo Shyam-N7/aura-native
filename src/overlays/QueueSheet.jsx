@@ -740,7 +740,7 @@ function QueueOptionsSheet({ player, hidePast, onToggleHidePast, onClose }) {
     return (
       <Sheet animated={false} onClose={onClose} closeLabel="close queue options">
         <Text style={[styles.menuTitle, { color: t.ink }]}>
-          save queue as playlist
+          Save queue as playlist
         </Text>
         <Text style={[label(9.5), styles.menuSub, { color: t.inkFaint }]}>
           {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}

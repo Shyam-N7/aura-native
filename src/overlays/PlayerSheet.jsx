@@ -812,7 +812,7 @@ export function PlayerSheet() {
     if (next) {
       endTour();
     }
-    showToast(next ? 'gestures off.' : 'gestures on.');
+    showToast(next ? 'Gestures off.' : 'Gestures on.');
   };
   // Replay from the ⋯ menu — turning gestures back on if they were off,
   // since a tour over a gesture-dead player could never advance.
@@ -1272,7 +1272,7 @@ export function PlayerSheet() {
               >
                 <Icon name="plus" size={19} color={t.ink} />
                 <Text style={[styles.saveText, { color: t.ink }]}>
-                  add to playlist
+                  Add to playlist
                 </Text>
               </PressScale>
             </View>

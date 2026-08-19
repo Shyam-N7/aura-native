@@ -94,21 +94,38 @@ test('with motion on, an arriving row starts hidden and below its slot', async (
 
 // The `animate` flip must restyle the row, never remount it: a remount would
 // blink every already-settled row the moment an import stream ends.
-test('flipping animate keeps the same tree shape', async () => {
-  const child = <Text>row</Text>;
+//
+// Comparing the rendered tree before and after cannot prove this — the output
+// is identical either way, so the assertion passed whether React reused the
+// row or threw it away. Count mounts instead: only a real remount runs the
+// child's mount effect twice.
+test('flipping animate restyles the row instead of remounting it', async () => {
+  let mounts = 0;
+  function Probe() {
+    React.useEffect(() => {
+      mounts += 1;
+    }, []);
+    return <Text>row</Text>;
+  }
   const tree = await render(
     <RowArrive animate i={1}>
-      {child}
+      <Probe />
     </RowArrive>,
   );
   const before = tree.toJSON();
+  expect(mounts).toBe(1);
+
   await ReactTestRenderer.act(() => {
     tree.update(
       <RowArrive animate={false} i={1}>
-        {child}
+        <Probe />
       </RowArrive>,
     );
   });
+
+  // The row survived the flip: same element instance, so the child never
+  // unmounted and every settled row above it stays on screen.
+  expect(mounts).toBe(1);
   const after = tree.toJSON();
   expect(after.type).toBe(before.type);
   expect(JSON.stringify(after.children)).toBe(JSON.stringify(before.children));

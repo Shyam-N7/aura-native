@@ -302,7 +302,7 @@ export function EqualizerPanel() {
         ))}
       </View>
       <Text style={[styles.hint, { color: t.inkFaint }]}>
-        drag a fader to shape it · hold one to reset it
+        Drag a fader to shape it · hold one to reset it
       </Text>
       {/* The chip the popups already use, so nothing new is invented; the
           slop takes its ~33dp box past the 48dp touch target. */}

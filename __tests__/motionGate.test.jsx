@@ -69,6 +69,10 @@ beforeEach(() => {
   global.__gateAppActive = true;
   global.__gateRepeats = [];
   global.__gateTimings = [];
+  // The accumulator the reduced-motion assertion reads. Without this reset it
+  // carries every earlier test's values, so that assertion counted parked bars
+  // it never rendered.
+  global.__gateShared = [];
   endTour();
   storage.removeItem('aura.gestureTourDone');
 });
