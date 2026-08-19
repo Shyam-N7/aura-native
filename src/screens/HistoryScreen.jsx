@@ -17,10 +17,12 @@ import { LONG_LIST } from '../lib/listWindow';
 import { TrackArt } from '../components/TrackRow';
 import { CrumbBack } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { fonts, label, type } from '../theme/tokens';
 import { cleanTitle } from '../utils/title';
 import { formatTime12 } from '../utils/daypart';
 import { useBackToTop } from '../hooks/useBackToTop';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { countRender } from '../lib/renderCount';
 
 // Nothing inline reaches a row. This screen does not use DetailRow, so none of
@@ -221,8 +223,22 @@ export default function HistoryScreen({ navigation }) {
   // Page one, lifted out of the effect so the error state can offer the same
   // retry the load-more control does. A first-page failure used to be a dead
   // end — one line of copy and no way back — while page two got a button.
-  const loadFirstPage = useCallback(signal => {
-    setStatus('loading');
+  //
+  // `quiet` is the pull-to-refresh mode of the same request: no blank-to-
+  // loading on the way in, and a failure re-thrown instead of written into
+  // the error state, so the history already on screen survives it.
+  //
+  // Refreshing a CURSOR-paginated list means page one and nothing else, and
+  // that is deliberate rather than lossy: pages after the first are windows
+  // behind a `before` cursor, so keeping them while page one is replaced
+  // would leave a hole wherever plays landed in between — and `nextBefore`
+  // would no longer describe the list under it. Page one plus the cursor that
+  // belongs to it is the only self-consistent answer; Load more walks down
+  // again from there.
+  const loadFirstPage = useCallback((signal, { quiet = false } = {}) => {
+    if (!quiet) {
+      setStatus('loading');
+    }
     return Promise.all([
       getHistory({ limit: 80, signal }),
       getMusicClockPlays({ signal }).catch(() => []),
@@ -231,12 +247,17 @@ export default function HistoryScreen({ navigation }) {
         setPlays(h.plays);
         setNextBefore(h.nextBefore);
         setClock(summarizeClock(clockPlays, { perPart: 2 }));
+        setMoreError(false);
         setStatus('ok');
       })
       .catch(err => {
-        if (err.name !== 'AbortError') {
-          setStatus('error');
+        if (err.name === 'AbortError') {
+          return;
         }
+        if (quiet) {
+          throw err;
+        }
+        setStatus('error');
       });
   }, []);
 
@@ -245,6 +266,10 @@ export default function HistoryScreen({ navigation }) {
     loadFirstPage(ctl.signal);
     return () => ctl.abort();
   }, [loadFirstPage]);
+
+  // Pull-to-refresh: page one again. See ui/Bounce for how the pull and the
+  // rubber band share one downward drag at the top.
+  const pull = usePullRefresh(signal => loadFirstPage(signal, { quiet: true }));
 
   const loadMore = () => {
     if (!nextBefore || loadingMore) {
@@ -279,27 +304,14 @@ export default function HistoryScreen({ navigation }) {
       <CrumbBack onPress={() => navigation.goBack()} />
       <Text style={[type.queueHero, { color: t.ink }]}>Your history.</Text>
       {status === 'loading' && <AuraLoader label="Loading history" />}
+      {/* The pill this screen grew for its own first-page failure is now the
+          shared ErrorState every other screen wears — same markup, same
+          spacing, same hitSlop. */}
       {status === 'error' && (
-        <>
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load your history.
-          </Text>
-          {/* Same pill as the load-more control below, so the two failures read
-              as one design. hitSlop takes the 33dp pill past the 48dp floor. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="try again"
-            onPress={() => loadFirstPage()}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.more,
-              { borderColor: t.line },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[label(10), { color: t.inkSoft }]}>Try again</Text>
-          </Pressable>
-        </>
+        <ErrorState
+          message="Couldn't load your history."
+          onRetry={() => loadFirstPage()}
+        />
       )}
       {status === 'ok' && plays.length === 0 && (
         <View style={styles.empty}>
@@ -377,6 +389,7 @@ export default function HistoryScreen({ navigation }) {
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         stickySectionHeadersEnabled={false}
+        refreshControl={pull.control}
         {...LONG_LIST}
         contentContainerStyle={[
           styles.list,

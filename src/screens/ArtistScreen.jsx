@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
@@ -16,6 +16,8 @@ import {
   DetailRow,
 } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { usePullRefresh } from '../hooks/usePullRefresh';
+import { ErrorState } from '../components/ui/ErrorState';
 import { fonts, label, type } from '../theme/tokens';
 
 // Artist page, ported from web DesktopArtist: identity hero, top tracks,
@@ -31,17 +33,43 @@ export default function ArtistScreen({ route, navigation }) {
   const [hit, setHit] = useState({ data: null, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
+  // Lifted out of the effect so the failure can offer a retry (HistoryScreen's
+  // loadFirstPage shape). Resetting to {null, null} returns the screen to
+  // `loading`; an abort still never renders as an error.
+  //
+  // `quiet` is the pull-to-refresh mode of the SAME request (LikedScreen
+  // carries the long version): no blank-to-loading on the way in, and a
+  // failure re-thrown rather than written into the error state, so the artist
+  // already on screen outlives a blink of network.
+  const load = useCallback(
+    (signal, { quiet = false } = {}) => {
+      if (!quiet) {
+        setHit({ data: null, error: null });
+      }
+      return getArtist({ id, name, trackId }, { signal })
+        .then(data => setHit({ data, error: null }))
+        .catch(err => {
+          if (err.name === 'AbortError') {
+            return;
+          }
+          if (quiet) {
+            throw err;
+          }
+          setHit({ data: null, error: err.message });
+        });
+    },
+    [id, name, trackId],
+  );
+
   useEffect(() => {
     const ctl = new AbortController();
-    getArtist({ id, name, trackId }, { signal: ctl.signal })
-      .then(data => setHit({ data, error: null }))
-      .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
-        }
-      });
+    load(ctl.signal);
     return () => ctl.abort();
-  }, [id, name, trackId]);
+  }, [load]);
+
+  // Pull-to-refresh. This screen is a ScrollView, not a list — the control
+  // rides the same prop either way, and Bounce yields the top drag to it.
+  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
 
   const artist = hit.data;
   const tracks = artist?.topTracks ?? [];
@@ -62,6 +90,7 @@ export default function ArtistScreen({ route, navigation }) {
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
+        refreshControl={pull.control}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.crumbRow}>
@@ -76,9 +105,11 @@ export default function ArtistScreen({ route, navigation }) {
 
         {status === 'loading' && <AuraLoader label="Loading artist" />}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={`Couldn't load — ${hit.error}`}
+            onRetry={() => load()}
+          />
         )}
 
         {status === 'ok' && (
@@ -213,7 +244,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-  stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',

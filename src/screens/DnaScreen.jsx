@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, {
   Circle,
@@ -12,6 +12,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { getSonicDna } from '../api/sonicDna';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
 import { fonts, label, radii } from '../theme/tokens';
@@ -113,9 +114,12 @@ export default function DnaScreen({ navigation }) {
   const [hit, setHit] = useState({ data: null, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    getSonicDna({ signal: ctl.signal })
+  // Lifted out of the effect so a failed build offers a retry instead of only
+  // Back (HistoryScreen's loadFirstPage shape). The reset returns the screen
+  // to `loading`; an abort still never renders as an error.
+  const load = useCallback(signal => {
+    setHit({ data: null, error: null });
+    return getSonicDna({ signal })
       .then(data => setHit({ data, error: null }))
       .catch(err => {
         if (err.name === 'AbortError') {
@@ -123,8 +127,13 @@ export default function DnaScreen({ navigation }) {
         }
         setHit({ data: null, error: err.message });
       });
-    return () => ctl.abort();
   }, []);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    load(ctl.signal);
+    return () => ctl.abort();
+  }, [load]);
 
   const dna = hit.data;
   const radarSize = Math.min(winW - 44, 320);
@@ -159,9 +168,11 @@ export default function DnaScreen({ navigation }) {
           )}
 
           {status === 'error' && (
-            <Text style={[styles.errorText, { color: t.inkSoft }]}>
-              Couldn't load — {hit.error}
-            </Text>
+            <ErrorState
+              style={styles.errorBlock}
+              message={`Couldn't load — ${hit.error}`}
+              onRetry={() => load()}
+            />
           )}
 
           {status === 'ok' && !dna.available && (
@@ -266,12 +277,7 @@ const styles = StyleSheet.create({
   title: { marginTop: 8 },
   signature: { marginTop: 12 },
   center: { paddingVertical: 48, alignItems: 'center' },
-  errorText: {
-    fontFamily: fonts.regular,
-    fontSize: 15,
-    lineHeight: 21,
-    paddingVertical: 24,
-  },
+  errorBlock: { paddingVertical: 24 },
   empty: { paddingVertical: 32, gap: 8 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },

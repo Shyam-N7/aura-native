@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -9,6 +9,7 @@ import { cleanTitle } from '../utils/title';
 import { TrackArt } from '../components/TrackRow';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { PressScale } from '../components/ui/PressScale';
 import { PageHeader } from '../components/detail/DetailChassis';
 import { ScreenFade } from '../components/ui/ScreenFade';
@@ -31,9 +32,12 @@ export default function JournalScreen({ navigation }) {
 
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
-  useEffect(() => {
-    const ctl = new AbortController();
-    getJournal({ days: 7, signal: ctl.signal })
+  // Lifted out of the effect so a failed read offers a retry instead of only
+  // Back (HistoryScreen's loadFirstPage shape). The reset returns the screen
+  // to `loading`; an abort still never renders as an error.
+  const load = useCallback(signal => {
+    setHit({ data: null, error: null });
+    return getJournal({ days: 7, signal })
       .then(data => setHit({ data, error: null }))
       .catch(err => {
         if (err.name === 'AbortError') {
@@ -41,8 +45,13 @@ export default function JournalScreen({ navigation }) {
         }
         setHit({ data: null, error: err.message });
       });
-    return () => ctl.abort();
   }, []);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    load(ctl.signal);
+    return () => ctl.abort();
+  }, [load]);
 
   // Hydrate the entries' track ids into playable tracks (dedup, capped so a
   // long journal can't fan out into dozens of catalog calls).
@@ -113,9 +122,11 @@ export default function JournalScreen({ navigation }) {
           )}
 
           {status === 'error' && (
-            <Text style={[styles.errorText, { color: t.inkSoft }]}>
-              Couldn't load the journal — {hit.error}
-            </Text>
+            <ErrorState
+              style={styles.errorBlock}
+              message={`Couldn't load the journal — ${hit.error}`}
+              onRetry={() => load()}
+            />
           )}
 
           {status === 'ok' && entries.length === 0 && (
@@ -192,12 +203,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 22 },
   title: { marginTop: 8, marginBottom: 22 },
   center: { paddingVertical: 48, alignItems: 'center' },
-  errorText: {
-    fontFamily: fonts.regular,
-    fontSize: 15,
-    lineHeight: 21,
-    paddingVertical: 24,
-  },
+  errorBlock: { paddingVertical: 24 },
   empty: { paddingVertical: 32, gap: 8 },
   emptyTitle: { fontFamily: fonts.semibold, fontSize: 18 },
   emptyBody: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Keyboard,
   Pressable,
@@ -10,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, label } from '../theme/tokens';
 import { TOPBAR_CLEARANCE } from '../components/nav/TopBar';
@@ -135,11 +142,19 @@ export default function SearchScreen({ navigation }) {
   const trimmed = debouncedQ.trim();
   const wantKey = `${trimmed}|${lang}`;
 
-  useEffect(() => {
-    if (!trimmed) {
-      return undefined;
-    }
+  // Lifted out of the effect so a failed search can be re-run from the error
+  // state — the debounce means the query itself never changes, so nothing else
+  // would ever fire it again and the only way out was to retype.
+  //
+  // Clearing `hit` returns the view to `loading`: status is derived from
+  // whether the stored key matches the key being asked for. Every run
+  // supersedes the one before it (cancelRef), so a retry's late response can
+  // never land on top of a newer query's results.
+  const cancelRef = useRef(null);
+  const runSearch = useCallback(() => {
+    cancelRef.current?.();
     let stale = false;
+    setHit(EMPTY);
     searchCatalog(trimmed, {
       lang: lang === 'all' ? undefined : lang,
       langs: prefLangs,
@@ -156,10 +171,19 @@ export default function SearchScreen({ navigation }) {
           setHit({ ...EMPTY, key: wantKey, error: err.message });
         }
       });
-    return () => {
+    const cancel = () => {
       stale = true;
     };
+    cancelRef.current = cancel;
+    return cancel;
   }, [trimmed, lang, wantKey, prefLangs]);
+
+  useEffect(() => {
+    if (!trimmed) {
+      return undefined;
+    }
+    return runSearch();
+  }, [trimmed, runSearch]);
 
   const view = hit.key === wantKey ? hit : EMPTY;
   const status = !trimmed
@@ -327,9 +351,11 @@ export default function SearchScreen({ navigation }) {
 
         {status === 'loading' && <AuraLoader label="Searching" />}
         {status === 'error' && (
-          <Text style={[styles.hint, { color: t.inkFaint }]}>
-            Search failed — {view.error}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={`Search failed — ${view.error}`}
+            onRetry={runSearch}
+          />
         )}
 
         {status === 'ok' &&
@@ -535,6 +561,7 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     marginTop: 12,
   },
+  errorBlock: { marginTop: 12 },
   recentHead: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BounceScrollView } from '../components/ui/Bounce';
@@ -12,6 +12,7 @@ import {
   DetailSection,
 } from '../components/detail/DetailChassis';
 import { AuraLoader } from '../components/ui/AuraLoader';
+import { ErrorState } from '../components/ui/ErrorState';
 import { fonts, label, type } from '../theme/tokens';
 import { artUrl } from '../utils/artUrl';
 import { cleanTitle } from '../utils/title';
@@ -28,17 +29,28 @@ export default function LanguageHubScreen({ route, navigation }) {
   const [hit, setHit] = useState({ data: null, error: null });
   const status = hit.error ? 'error' : hit.data ? 'ok' : 'loading';
 
+  // Lifted out of the effect so the failure can offer a retry instead of
+  // dead-ending on Back (HistoryScreen's loadFirstPage shape). The reset puts
+  // the screen back into `loading`; an abort still never paints as an error.
+  const load = useCallback(
+    signal => {
+      setHit({ data: null, error: null });
+      return getDiscoverHome({ lang, signal })
+        .then(data => setHit({ data, error: null }))
+        .catch(err => {
+          if (err.name !== 'AbortError') {
+            setHit({ data: null, error: err.message });
+          }
+        });
+    },
+    [lang],
+  );
+
   useEffect(() => {
     const ctl = new AbortController();
-    getDiscoverHome({ lang, signal: ctl.signal })
-      .then(data => setHit({ data, error: null }))
-      .catch(err => {
-        if (err.name !== 'AbortError') {
-          setHit({ data: null, error: err.message });
-        }
-      });
+    load(ctl.signal);
     return () => ctl.abort();
-  }, [lang]);
+  }, [load]);
 
   const trending = hit.data?.trending ?? [];
   const playlists = hit.data?.popularPlaylists ?? [];
@@ -101,9 +113,11 @@ export default function LanguageHubScreen({ route, navigation }) {
 
         {status === 'loading' && <AuraLoader label={`Loading ${lang}`} />}
         {status === 'error' && (
-          <Text style={[styles.stateLine, { color: t.inkSoft }]}>
-            Couldn't load — {hit.error}
-          </Text>
+          <ErrorState
+            style={styles.errorBlock}
+            message={`Couldn't load — ${hit.error}`}
+            onRetry={() => load()}
+          />
         )}
         {status === 'ok' && !anyContent && (
           <Text style={[styles.stateLine, { color: t.inkSoft }]}>
@@ -167,6 +181,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stateLine: { fontFamily: fonts.regular, fontSize: 13.5, marginTop: 12 },
+  errorBlock: { marginTop: 12 },
   gridFlush: { paddingHorizontal: 0 },
   footer: { textAlign: 'center', marginTop: 30 },
 });
