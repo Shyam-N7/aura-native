@@ -206,7 +206,10 @@ export default function PlaylistScreen({ route, navigation }) {
   // means the YouTube re-check below — a different thing entirely (that one
   // asks YouTube for new songs, this one re-reads the playlist we have). Both
   // can run at once and neither touches the other's state.
-  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(signal => load(signal, { quiet: true }));
 
   // The error state's way out. The reset to `loading` lives here, not inside
   // load(): every other caller (the import/refresh re-reads below) re-runs it
@@ -878,7 +881,6 @@ export default function PlaylistScreen({ route, navigation }) {
         // playlist never reorders under the user.
         itemLayoutAnimation={streaming ? ROW_LAYOUT : undefined}
         ListFooterComponent={footer}
-        refreshControl={pull.control}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },

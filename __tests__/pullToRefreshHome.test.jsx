@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { RefreshControl } from 'react-native';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import HomeScreen from '../src/screens/HomeScreen';
 import { invalidateHomeCache } from '../src/lib/homeCache';
@@ -12,6 +11,22 @@ import { invalidateHomeCache } from '../src/lib/homeCache';
 // was already showing. The mechanism under test is the handshake that avoids
 // that: the pull re-fetches every section, writes the results into the cache,
 // and only then bumps the nonce the sections read.
+// The hook's return, as HomeScreen itself received it. The RefreshControl it
+// used to hand back is gone — see src/components/ui/Bounce.jsx — so the pull
+// is fired through the hook's own onRefresh.
+let mockLastPull = null;
+jest.mock('../src/hooks/usePullRefresh', () => {
+  const actual = jest.requireActual('../src/hooks/usePullRefresh');
+  return {
+    ...actual,
+    usePullRefresh: (...args) => {
+      const r = actual.usePullRefresh(...args);
+      mockLastPull = r;
+      return r;
+    },
+  };
+});
+
 jest.mock('../src/playback/PlayerContext', () => ({
   usePlayer: () => ({
     current: null,
@@ -66,7 +81,7 @@ const { getTopArtists } = require('../src/api/stats');
 const { getHomeHero } = require('../src/api/catalog');
 const { listAutoPlaylists } = require('../src/api/autoPlaylists');
 
-const control = tree => tree.root.findByType(RefreshControl);
+const control = () => mockLastPull;
 
 describe('home pulls itself fresh', () => {
   beforeEach(() => {
@@ -96,7 +111,7 @@ describe('home pulls itself fresh', () => {
     ]);
 
     await ReactTestRenderer.act(async () => {
-      await control(tree).props.onRefresh();
+      await control().onRefresh();
     });
 
     // Every cache-first section asked again — not just the ones that happened
@@ -110,7 +125,7 @@ describe('home pulls itself fresh', () => {
     expect(
       tree.root.findAllByProps({ accessibilityLabel: 'ilaiyaraaja' }).length,
     ).toBeGreaterThan(0);
-    expect(control(tree).props.refreshing).toBe(false);
+    expect(control().refreshing).toBe(false);
   });
 
   test('a section that fails keeps its shelf, and the spinner still leaves', async () => {
@@ -131,13 +146,13 @@ describe('home pulls itself fresh', () => {
 
     getTopArtists.mockRejectedValueOnce(new Error('network down'));
     await ReactTestRenderer.act(async () => {
-      await control(tree).props.onRefresh();
+      await control().onRefresh();
     });
 
     // Half a Home is still a Home: the shelf keeps the artists it had.
     expect(
       tree.root.findAllByProps({ accessibilityLabel: 'ilaiyaraaja' }).length,
     ).toBeGreaterThan(0);
-    expect(control(tree).props.refreshing).toBe(false);
+    expect(control().refreshing).toBe(false);
   });
 });

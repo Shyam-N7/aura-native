@@ -69,7 +69,10 @@ export default function ArtistScreen({ route, navigation }) {
 
   // Pull-to-refresh. This screen is a ScrollView, not a list — the control
   // rides the same prop either way, and Bounce yields the top drag to it.
-  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(signal => load(signal, { quiet: true }));
 
   const artist = hit.data;
   const tracks = artist?.topTracks ?? [];
@@ -90,7 +93,6 @@ export default function ArtistScreen({ route, navigation }) {
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
-        refreshControl={pull.control}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.crumbRow}>

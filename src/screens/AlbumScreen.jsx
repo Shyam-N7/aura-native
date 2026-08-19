@@ -83,7 +83,10 @@ export default function AlbumScreen({ route, navigation }) {
 
   // Pull-to-refresh: the same load, quiet. Bounce yields the top drag to it
   // (see ui/Bounce) so the band and the spinner never move on one finger.
-  const pull = usePullRefresh(signal => load(signal, { quiet: true }));
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(signal => load(signal, { quiet: true }));
 
   // Memoized because this is the list's `data`. A fresh `[]`/slice every render
   // is a new identity to VirtualizedList, which re-renders every mounted cell.
@@ -133,7 +136,6 @@ export default function AlbumScreen({ route, navigation }) {
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
         showsVerticalScrollIndicator={false}
-        refreshControl={pull.control}
         ListHeaderComponent={
           <View style={styles.head}>
             <CrumbBack onPress={() => navigation.goBack()} />

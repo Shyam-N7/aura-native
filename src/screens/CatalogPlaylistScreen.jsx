@@ -132,7 +132,10 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
   // so there is nothing a pull could ask for. No control on those, and the
   // rubber band keeps the top drag it always had — an affordance that cannot
   // do anything is worse than none.
-  const pull = usePullRefresh(signal => load(signal, { quiet: true }), {
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(signal => load(signal, { quiet: true }), {
     enabled: !initialData,
   });
 
@@ -311,7 +314,6 @@ export default function CatalogPlaylistScreen({ route, navigation }) {
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
-        refreshControl={pull.control}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.head}>

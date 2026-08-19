@@ -140,7 +140,10 @@ export default function PlaylistsScreen({ navigation }) {
   // flag is deployment state, not data). The two shelves stay best-effort
   // exactly as their own effects are — a mixes shelf that fails to reload is
   // still a shelf, and only the playlists themselves are worth a sentence.
-  const pull = usePullRefresh(signal =>
+  // Wired, but nothing reads it yet: the pull GESTURE is gone (see the note
+  // in src/components/ui/Bounce.jsx). The refetch path stays connected and
+  // under test, so the screen is one line away from having the pull back.
+  usePullRefresh(signal =>
     Promise.all([
       reload(signal, { quiet: true }),
       listAutoPlaylists({ signal })
@@ -343,7 +346,6 @@ export default function PlaylistsScreen({ navigation }) {
           styles.content,
           { paddingBottom: insets.bottom + DOCK_CLEARANCE },
         ]}
-        refreshControl={pull.control}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { RefreshControl } from 'react-native';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 
 // Pull-to-refresh, proved where it can actually lie.
@@ -13,10 +12,28 @@ import { ThemeProvider } from '../src/theme/ThemeContext';
 //  2. the flag never clears when the request FAILS — one lost connection and
 //     the list wears a spinner forever, over rows that are perfectly fine.
 //
-// So these go through the real screens and the real usePullRefresh: the pull
-// is fired the way the scroller fires it (the RefreshControl's own onRefresh),
-// and the assertions are on the API mock's call count and on the control's
-// `refreshing` prop, before and after the promise settles.
+// So these go through the real screens and the real usePullRefresh. The pull
+// USED to be fired through the RefreshControl the hook returned; that control
+// is gone (hanging it on a Bounce* scroller cost the app one-finger scrolling
+// — see the note at the top of src/components/ui/Bounce.jsx), so the hook's
+// own `onRefresh` is called directly instead, captured from inside the real
+// screen render by the spy below. Everything the rules above are about is
+// unchanged: the assertions are still on the API mock's call count and on the
+// hook's `refreshing` flag, before and after the promise settles.
+
+// The hook's return, as the screen itself received it.
+let mockLastPull = null;
+jest.mock('../src/hooks/usePullRefresh', () => {
+  const actual = jest.requireActual('../src/hooks/usePullRefresh');
+  return {
+    ...actual,
+    usePullRefresh: (...args) => {
+      const r = actual.usePullRefresh(...args);
+      mockLastPull = r;
+      return r;
+    },
+  };
+});
 
 jest.mock('../src/api/likes', () => ({
   listLiked: jest.fn(),
@@ -70,7 +87,7 @@ const titles = tree =>
     )
     .filter(s => typeof s === 'string' && s.startsWith('song '));
 
-const control = tree => tree.root.findByType(RefreshControl);
+const control = () => mockLastPull;
 
 // A promise this test decides when to settle, so `refreshing` can be read
 // WHILE the refetch is in flight — the half a timer-driven spinner fakes.
@@ -84,11 +101,27 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+// Trees are unmounted between tests. Without that, a screen from an earlier
+// test whose fixture promise settles late re-renders, its usePullRefresh runs
+// again, and `mockLastPull` silently flips back to THAT screen's hook — the
+// next test then pulls the wrong screen.
+const mounted = [];
+afterEach(() => {
+  while (mounted.length) {
+    const tree = mounted.pop();
+    ReactTestRenderer.act(() => {
+      tree.unmount();
+    });
+  }
+  mockLastPull = null;
+});
+
 const mount = async node => {
   let tree;
   await ReactTestRenderer.act(async () => {
     tree = ReactTestRenderer.create(<ThemeProvider>{node}</ThemeProvider>);
   });
+  mounted.push(tree);
   return tree;
 };
 
@@ -107,26 +140,26 @@ describe('pull to refresh', () => {
 
     expect(listLiked).toHaveBeenCalledTimes(1);
     expect(titles(tree)).toEqual(['song a']);
-    expect(control(tree).props.refreshing).toBe(false);
+    expect(control().refreshing).toBe(false);
 
     // The second answer is DIFFERENT, so a spinner that only spins can't pass.
     const second = deferred();
     listLiked.mockReturnValueOnce(second.promise);
 
     await ReactTestRenderer.act(async () => {
-      control(tree).props.onRefresh();
+      control().onRefresh();
     });
     expect(listLiked).toHaveBeenCalledTimes(2);
     // In flight: the spinner is up and the old rows are still on screen —
     // a refresh does not blank the list it is refreshing.
-    expect(control(tree).props.refreshing).toBe(true);
+    expect(control().refreshing).toBe(true);
     expect(titles(tree)).toEqual(['song a']);
 
     await ReactTestRenderer.act(async () => {
       second.resolve([track('a'), track('b')]);
       await second.promise;
     });
-    expect(control(tree).props.refreshing).toBe(false);
+    expect(control().refreshing).toBe(false);
     expect(titles(tree)).toEqual(['song a', 'song b']);
   });
 
@@ -141,9 +174,9 @@ describe('pull to refresh', () => {
     const second = deferred();
     listLiked.mockReturnValueOnce(second.promise);
     await ReactTestRenderer.act(async () => {
-      control(tree).props.onRefresh();
+      control().onRefresh();
     });
-    expect(control(tree).props.refreshing).toBe(true);
+    expect(control().refreshing).toBe(true);
 
     await ReactTestRenderer.act(async () => {
       second.reject(new Error('network down'));
@@ -152,7 +185,7 @@ describe('pull to refresh', () => {
 
     // The three things a failed refresh owes: no stuck spinner, no error page
     // where a good list used to be, and one sentence about it.
-    expect(control(tree).props.refreshing).toBe(false);
+    expect(control().refreshing).toBe(false);
     expect(titles(tree)).toEqual(['song a']);
     expect(said).toEqual([REFRESH_FAILED]);
     off();
@@ -160,14 +193,14 @@ describe('pull to refresh', () => {
 
   test('a pull while one is already running is a no-op', async () => {
     listLiked.mockResolvedValueOnce([track('a')]);
-    const tree = await mount(<LikedScreen navigation={nav} />);
+    await mount(<LikedScreen navigation={nav} />);
 
     const second = deferred();
     listLiked.mockReturnValueOnce(second.promise);
     await ReactTestRenderer.act(async () => {
-      control(tree).props.onRefresh();
-      control(tree).props.onRefresh();
-      control(tree).props.onRefresh();
+      control().onRefresh();
+      control().onRefresh();
+      control().onRefresh();
     });
     // One request, not three racing to write the same state.
     expect(listLiked).toHaveBeenCalledTimes(2);
@@ -176,24 +209,7 @@ describe('pull to refresh', () => {
       second.resolve([track('a')]);
       await second.promise;
     });
-    expect(control(tree).props.refreshing).toBe(false);
-  });
-
-  test('the spinner wears each theme, not the stock white disc', async () => {
-    const { themes } = require('../src/theme/tokens');
-    const { storage } = require('../src/storage/mmkv');
-    for (const name of ['dusk', 'midnight', 'bloom']) {
-      storage.setItem('aura.theme', name);
-      listLiked.mockResolvedValueOnce([]);
-      const tree = await mount(<LikedScreen navigation={nav} />);
-      const t = themes[name];
-      expect(control(tree).props.colors).toEqual([t.accent]);
-      expect(control(tree).props.tintColor).toBe(t.accent);
-      // The puck behind the arc is one of the app's own surfaces — white
-      // would be a hole in midnight and invisible on dusk.
-      expect(control(tree).props.progressBackgroundColor).toBe(t.surface);
-    }
-    storage.setItem('aura.theme', 'dusk');
+    expect(control().refreshing).toBe(false);
   });
 
   test('history refreshes page one — the cursor and the rows stay one list', async () => {
@@ -213,7 +229,7 @@ describe('pull to refresh', () => {
       nextBefore: 'cursor-2',
     });
     await ReactTestRenderer.act(async () => {
-      await control(tree).props.onRefresh();
+      await control().onRefresh();
     });
 
     // Page one asked for again — no `before`, so the refresh can never splice
@@ -221,7 +237,7 @@ describe('pull to refresh', () => {
     expect(getHistory).toHaveBeenCalledTimes(2);
     expect(getHistory.mock.calls[1][0].before).toBeUndefined();
     expect(titles(tree)).toEqual(['song c', 'song a']);
-    expect(control(tree).props.refreshing).toBe(false);
+    expect(control().refreshing).toBe(false);
   });
 
   // Making page one reachable at any time (the pull) opened a race the screen
@@ -255,7 +271,7 @@ describe('pull to refresh', () => {
       nextBefore: 'cursor-fresh',
     });
     await ReactTestRenderer.act(async () => {
-      await control(tree).props.onRefresh();
+      await control().onRefresh();
     });
     expect(titles(tree)).toEqual(['song fresh']);
 
